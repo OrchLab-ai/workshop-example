@@ -1,0 +1,17 @@
+# Checkpoint ladder — single source of truth.
+#
+# Format:  tag | title | what this checkpoint contains | what it unblocks
+#
+# Read by ./checkpoint.sh. Keep the pipes; keep the tags in ascending order.
+# A tag listed here that does not exist yet in git is reported as "not published"
+# rather than failing — that is how a partially-built ladder stays usable.
+
+cp-00 | Environment verified        | Clean clone with the environment check passing. Nothing built yet.                    | Part 1 — Coding Challenges
+cp-01 | Warm-up challenge complete  | One of the three Part 1 challenges applied (rename, logging, or Trending Missions).   | Part 1 — Give Your Agent Sight
+cp-02 | Agent has sight             | Playwright wired into the container; your agent can screenshot and verify its work.   | Part 2 — the Blog Engine exercise
+cp-03 | Mission Updates, by prompt  | Mission Updates built from a micro-prompt and a mega-prompt. Deliberately mediocre.   | Part 2 — Create the spec
+cp-04 | Spec written                | mission-updates.spec.md — role, context, standards, acceptance criteria.             | Part 2 — Brand Your Mission Updates
+cp-05 | Brand written and applied   | Your own specs/standards/brand.md, with tokens.css regenerated from it.               | Part 2 — Socratic build
+cp-06 | Mission Updates, by spec    | The L2 reference implementation, built from the spec and wearing your brand.          | Part 3 — Build an Autonomous Agent
+cp-07 | Autonomous agent run        | Agent loop with guardrails: iteration cap, cost limit, rollback on failing tests.     | Part 3 — Plan-First Orchestration
+cp-08 | Plan / code handoff         | The feature rebuilt by a planning agent handing off to a separate coding agent.       | Part 3 — Automated Code Review

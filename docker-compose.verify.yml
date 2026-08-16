@@ -1,0 +1,41 @@
+# Environment check stack. Two services, mirroring the shape of the real
+# workshop stack: something serving a site, and an agent container that can see
+# it through a real browser.
+#
+# Driven by ./verify.sh — you should not need to run these by hand.
+
+services:
+  verify-web:
+    image: nginx:alpine
+    volumes:
+      - ./verify/site:/usr/share/nginx/html:ro
+    ports:
+      # Host-side port only exists so check 4 can prove the site is reachable
+      # from *your machine*, not just from inside the Docker network. Override
+      # with VERIFY_PORT if 8080 is already taken.
+      - "${VERIFY_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  verify-agent:
+    build:
+      context: .
+      dockerfile: verify/Dockerfile
+    depends_on:
+      verify-web:
+        condition: service_healthy
+    environment:
+      VERIFY_URL: http://verify-web/
+      VERIFY_OUT: /screenshots/verify.png
+      VERIFY_CHECKPOINT: "${VERIFY_CHECKPOINT:-cp-00}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+    volumes:
+      - ./verify/screenshot.mjs:/work/screenshot.mjs:ro
+      - ./screenshots:/screenshots
+    # No default command — verify.sh invokes each check explicitly so it can
+    # report them as separate lines.
+    command: ["node", "--version"]
