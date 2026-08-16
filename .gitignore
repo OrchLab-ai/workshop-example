@@ -1,0 +1,6 @@
+.env
+.verify-logs/
+verify-report.txt
+screenshots/*.png
+node_modules/
+.DS_Store

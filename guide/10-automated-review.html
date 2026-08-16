@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Automated Code Review — OrchLab Workshop Guide</title>
+<script>
+(function () {
+  try {
+    var stored = localStorage.getItem('orchlab-guide-theme');
+    var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    document.documentElement.setAttribute('data-theme', stored || (prefersLight ? 'light' : 'dark'));
+  } catch (e) {}
+})();
+</script>
+<style>
+:root {
+  color-scheme: light;
+  /* Light theme */
+  --bg:          #ffffff;
+  --panel:       #f4f4f4;
+  --surface:     #ebebeb;
+  --surface-alt: #dedede;
+  --border:      #d4d4d4;
+  --text:        #2a2a2a;
+  --muted:       #5a5a5a;
+  --strong:      #111111;
+  --accent:      #3f6b2b;  /* deep green — 6.3:1 on white */
+  --amber:       #7a5200;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg:          #222222;
+    --panel:       #2a2a2a;
+    --surface:     #383838;
+    --surface-alt: #444444;
+    --border:      #383838;
+    --text:        #eeeeee;
+    --muted:       #9e9e9e;
+    --strong:      #ffffff;
+    --accent:      #8cc26c;
+    --amber:       #ffbd2e;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg:          #222222;
+  --panel:       #2a2a2a;
+  --surface:     #383838;
+  --surface-alt: #444444;
+  --border:      #383838;
+  --text:        #eeeeee;
+  --muted:       #9e9e9e;
+  --strong:      #ffffff;
+  --accent:      #8cc26c;
+  --amber:       #ffbd2e;
+}
+:root {
+  /* Constant in both themes */
+  --brand:      #8cc26c;  /* the OrchLab green — decorative only */
+  --on-brand:   #222222;  /* text sitting on --brand, 7.6:1 */
+  --well:       #050505;  /* code + prompt wells stay dark in both themes */
+  --well-text:  #eeeeee;
+  --well-accent:#8cc26c;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 0 20px 80px;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.wrap { max-width: 820px; margin: 0 auto; }
+header.site {
+  padding: 32px 0 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 32px;
+  display: flex; gap: 24px; align-items: center; flex-wrap: wrap;
+}
+header.site a { color: var(--accent); text-decoration: none; font-weight: 700; letter-spacing: 2px; font-size: 13px; }
+header.site a:hover { text-decoration: underline; }
+header.site .spacer { flex: 1 1 auto; }
+
+/* theme toggle — the label is driven by CSS, so it is correct on first paint */
+.theme-toggle {
+  flex: none; cursor: pointer; font: 600 12px/1 inherit; letter-spacing: 1px;
+  padding: 8px 14px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+}
+.theme-toggle:hover { background: var(--surface); border-color: var(--accent); color: var(--accent); }
+.theme-toggle .to-dark { display: none; }
+:root[data-theme="dark"] .theme-toggle .to-dark { display: inline; }
+:root[data-theme="dark"] .theme-toggle .to-light { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .to-dark { display: inline; }
+  :root:not([data-theme="light"]) .theme-toggle .to-light { display: none; }
+}
+
+h1 { font-size: 31px; line-height: 1.2; margin: 18px 0 10px; color: var(--strong); }
+h2 {
+  font-size: 15px; margin: 38px 0 14px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;
+}
+p.lede { color: var(--text); font-size: 17.5px; margin: 0 0 28px; }
+p.eyebrow { color: var(--muted); font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; margin: 0 0 4px; }
+
+/* Inline code is theme-aware — a near-black chip on a white page reads as
+   damage. The dark wells are for block-level code only. */
+code {
+  background: var(--panel); color: var(--accent);
+  border: 1px solid var(--border);
+  padding: 1px 6px; border-radius: 4px;
+  font: 14px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+}
+a { color: var(--accent); }
+
+/* index cards */
+.cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.card {
+  position: relative;
+  display: block; padding: 18px 20px; text-decoration: none;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 4px solid var(--brand);
+  border-radius: 6px; color: inherit; transition: background .15s, transform .1s;
+}
+.card:hover { background: var(--surface-alt); transform: translateY(-1px); }
+/* The activity number is what the facilitator says out loud ("we're on
+   activity four"), so it has to be findable at a glance from across a room. */
+.card .num {
+  position: absolute; top: 14px; right: 16px;
+  font: 700 13px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 1px; color: var(--accent);
+}
+.card .want { display: block; font-size: 17.5px; font-weight: 600; color: var(--strong); margin-bottom: 6px; line-height: 1.35; padding-right: 46px; }
+.card .meta { display: block; font-size: 13px; color: var(--text); opacity: .82; }
+.card .tag { color: var(--strong); font-family: ui-monospace, Menlo, monospace; font-weight: 700; }
+
+/* activity number on a page header */
+.actnum {
+  display: inline-block; margin: 0 0 10px;
+  background: var(--brand); color: var(--on-brand);
+  font: 700 12px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  letter-spacing: 1.5px; padding: 7px 11px; border-radius: 4px;
+}
+
+/* checkpoint strip */
+.cp {
+  display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: baseline;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 6px; padding: 13px 18px; margin: 0 0 26px;
+  font-size: 14px; color: var(--text);
+}
+.cp b { color: var(--strong); font-family: ui-monospace, Menlo, monospace; font-size: 15px; }
+
+ol, ul { padding-left: 22px; }
+li { margin: 8px 0; }
+
+.success {
+  border-left: 4px solid var(--brand); background: var(--surface);
+  padding: 15px 18px; border-radius: 0 6px 6px 0; margin: 10px 0 0;
+  color: var(--strong);
+}
+
+/* copy blocks — the point of this guide on a laptop */
+.copyblock { margin: 0 0 16px; }
+.copyblock .cb-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 8px 12px; background: var(--surface);
+  border: 1px solid var(--border); border-bottom: 0;
+  border-radius: 6px 6px 0 0; font-size: 13px; color: var(--text);
+}
+.copyblock button {
+  flex: none; cursor: pointer; border: 1px solid var(--accent);
+  background: transparent; color: var(--accent);
+  font: 600 12px/1 inherit; padding: 6px 12px; border-radius: 4px;
+}
+.copyblock button:hover { background: var(--accent); color: var(--bg); }
+.copyblock button.copied { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.copyblock pre {
+  margin: 0; padding: 14px; background: var(--well);
+  border-radius: 0 0 6px 6px; overflow-x: auto;
+  font: 13.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--well-text); white-space: pre-wrap; word-break: break-word;
+}
+.copyblock pre code { background: none; border: 0; color: var(--well-accent); padding: 0; }
+.copyblock.is-prompt .cb-head { background: var(--brand); color: var(--on-brand); font-weight: 700; border-color: var(--brand); }
+.copyblock.is-prompt button { border-color: var(--on-brand); color: var(--on-brand); }
+.copyblock.is-prompt button:hover { background: var(--on-brand); color: var(--brand); }
+
+/* link list */
+.links { list-style: none; padding: 0; margin: 0; }
+.links li { margin: 0 0 12px; }
+.links .lbl { display: block; font-size: 14px; color: var(--muted); margin-bottom: 4px; }
+
+/* cheat — collapsed by default, deliberately understated */
+details.cheat {
+  margin: 34px 0 0; background: var(--panel);
+  border-left: 4px solid var(--amber); border-radius: 0 6px 6px 0;
+}
+details.cheat > summary {
+  cursor: pointer; padding: 14px 18px; font-weight: 600; color: var(--amber);
+  list-style: none; user-select: none;
+}
+details.cheat > summary::-webkit-details-marker { display: none; }
+details.cheat > summary::before { content: "▸ "; }
+details.cheat[open] > summary::before { content: "▾ "; }
+details.cheat .body { padding: 0 18px 16px; }
+details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
+
+/* nav */
+nav.pager {
+  display: flex; justify-content: space-between; gap: 14px;
+  margin-top: 46px; padding-top: 22px; border-top: 1px solid var(--border);
+}
+nav.pager a, nav.pager span {
+  padding: 11px 18px; border-radius: 6px; text-decoration: none; font-size: 14.5px;
+  background: var(--panel); color: var(--accent); border: 1px solid var(--border);
+}
+nav.pager span { color: var(--muted); opacity: .5; border-color: transparent; background: none; }
+nav.pager a:hover { background: var(--surface); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <a href="index.html">← ALL ACTIVITIES</a>
+    <a href="links.html">ALL LINKS</a>
+    <span class="spacer"></span>
+    <button class="theme-toggle" type="button" data-theme-toggle
+      aria-label="Switch between light and dark theme"
+    ><span class="to-dark">☀ LIGHT</span><span class="to-light">☾ DARK</span></button>
+  </header>
+  <span class="actnum">ACTIVITY 10</span>
+  <p class="eyebrow">Part 3 — Orchestration</p>
+  <h1>Automated Code Review</h1>
+  <p class="lede">A third specialist reads the diff, summarises the tests, and writes something a non-technical stakeholder could act on.</p>
+
+  <div class="cp">
+    <span>start from <b>cp-08</b></span>
+    <span>final activity</span>
+    <span>behind? <code>./checkpoint.sh 8</code></span>
+  </div>
+
+  <h2>What to do</h2>
+  <ol>
+    <li>Feed the git diff to a review agent — risks, regressions, style violations.</li>
+    <li>Have it summarise the test results: passed, failed, missing.</li>
+    <li>Ask for three sentences for leadership: what changed, what risk, what is next.</li>
+  </ol>
+
+  <h2>Commands</h2>
+  <div class="copyblock">
+    <div class="cb-head"><span>Start from the right checkpoint</span><button type="button">Copy</button></div>
+    <pre>./checkpoint.sh 8</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Get the diff to review</span><button type="button">Copy</button></div>
+    <pre>git diff main...HEAD &gt; /tmp/review.diff</pre>
+  </div>
+
+  <h2>Prompts — copy, don't retype</h2>
+  <div class="copyblock is-prompt">
+    <div class="cb-head"><span>The review agent</span><button type="button">Copy</button></div>
+    <pre>You are a code reviewer. Read the diff in /tmp/review.diff and identify risks, regressions, and style violations. Report every issue you find, including ones you're uncertain about — give each a confidence level and a severity rather than filtering them out yourself.</pre>
+  </div>
+  <div class="copyblock is-prompt">
+    <div class="cb-head"><span>The executive summary</span><button type="button">Copy</button></div>
+    <pre>Now summarise this for a non-technical stakeholder in three sentences: what changed, what the risk is, and what happens next. No jargon.</pre>
+  </div>
+
+  <h2>You are done when</h2>
+  <div class="success">You planned a feature, delegated it, and reviewed it — without writing a line of code yourself.</div>
+
+  <details class="cheat">
+    <summary>Stuck? Open this</summary>
+    <div class="body">
+      <p>Nothing to skip to. This is the last one.</p>
+      <p>If you are behind, <code>./checkpoint.sh 8</code> gives you a diff worth reviewing.</p>
+    </div>
+  </details>
+
+  <nav class="pager">
+    <a href="09-plan-first.html">&larr; Plan-First Orchestration</a>
+    <span>Next &rarr;</span>
+  </nav>
+</div>
+<script>
+document.addEventListener('click', function (e) {
+  var toggle = e.target.closest('[data-theme-toggle]');
+  if (toggle) {
+    var root = document.documentElement;
+    var current = root.getAttribute('data-theme');
+    if (!current) {
+      var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+      current = prefersLight ? 'light' : 'dark';
+    }
+    var next = current === 'light' ? 'dark' : 'light';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('orchlab-guide-theme', next); } catch (err) {}
+    return;
+  }
+
+  var btn = e.target.closest('.copyblock button');
+  if (!btn) return;
+  var text = btn.closest('.copyblock').querySelector('pre').textContent;
+  var flash = function () {
+    var was = btn.textContent;
+    btn.textContent = 'Copied';
+    btn.classList.add('copied');
+    setTimeout(function () { btn.textContent = was; btn.classList.remove('copied'); }, 1400);
+  };
+  var ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'absolute';
+  ta.style.left = '-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+  document.body.removeChild(ta);
+  if (ok) { flash(); return; }
+  if (navigator.clipboard) { navigator.clipboard.writeText(text).then(flash); }
+});
+</script>
+</body>
+</html>
