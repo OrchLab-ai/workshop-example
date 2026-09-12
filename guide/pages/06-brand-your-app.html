@@ -260,6 +260,37 @@ details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
   font-size: 14.5px;
 }
 
+/* "Which window do I type this into, and from where?" is the most common thing a
+   first-timer gets wrong, and a list of copyable commands answers neither half of
+   it. So it is a callout rather than a sentence of prose above the commands, and it
+   names the wrong shells explicitly - "not PowerShell" is the part people need. The
+   badge takes its text colour from --bg so it stays readable when --accent flips to
+   the light green in dark mode. */
+.shellreq {
+  border-left: 4px solid var(--accent); background: var(--surface);
+  padding: 13px 16px; border-radius: 0 6px 6px 0; margin: 0 0 14px;
+  color: var(--strong); font-size: 15px;
+}
+.shellreq .where {
+  display: inline-block; background: var(--accent); color: var(--bg);
+  font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .08em;
+  text-transform: uppercase; padding: 5px 8px; border-radius: 3px;
+  margin-right: 10px; vertical-align: 1px;
+}
+.shellreq strong { color: var(--strong); }
+
+/* Which shell does this command belong in. Two places, two colours, stated on every
+   block rather than once at the top of the page — by the time someone has scrolled
+   to the third command they have forgotten a heading. */
+.loc {
+  flex: none; margin-left: auto; margin-right: 10px; padding: 3px 8px; border-radius: 3px;
+  font: 700 10.5px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
+  text-transform: uppercase; white-space: nowrap;
+}
+.loc.host      { background: var(--amber);  color: var(--bg); }
+.loc.container { background: var(--accent); color: var(--bg); }
+.shellreq .not { color: var(--amber); font-weight: 700; }
+
 /* nav */
 nav.pager {
   display: flex; justify-content: space-between; gap: 14px;
@@ -277,7 +308,7 @@ nav.pager a:hover { background: var(--surface); }
 <div class="wrap">
   <header class="site">
     <a href="../start-here.html">← ALL ACTIVITIES</a>
-    <a href="platform.html">SETUP</a>
+    <a href="environment-setup.html">SETUP</a>
     <a href="links.html">ALL LINKS</a>
     <span class="spacer"></span>
     <button class="theme-toggle" type="button" data-theme-toggle
@@ -304,9 +335,31 @@ nav.pager a:hover { background: var(--surface); }
   </ol>
 
   <h2>Commands</h2>
+      <div class="shellreq"><span class="where">Where</span>Run these in <strong>two places — your machine, and the container</strong>. Commands marked <strong>your machine</strong> run in Git Bash (Windows) or Terminal (macOS), from the root of your <code>workshop-example</code> clone. Commands marked <strong>in the container</strong> run after you are inside it — see <em>Start your day</em> below.</div>
   <div class="copyblock">
-    <div class="cb-head"><span>Start from the right checkpoint</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>1. Start the stack (once a day — leave it running)</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
+    <pre>docker compose -f docker-compose.workshop.yml up -d</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>2. Get a shell inside the container</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
+    <pre>docker compose -f docker-compose.workshop.yml exec claude-container bash</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>3. Check the site is up — open this in your browser</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
+    <pre>http://localhost:5173</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Jump to the starting checkpoint</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
     <pre>./checkpoint.sh 4</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Start Claude Code</span><span class="loc container">in the container</span><button type="button">Copy</button></div>
+    <pre>claude</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Your brand, and the tokens generated from it</span><span class="loc container">in the container</span><button type="button">Copy</button></div>
+    <pre>specs/standards/brand.md
+packages/client/src/tokens.css</pre>
   </div>
 
   <h2>Prompts — copy, don't retype</h2>

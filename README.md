@@ -14,7 +14,7 @@ for a download.
 git clone https://github.com/OrchLab-ai/workshop-example.git
 cd workshop-example
 cp .env.example .env      # then paste your token in — see below
-./verify.sh
+./verify-setup.sh
 ```
 
 ### On Windows with Docker Desktop in *Windows-container* mode
@@ -34,7 +34,7 @@ proves the same five things and needs no daemon switch:
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1
 ```
 
-`./verify.sh` will tell you this too rather than failing confusingly. See
+`./verify-setup.sh` will tell you this too rather than failing confusingly. See
 [`windows/README.md`](windows/README.md) for the detail.
 
 ### Getting your token
@@ -121,13 +121,28 @@ A plain-text copy lands in `verify-report.txt`. Paste that when you ask for help
 
 | Command | What it does |
 |---|---|
-| `./verify.sh` | The normal run |
-| `VERIFY_PORT=8081 ./verify.sh` | Use a different port if 8080 is taken |
-| `./verify.sh --quiet` | One-line verdict only (facilitators sweeping a room) |
-| `./verify.sh --keep` | Leave the containers up afterwards |
+| `./verify-setup.sh` | The normal run |
+| `VERIFY_PORT=8081 ./verify-setup.sh` | Use a different port if 8080 is taken |
+| `./verify-setup.sh --quiet` | One-line verdict only (facilitators sweeping a room) |
+| `./verify-setup.sh --keep` | Leave the containers up afterwards |
 
 Detailed output from every step is kept in `.verify-logs/` — you should not need
 it, but it is there when a check fails.
+
+### Check 2 takes the longest, and it tells you why
+
+The first run has to download the Playwright base image — roughly 2 GB — so check 2
+can sit there for several minutes. It is not stuck. While it works, that row shows
+what Docker is doing and how long it has been at it:
+
+```
+   [2/5]  Workshop image builds ... pulling 742.8MB / 1.9GB 96s
+```
+
+The finished `PASS` line replaces it. Later runs reuse the downloaded image and
+check 2 takes a second or two. Nothing is animated under `--quiet`, when output is
+redirected to a file, or in CI, so a pasted report is the same fixed-length
+checklist it always was.
 
 ---
 
@@ -153,7 +168,7 @@ a pass later.
 ## Repository layout
 
 ```
-verify.sh                    # The environment check — start here
+verify-setup.sh                    # The environment check — start here
 checkpoint.sh                # Jump between checkpoints; parks your work safely
 docker-compose.verify.yml    # Two-service check stack (site + agent)
 verify/
@@ -165,7 +180,7 @@ checkpoints/
   README.md                  # How checkpoints work; publishing guide
 guide/
   start-here.html            # The how-to guide — open this in a browser
-  pages/                     # Activities, platform.html (setup), links.html
+  pages/                     # Activities, environment-setup.html, links.html
   src/activities.js          # Guide content as data
   src/build-guide.js         # Regenerates the guide (no dependencies)
 windows/                     # Windows-containers support layer
@@ -192,7 +207,7 @@ collapsed "Stuck? Open this" section with the shortcut when you need it.
 
 ### Pick your operating system first
 
-**[`guide/pages/platform.html`](guide/pages/platform.html)** — linked as **SETUP** in
+**[`guide/pages/environment-setup.html`](guide/pages/environment-setup.html)** — linked as **SETUP** in
 the header of every page — asks which machine you are on and gives you the exact
 commands for it. It is worth doing before anything else, because the environment
 check is a *different script* depending on your setup.
@@ -211,8 +226,8 @@ same pathway you chose.
 
 | Answer | Pathway | Shell | Check |
 |---|---|---|---|
-| macOS | Only one — there is no Windows-container mode on a Mac | Terminal | `./verify.sh` |
-| `linux` | Linux containers — the usual Windows setup | Git Bash | `./verify.sh` |
+| macOS | Only one — there is no Windows-container mode on a Mac | Terminal | `./verify-setup.sh` |
+| `linux` | Linux containers — the usual Windows setup | Git Bash | `./verify-setup.sh` |
 | `windows` | Windows containers — see [`windows/README.md`](windows/README.md) | PowerShell | `windows\verify.ps1` |
 
 Guess wrong and nothing breaks: each script detects the wrong container mode and
@@ -226,7 +241,7 @@ system setting to begin with and remembers your choice after that.
 ```
 guide/
   start-here.html    The entry point — the only file here, double-click it
-  pages/             Every other page: the 10 activities, platform.html, links.html
+  pages/             Every other page: the 10 activities, environment-setup.html, links.html
   src/
     activities.js    The workshop content as data — edit this
     build-guide.js   The generator: no dependencies, no build tooling
@@ -256,7 +271,7 @@ happened, and each names the finding in
 [`.claude/context/findings.yaml`](.claude/context/findings.yaml) that records it.
 
 It does **not** prove that either image builds or that a browser renders — those need
-a Docker daemon in the right mode, and they are exactly what `verify.sh` and
+a Docker daemon in the right mode, and they are exactly what `verify-setup.sh` and
 `windows\verify.ps1` are for. A green run here means the invariants hold, not that
 the workshop works.
 

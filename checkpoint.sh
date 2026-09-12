@@ -167,7 +167,7 @@ if [ "$MODE" = "status" ]; then
   printf '\n'
   if [ -z "$CURRENT" ]; then
     printf '   %s\n' "You are not on a checkpoint yet."
-    printf '   %s\n\n' "${DIM}Start with  ./verify.sh  then  ./checkpoint.sh --list${RESET}"
+    printf '   %s\n\n' "${DIM}Start with  ./verify-setup.sh  then  ./checkpoint.sh --list${RESET}"
     exit 0
   fi
   if idx=$(index_of "$CURRENT"); then

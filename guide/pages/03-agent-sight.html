@@ -260,6 +260,37 @@ details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
   font-size: 14.5px;
 }
 
+/* "Which window do I type this into, and from where?" is the most common thing a
+   first-timer gets wrong, and a list of copyable commands answers neither half of
+   it. So it is a callout rather than a sentence of prose above the commands, and it
+   names the wrong shells explicitly - "not PowerShell" is the part people need. The
+   badge takes its text colour from --bg so it stays readable when --accent flips to
+   the light green in dark mode. */
+.shellreq {
+  border-left: 4px solid var(--accent); background: var(--surface);
+  padding: 13px 16px; border-radius: 0 6px 6px 0; margin: 0 0 14px;
+  color: var(--strong); font-size: 15px;
+}
+.shellreq .where {
+  display: inline-block; background: var(--accent); color: var(--bg);
+  font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .08em;
+  text-transform: uppercase; padding: 5px 8px; border-radius: 3px;
+  margin-right: 10px; vertical-align: 1px;
+}
+.shellreq strong { color: var(--strong); }
+
+/* Which shell does this command belong in. Two places, two colours, stated on every
+   block rather than once at the top of the page — by the time someone has scrolled
+   to the third command they have forgotten a heading. */
+.loc {
+  flex: none; margin-left: auto; margin-right: 10px; padding: 3px 8px; border-radius: 3px;
+  font: 700 10.5px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
+  text-transform: uppercase; white-space: nowrap;
+}
+.loc.host      { background: var(--amber);  color: var(--bg); }
+.loc.container { background: var(--accent); color: var(--bg); }
+.shellreq .not { color: var(--amber); font-weight: 700; }
+
 /* nav */
 nav.pager {
   display: flex; justify-content: space-between; gap: 14px;
@@ -277,7 +308,7 @@ nav.pager a:hover { background: var(--surface); }
 <div class="wrap">
   <header class="site">
     <a href="../start-here.html">← ALL ACTIVITIES</a>
-    <a href="platform.html">SETUP</a>
+    <a href="environment-setup.html">SETUP</a>
     <a href="links.html">ALL LINKS</a>
     <span class="spacer"></span>
     <button class="theme-toggle" type="button" data-theme-toggle
@@ -287,7 +318,7 @@ nav.pager a:hover { background: var(--surface); }
   <span class="actnum">ACTIVITY 03</span>
   <p class="eyebrow">Part 1 — AI Coding</p>
   <h1>Give Your Agent Sight</h1>
-  <p class="lede">Wire Playwright into the container so the agent can open the running app, navigate it, and screenshot what it did.</p>
+  <p class="lede">Your container already has Playwright. The skill is asking the agent to use it — to open the running app, look at what it changed, and prove it with a screenshot.</p>
 
   <div class="cp">
     <span>start from <b>cp-01</b></span>
@@ -297,27 +328,55 @@ nav.pager a:hover { background: var(--surface); }
 
   <h2>What to do</h2>
   <ol>
-    <li>Paste the prompt and let the agent work out the Docker wiring itself.</li>
-    <li>Point it at the page you changed in the last activity.</li>
-    <li>Ask for a before and after.</li>
+    <li>Start Claude Code in the container — Playwright and its MCP server are already installed, so there is nothing to wire up.</li>
+    <li>Paste one of the prompts. The words that matter are <strong>use Playwright</strong>: without them the agent will reason about the code instead of looking at the page.</li>
+    <li>Read what it reports back against what you can see yourself at <code>http://localhost:5173</code>.</li>
+    <li>Check the screenshots it wrote — they land in <code>screenshots/</code> on your own machine.</li>
   </ol>
 
   <h2>Commands</h2>
+      <div class="shellreq"><span class="where">Where</span>Run these in <strong>two places — your machine, and the container</strong>. Commands marked <strong>your machine</strong> run in Git Bash (Windows) or Terminal (macOS), from the root of your <code>workshop-example</code> clone. Commands marked <strong>in the container</strong> run after you are inside it — see <em>Start your day</em> below.</div>
   <div class="copyblock">
-    <div class="cb-head"><span>Start from the right checkpoint</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>1. Start the stack (once a day — leave it running)</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
+    <pre>docker compose -f docker-compose.workshop.yml up -d</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>2. Get a shell inside the container</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
+    <pre>docker compose -f docker-compose.workshop.yml exec claude-container bash</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>3. Check the site is up — open this in your browser</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
+    <pre>http://localhost:5173</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Jump to the starting checkpoint</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
     <pre>./checkpoint.sh 1</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Confirm the agent has a browser to drive</span><span class="loc container">in the container</span><button type="button">Copy</button></div>
+    <pre>claude mcp list</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Start Claude Code, then ask it to look at the page itself</span><span class="loc container">in the container</span><button type="button">Copy</button></div>
+    <pre>claude</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Screenshots it takes land here, on your machine</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
+    <pre>screenshots/</pre>
   </div>
 
   <h2>Prompts — copy, don't retype</h2>
   <div class="copyblock is-prompt">
-    <div class="cb-head"><span>The prompt</span><button type="button">Copy</button></div>
-    <pre>Add Playwright to this container so you can open the running app, navigate it, and take screenshots. Then screenshot the page you changed in the last exercise and show me before and after.</pre>
+    <div class="cb-head"><span>Ask it to look</span><button type="button">Copy</button></div>
+    <pre>Use Playwright to open http://localhost:5173, navigate to the page I changed in the last exercise, and take a screenshot to /screenshots. Then tell me what you actually see on the page — not what the code says it should do.</pre>
   </div>
-
-  <h2>Links</h2>
-  <div class="copyblock">
-    <div class="cb-head"><span>Playwright in Docker — standalone reference</span><button type="button">Copy</button></div>
-    <pre>https://github.com/OrchLab-ai/playwright-in-docker</pre>
+  <div class="copyblock is-prompt">
+    <div class="cb-head"><span>Ask it to compare</span><button type="button">Copy</button></div>
+    <pre>Use Playwright to screenshot the page before and after your change, save both to /screenshots, and tell me what visibly differs. If the change did not render, say so plainly rather than explaining why it should have worked.</pre>
+  </div>
+  <div class="copyblock is-prompt">
+    <div class="cb-head"><span>Ask it to check itself</span><button type="button">Copy</button></div>
+    <pre>Use Playwright to verify the change actually works in the browser: click through the flow a user would take, and report anything that errors or looks wrong. Fix what you find, then screenshot the result.</pre>
   </div>
 
   <h2>You are done when</h2>
@@ -326,8 +385,8 @@ nav.pager a:hover { background: var(--surface); }
   <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
-      <p><code>./checkpoint.sh 2</code> gives you a container that already has sight.</p>
-      <p>Want to read a working version instead of building one? The <code>verify/</code> directory is exactly this, wired up — it is what your environment check ran.</p>
+      <p>If the agent says it cannot find a browser, check <code>claude mcp list</code> inside the container — the Playwright MCP server should be listed.</p>
+      <p>Want to read a working version instead? The <code>verify/</code> directory drives a real browser in a container and captures a screenshot — it is what your environment check ran this morning.</p>
       <p>This matters more than it looks: everything in Part 3 depends on an agent that can check its own work.</p>
     </div>
   </details>

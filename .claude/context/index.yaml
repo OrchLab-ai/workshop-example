@@ -12,7 +12,7 @@ version: 1
 updated: 2026-09-12
 repo: workshop-example
 summary: >-
-  The workshop ships a Linux-container environment check (verify.sh). A Windows host
+  The workshop ships a Linux-container environment check (verify-setup.sh). A Windows host
   whose Docker Desktop is in Windows-container mode cannot run it at all, so this
   repo also carries a Windows-container support layer under windows/. The context
   documents below record what was measured while building that layer.
@@ -64,7 +64,7 @@ fast_facts:
     (0xC00000FD STATUS_STACK_OVERFLOW). Fonts, memory, flags and DLLs were all ruled
     out by measurement. Use Firefox. Treat Chromium as unsupported, not untested.
   linux_stack_on_windows_daemon: >-
-    Impossible. One daemon cannot serve both modes. verify.sh now detects this and
+    Impossible. One daemon cannot serve both modes. verify-setup.sh now detects this and
     exits 2 pointing at windows/verify.ps1 instead of blaming the network.
   esm_and_node_path: >-
     NODE_PATH applies to CommonJS require() ONLY, never to ESM import. A globally

@@ -8,7 +8,7 @@
 #   * that either container image builds
 #   * that a browser renders anything
 # Those need a Docker daemon in the right mode, and a Windows host for the Windows
-# image. They are what verify.sh and windows\verify.ps1 are for. A green tick here
+# image. They are what verify-setup.sh and windows\verify.ps1 are for. A green tick here
 # means the invariants hold, not that the workshop works.
 name: tests
 
@@ -43,10 +43,10 @@ jobs:
 
       - name: Check shell scripts
         # shellcheck ships on GitHub's Ubuntu runners. Advisory rather than blocking:
-        # verify.sh is deliberately written for readability by workshop attendees, and
+        # verify-setup.sh is deliberately written for readability by workshop attendees, and
         # a style opinion should not fail a PR that fixes a real bug.
         continue-on-error: true
-        run: shellcheck verify.sh checkpoint.sh || true
+        run: shellcheck verify-setup.sh checkpoint.sh || true
 
       - name: Check PowerShell
         # PSScriptAnalyzer at Error severity only. Same reasoning as above, plus the

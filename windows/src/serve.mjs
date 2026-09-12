@@ -29,7 +29,7 @@ const TYPES = {
 };
 
 // An ALLOWLIST of the files under ROOT, built by walking the directory: URL path
-// ("pages/platform.html") -> absolute path on disk.
+// ("pages/environment-setup.html") -> absolute path on disk.
 //
 // Why an allowlist rather than sanitising the request path: it removes the bug class
 // instead of defending against it. No value derived from the request ever reaches

@@ -23,7 +23,7 @@ findings:
     symptom: |
       docker pull nginx:alpine fails with:
         no matching manifest for windows(10.0.26200)/amd64 in the manifest list entries
-      Check 1 of verify.sh still PASSES (the daemon is reachable), so the run dies at
+      Check 1 of verify-setup.sh still PASSES (the daemon is reachable), so the run dies at
       check 2 with "the container image failed to build / this is almost always a
       network problem" - a misleading diagnosis that sends people to debug wifi.
     cause: >-
@@ -31,13 +31,13 @@ findings:
       images (nginx:alpine, mcr.microsoft.com/playwright:v1.49.1-noble) are Linux-only.
     fix: >-
       Two paths, neither of which is "just switch": switching stops the user's running
-      Windows containers, which may be someone else's active work. So (a) verify.sh now
+      Windows containers, which may be someone else's active work. So (a) verify-setup.sh now
       detects OSType=windows up front and exits 2 with both options spelled out, and
       (b) windows/ provides a real Windows-container check that needs no switch.
     evidence:
       command: docker info --format '{{.OSType}}'
       result: windows
-    files: [verify.sh, windows/]
+    files: [verify-setup.sh, windows/]
 
   - id: WIN-002
     title: Chromium cannot render in a Windows Server Core container - use Firefox
@@ -253,10 +253,10 @@ findings:
       non-ASCII character). windows/verify.ps1 also strips \r while parsing .env.
       To remediate an already-bad clone: re-clone, or `git rm --cached -r . && git reset --hard`.
     evidence:
-      command: git config --get core.autocrlf ; file verify.sh
-      result: "true ; verify.sh: CRLF line terminators"
+      command: git config --get core.autocrlf ; file verify-setup.sh
+      result: "true ; verify-setup.sh: CRLF line terminators"
     note: >-
-      This bash (Cygwin 5.3) tolerates CRLF scripts, so verify.sh itself still runs
+      This bash (Cygwin 5.3) tolerates CRLF scripts, so verify-setup.sh itself still runs
       here. Do not conclude from that that CRLF is harmless - a Linux container will
       not tolerate it.
     files: [.gitattributes, windows/verify.ps1]
@@ -321,15 +321,15 @@ findings:
       CONTAINER paths: `node /work/screenshot.mjs` reached docker as
       `node C:/Program Files/Git/work/screenshot.mjs`.
     fix: >-
-      export MSYS_NO_PATHCONV=1 and MSYS2_ARG_CONV_EXCL='*' at the top of verify.sh.
+      export MSYS_NO_PATHCONV=1 and MSYS2_ARG_CONV_EXCL='*' at the top of verify-setup.sh.
       Both are meaningless no-ops on macOS and Linux, so this is safe to set
       unconditionally rather than detecting the platform.
     note: >-
       This bug is invisible on macOS and Linux and hits every Windows attendee who
       runs the Linux stack from Git Bash - i.e. the exact population the workshop
-      README's `./verify.sh` instruction targets on Windows. It masked WIN-012
+      README's `./verify-setup.sh` instruction targets on Windows. It masked WIN-012
       completely: the module path was mangled before Node ever got to the import.
-    files: [verify.sh]
+    files: [verify-setup.sh]
 
   - id: WIN-013
     title: Expand-Archive hard-crashes PowerShell on Server Core base images
@@ -443,11 +443,11 @@ findings:
     cause: Backslash-bearing text was placed in printf's FORMAT argument.
     fix: >-
       Pass such text as an ARGUMENT - printf '%s\n' "$path" - or emit the whole block
-      from a quoted heredoc, which needs no escaping at all. verify.sh uses a heredoc.
+      from a quoted heredoc, which needs no escaping at all. verify-setup.sh uses a heredoc.
     evidence:
-      command: ./verify.sh
+      command: ./verify-setup.sh
       result: "printed: powershell ... -File windowserify.ps1"
-    files: [verify.sh]
+    files: [verify-setup.sh]
 
   # --- Found while building and running the Windows image, 2026-09-12 ----------
 
@@ -503,7 +503,7 @@ findings:
       shape exists on Linux via the docker group and the unix socket.
     fix: >-
       Diagnose the two causes apart. windows/verify.ps1 gained Get-DockerGroupStatus;
-      verify.sh classifies the error text (permission denied / access is denied)
+      verify-setup.sh classifies the error text (permission denied / access is denied)
       before deciding what to say.
     the_subtle_part: >-
       Membership is read from the process TOKEN, not from the group's member list.
@@ -524,7 +524,7 @@ findings:
     note: >-
       Found while preparing to test the workshop as a non-admin user, BEFORE running
       that test - the prospective test was what prompted reading the group state.
-    files: [windows/verify.ps1, verify.sh]
+    files: [windows/verify.ps1, verify-setup.sh]
 
   - id: WIN-021
     title: Move-Item preserves the SOURCE ACL, so a moved dir can be unreadable

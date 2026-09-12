@@ -2,7 +2,7 @@
 # workshop stack: something serving a site, and an agent container that can see
 # it through a real browser.
 #
-# Driven by ./verify.sh — you should not need to run these by hand.
+# Driven by ./verify-setup.sh — you should not need to run these by hand.
 
 services:
   verify-web:
@@ -36,6 +36,6 @@ services:
     volumes:
       - ./verify/screenshot.mjs:/work/screenshot.mjs:ro
       - ./screenshots:/screenshots
-    # No default command — verify.sh invokes each check explicitly so it can
+    # No default command — verify-setup.sh invokes each check explicitly so it can
     # report them as separate lines.
     command: ["node", "--version"]

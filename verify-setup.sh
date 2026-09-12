@@ -23,7 +23,7 @@ KEEP=0
 
 usage() {
   cat <<'USAGE'
-Usage: ./verify.sh [options]
+Usage: ./verify-setup.sh [options]
 
   --quiet   Suppress the banner; print only the final verdict line.
             Intended for facilitators sweeping a room.
@@ -77,6 +77,9 @@ mkdir -p "$LOG_DIR" screenshots
 
 IDX=0
 FAILED=0
+CURRENT_LABEL=""
+CURRENT_LINE=""
+CURRENT_PREFIX=""
 FAIL_LABEL=""
 FAIL_CAUSE=""
 FAIL_FIX=""
@@ -93,6 +96,10 @@ start_check() {
   while [ ${#padded} -lt 42 ]; do padded="${padded}."; done
   CURRENT_LABEL="$label"
   CURRENT_LINE="   [$IDX/$TOTAL]  $padded  "
+  # The finished line is padded out with dots to a fixed width. While the check is
+  # still running those columns are worth more as room for a progress note, so the
+  # animated line uses an unpadded prefix and the padded line overwrites it.
+  CURRENT_PREFIX="   [$IDX/$TOTAL]  $label ... "
 }
 
 pass_check() {
@@ -105,6 +112,101 @@ fail_check() {
   FAIL_LABEL="$CURRENT_LABEL"
   FAIL_CAUSE="$1"
   FAIL_FIX="$2"
+}
+
+# ------------------------------------------------------------------- progress
+#
+# The checklist prints one line per check, and that line is only written once the
+# check has finished. That is right for a check that takes a second and wrong for
+# check 2, which on a first run downloads a ~2 GB base image: the screen holds
+# still for minutes with nothing to say it is working, and people kill it. So a
+# long step redraws its own line in place with where it has got to, and the
+# finished PASS/FAIL line overwrites the animation. Nothing is streamed, and the
+# report file never sees any of it - a pasted report stays the same fixed-length
+# checklist it was before.
+
+# Animate only on a real terminal, and never under --quiet or in CI, where the
+# carriage returns would pile up in a log nobody is watching live.
+PROGRESS=0
+if [ -t 1 ] && [ "$QUIET" -eq 0 ] && [ -z "${CI:-}" ]; then PROGRESS=1; fi
+
+term_cols() {
+  local c
+  c=$(tput cols 2>/dev/null)
+  case "$c" in '' | *[!0-9]*) c=80 ;; esac
+  [ "$c" -lt 48 ] && c=48
+  printf '%s' "$c"
+}
+
+# progress_note <log> - one short phrase for where the step has got to, read out
+# of BuildKit's plain-progress log.
+progress_note() {
+  local log="$1" sizes line
+  [ -s "$log" ] || { printf 'starting'; return; }
+  # BuildKit's plain output carries the layer counter: "120.4MB / 1.9GB". Showing it
+  # verbatim is the single most reassuring thing on screen during a first run, because
+  # it is the one part that visibly moves.
+  # Both phases are read from the TAIL of the log, so the note follows what docker is
+  # doing now. Extraction is checked first: the download's byte counters stay in the
+  # log after it finishes, and would otherwise keep winning once the pull is over.
+  if tail -40 "$log" 2>/dev/null | grep -qE 'extracting'; then
+    printf 'extracting layers'
+    return
+  fi
+  sizes=$(tail -40 "$log" 2>/dev/null |
+    grep -oE '[0-9.]+[KMG]i?B / [0-9.]+[KMG]i?B' | tail -1)
+  if [ -n "$sizes" ]; then
+    printf 'pulling %s' "$sizes"
+    return
+  fi
+  line=$(grep -E '^#[0-9]+ \[[0-9]+/[0-9]+\]' "$log" 2>/dev/null | tail -1)
+  if [ -n "$line" ]; then
+    printf 'step %s' "$(printf '%s' "$line" |
+      sed -E 's/^#[0-9]+ \[([0-9]+\/[0-9]+)\] ([A-Za-z]+).*/\1 \2/')"
+    return
+  fi
+  printf 'working'
+}
+
+# progress_draw <elapsed-seconds> <note> - repaint the current check line. The
+# note is truncated so the line cannot wrap: a wrapped line defeats the \r redraw
+# and leaves a trail of half-finished rows up the screen.
+progress_draw() {
+  local secs="$1" note="$2" room
+  room=$(( $(term_cols) - ${#CURRENT_PREFIX} - 10 ))
+  [ "$room" -lt 8 ] && room=8
+  if [ ${#note} -gt "$room" ]; then note="${note:0:$((room - 3))}..."; fi
+  printf '\r%s%s%s %ss%s' "$CURRENT_PREFIX" "$DIM" "$note" "$secs" "$RESET"
+}
+
+progress_clear() {
+  printf '\r%*s\r' "$(term_cols)" ''
+}
+
+# run_logged <log> <command...> - run a command silently, logging it, and keep the
+# current check line updated while it runs. Returns the command's own exit status,
+# so the callers' if/elif logic reads exactly as it did before.
+run_logged() {
+  local log="$1"; shift
+  # stdin comes from /dev/null in both branches. `docker compose run` will read the
+  # terminal if it can, and a BACKGROUND job that reads the terminal is stopped by
+  # SIGTTIN - which looks exactly like the hang this function exists to prevent.
+  if [ "$PROGRESS" -eq 0 ]; then
+    "$@" >"$log" 2>&1 </dev/null
+    return $?
+  fi
+  : > "$log"
+  "$@" >"$log" 2>&1 </dev/null &
+  local pid=$! start rc
+  start=$(date +%s)
+  while kill -0 "$pid" 2>/dev/null; do
+    progress_draw "$(( $(date +%s) - start ))" "$(progress_note "$log")"
+    sleep 1
+  done
+  wait "$pid"
+  rc=$?
+  progress_clear
+  return $rc
 }
 
 cleanup() {
@@ -192,7 +294,7 @@ start_check "Docker daemon reachable"
 if ! command -v docker >/dev/null 2>&1; then
   fail_check "the 'docker' command was not found on your PATH" \
 "install Docker Desktop from https://docker.com/products/docker-desktop
-                        then re-run  ./verify.sh"
+                        then re-run  ./verify-setup.sh"
 elif ! docker info >"$LOG_DIR/01-docker.log" 2>&1; then
   # `docker info` failing has two very different causes that look identical from
   # here. If you lack permission to reach the socket or pipe, the daemon is running
@@ -226,7 +328,7 @@ elif ! docker info >"$LOG_DIR/01-docker.log" 2>&1; then
   else
     fail_check "Docker is installed but the daemon is not answering" \
 "start Docker Desktop and wait for the whale icon to stop animating
-                        then re-run  ./verify.sh
+                        then re-run  ./verify-setup.sh
                         the full error is in $LOG_DIR/01-docker.log"
   fi
 else
@@ -239,12 +341,12 @@ fi
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop image builds"
   BUILD_START=$(date +%s)
-  if compose build verify-agent >"$LOG_DIR/02-build.log" 2>&1; then
+  if run_logged "$LOG_DIR/02-build.log" compose build verify-agent; then
     pass_check "$(( $(date +%s) - BUILD_START ))s"
   else
     fail_check "the container image failed to build" \
 "this is almost always a network problem - check your connection,
-                        then re-run  ./verify.sh
+                        then re-run  ./verify-setup.sh
                         full build output is in $LOG_DIR/02-build.log"
   fi
 fi
@@ -259,9 +361,9 @@ if [ "$FAILED" -eq 0 ]; then
                         copy the value it prints
                         run  cp .env.example .env   (if you have not already)
                         paste the value into .env as CLAUDE_CODE_OAUTH_TOKEN
-                        re-run  ./verify.sh"
-  elif ! compose run --rm --no-deps verify-agent claude --version \
-        >"$LOG_DIR/03-claude.log" 2>&1; then
+                        re-run  ./verify-setup.sh"
+  elif ! run_logged "$LOG_DIR/03-claude.log" \
+        compose run --rm --no-deps verify-agent claude --version; then
     fail_check "the Claude Code CLI did not start inside the container" \
 "check $LOG_DIR/03-claude.log for the error
                         if it mentions authentication, re-run  claude setup-token
@@ -277,10 +379,10 @@ fi
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop site responds"
   PORT="${VERIFY_PORT:-8080}"
-  if ! compose up -d verify-web >"$LOG_DIR/04-web.log" 2>&1; then
+  if ! run_logged "$LOG_DIR/04-web.log" compose up -d verify-web; then
     fail_check "the web container would not start" \
 "port $PORT is probably already in use on your machine
-                        re-run with a different port:  VERIFY_PORT=8081 ./verify.sh"
+                        re-run with a different port:  VERIFY_PORT=8081 ./verify-setup.sh"
   else
     SITE_START=$(date +%s)
     SITE_OK=0
@@ -291,14 +393,17 @@ if [ "$FAILED" -eq 0 ]; then
         SITE_OK=1
         break
       fi
+      [ "$PROGRESS" -eq 1 ] &&
+        progress_draw "$(( $(date +%s) - SITE_START ))" "waiting for nginx to answer on :${PORT}"
       sleep 1
     done
+    [ "$PROGRESS" -eq 1 ] && progress_clear
     if [ "$SITE_OK" -eq 1 ]; then
       pass_check "HTTP 200 on :${PORT}, $(( $(date +%s) - SITE_START ))s"
     else
       fail_check "nothing answered on http://localhost:${PORT}/ after 30s" \
 "another program may be holding port $PORT
-                        re-run with a different port:  VERIFY_PORT=8081 ./verify.sh"
+                        re-run with a different port:  VERIFY_PORT=8081 ./verify-setup.sh"
     fi
   fi
 fi
@@ -308,11 +413,11 @@ fi
 if [ "$FAILED" -eq 0 ]; then
   start_check "Playwright screenshot captured"
   rm -f "$SCREENSHOT"
-  if ! compose run --rm verify-agent node /work/screenshot.mjs \
-       >"$LOG_DIR/05-screenshot.log" 2>&1; then
+  if ! run_logged "$LOG_DIR/05-screenshot.log" \
+       compose run --rm verify-agent node /work/screenshot.mjs; then
     fail_check "the headless browser could not render and capture the page" \
 "check $LOG_DIR/05-screenshot.log for the error
-                        then re-run  ./verify.sh"
+                        then re-run  ./verify-setup.sh"
   elif [ ! -s "$SCREENSHOT" ]; then
     fail_check "Playwright reported success but $SCREENSHOT was not written" \
 "this is usually a Docker file-sharing permission problem
