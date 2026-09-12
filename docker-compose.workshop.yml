@@ -1,0 +1,126 @@
+# The workshop stack. One group, started once, used all day.
+#
+#   docker compose -f docker-compose.workshop.yml up -d
+#
+# Everything an attendee needs is in here, which is the point: the only things
+# required on the host are Docker, Claude Code (for `claude setup-token`), and git.
+#
+# Two services run all day, and a third is started only for the Part 3 autonomy
+# activity — see the `l4` profile at the bottom.
+name: orchlab-workshop
+
+services:
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mmf
+      POSTGRES_PASSWORD: mmf
+      POSTGRES_DB: mmf
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mmf']
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    # No published port, deliberately. Nothing on the host needs to reach Postgres
+    # directly, and publishing 5432 collides with any database an attendee already
+    # runs — which turns a working setup into a failed one for no gain.
+
+  # ---------------------------------------------------------------------------
+  # Where attendees work for the whole day. Claude Code runs IN HERE, not on the
+  # host: that is the isolation layer the deck argues for on slide 39, and it is
+  # what makes skipping permission prompts defensible later on.
+  #
+  # The image is the app's own agent image, not a new one. It already carries
+  # Claude Code, the Playwright MCP server, Chromium, dbmate, git and the GitHub
+  # CLI, and it already solves two problems that are painful to rediscover: it
+  # runs as a non-root `agent` user, because Claude Code refuses to skip
+  # permissions as root, and it pre-creates ~/.claude so a volume mount cannot
+  # leave that directory owned by root and break Claude's Bash tool.
+  claude-container:
+    build:
+      context: ./app/autonomous
+      dockerfile: Dockerfile
+    # The image's own entrypoint runs an autonomous loop. For Parts 1 and 2 the
+    # container just needs to stay up so attendees can exec into it.
+    entrypoint: ['sleep', 'infinity']
+    working_dir: /workspace/repo
+    environment:
+      DATABASE_URL: postgresql://mmf:mmf@db:5432/mmf?sslmode=disable
+      JWT_SECRET: workshop-jwt-secret
+      PORT: '3001'
+      # Whichever credential .env supplies. The server-side check in
+      # verify-setup.sh has already confirmed exactly one of them is set.
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+    volumes:
+      # The real repo, so edits show up live in the attendee's editor.
+      - ./app:/workspace/repo
+      # Shadow every node_modules with a container-only volume. This is not an
+      # optimisation: the host is usually Windows, so host node_modules holds
+      # win32 binaries (esbuild, lightningcss) that a Linux container cannot run.
+      # Source is shared with the host; dependencies are not.
+      - workshop_node_modules:/workspace/repo/node_modules
+      - workshop_client_node_modules:/workspace/repo/packages/client/node_modules
+      - workshop_server_node_modules:/workspace/repo/packages/server/node_modules
+      - workshop_shared_node_modules:/workspace/repo/packages/shared/node_modules
+      # Screenshots the agent takes land on the host, where they can be looked at.
+      - ./screenshots:/screenshots
+    ports:
+      # The app, served from inside the container so it can be viewed in a normal
+      # browser on the host.
+      - '5173:5173'   # Vite (the site)
+      - '3001:3001'   # the API
+    mem_limit: 4g
+    cpus: 2
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Part 3 only. Started on demand, never as part of the day's background stack:
+  #
+  #   docker compose -f docker-compose.workshop.yml --profile l4 up autonomous-agent
+  #
+  # This is the headless one. No interactive session, no TTY — it runs
+  # `claude --dangerously-skip-permissions --print` in a loop against a prompt,
+  # bounded by an iteration cap, a cooldown and a timeout. Attendees watch the log
+  # rather than drive it, which is the entire lesson of the activity.
+  autonomous-agent:
+    profiles: ['l4']
+    build:
+      context: ./app/autonomous-demo
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://mmf:mmf@db:5432/mmf?sslmode=disable
+      JWT_SECRET: workshop-jwt-secret
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      # The guardrails are the point of the exercise, so they are visible here
+      # rather than buried in the image.
+      MAX_ITERATIONS: "${MAX_ITERATIONS:-30}"
+      COOLDOWN_SECONDS: "${COOLDOWN_SECONDS:-3}"
+      TIMEOUT_SECONDS: "${TIMEOUT_SECONDS:-1800}"
+    volumes:
+      - ./app:/workspace/repo
+      - agent_node_modules:/workspace/repo/node_modules
+      - agent_client_node_modules:/workspace/repo/packages/client/node_modules
+      - agent_server_node_modules:/workspace/repo/packages/server/node_modules
+      - agent_shared_node_modules:/workspace/repo/packages/shared/node_modules
+      - ./app/autonomous-demo/PROMPT.md:/workspace/PROMPT.md:ro
+      - ./screenshots:/screenshots
+    mem_limit: 4g
+    cpus: 2
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  workshop_node_modules:
+  workshop_client_node_modules:
+  workshop_server_node_modules:
+  workshop_shared_node_modules:
+  agent_node_modules:
+  agent_client_node_modules:
+  agent_server_node_modules:
+  agent_shared_node_modules:

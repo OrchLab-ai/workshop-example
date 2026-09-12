@@ -1,7 +1,7 @@
 # Windows-containers support layer
 
 **You need this only if Docker Desktop on your machine is set to *Windows
-containers*.** Most people are not, and should run `./verify.sh` from the repo root as
+containers*.** Most people are not, and should run `./verify-setup.sh` from the repo root as
 the main README says.
 
 Not sure? Run this:
@@ -10,7 +10,7 @@ Not sure? Run this:
 docker info --format '{{.OSType}}'
 ```
 
-- prints `linux` → use `.\verify.sh` from the repo root. Stop reading here.
+- prints `linux` → use `.\verify-setup.sh` from the repo root. Stop reading here.
 - prints `windows` → you are in the right place.
 
 Either entry point will also tell you if you picked the wrong one, so a mistake costs
@@ -39,6 +39,17 @@ check, and writes the same `screenshots\verify.png` proof and `verify-report.txt
 
 The first run pulls a ~2 GB Windows base image and builds on top of it, so give it
 time. Later runs reuse both.
+
+While it works, check 2 redraws its own row with what Docker is doing, so a long
+download cannot be mistaken for a hang:
+
+```
+   [2/5]  Workshop image builds ... pulling 742.8MB / 1.9GB 96s
+```
+
+The finished `PASS` line replaces it. This matches `verify-setup.sh`, and like it the
+animation is suppressed under `-Quiet`, when output is redirected to a file, and in
+CI — so `verify-report.txt` stays a clean fixed-length checklist.
 
 ### Host requirements
 

@@ -1,10 +1,10 @@
 ﻿<#
     OrchLab Workshop - Environment Check (WINDOWS CONTAINERS edition)
 
-    The Windows-container twin of ../verify.sh. Run this instead of verify.sh when
+    The Windows-container twin of ../verify-setup.sh. Run this instead of verify-setup.sh when
     your Docker Desktop is in Windows-container mode.
 
-    Design note, inherited deliberately from verify.sh: every intermediate command
+    Design note, inherited deliberately from verify-setup.sh: every intermediate command
     is silenced and logged to .verify-logs\. The problem this script exists to solve
     is not that checks fail - it is that a wall of streamed container output makes
     SUCCESS indistinguishable from FAILURE. So the only thing on screen is a
@@ -92,6 +92,7 @@ $script:FailCause    = ''
 $script:FailFix      = ''
 $script:CurrentLabel = ''
 $script:CurrentLine  = ''
+$script:CurrentPrefix = ''
 # Default to a non-zero exit. If anything prevents the verdict being reached, the
 # script must NOT report success by omission.
 $script:ExitCode     = 1
@@ -102,6 +103,7 @@ function Write-CheckStart([string]$Label) {
     while ($padded.Length -lt 42) { $padded += '.' }
     $script:CurrentLabel = $Label
     $script:CurrentLine  = "   [$($script:Idx)/$Total]  $padded  "
+    $script:CurrentPrefix = "   [$($script:Idx)/$Total]  $Label ... "
 }
 
 function Write-CheckPass([string]$Detail = '') {
@@ -116,6 +118,85 @@ function Write-CheckFail([string]$Cause, [string]$Fix) {
     $script:FailFix   = $Fix
 }
 
+# ------------------------------------------------------------------- progress
+#
+# Mirror of the progress block in verify-setup.sh, and there for the same reason:
+# check 2 pulls a ~2 GB Windows base image on a first run, and a checklist row that
+# is only printed once the check has FINISHED leaves the screen still for minutes.
+# People conclude it has hung and kill it. So a long step redraws its own row in
+# place with what Docker is doing, and the finished PASS/FAIL line overwrites the
+# animation. Nothing is streamed, and the report file never sees any of it - a
+# pasted report stays the same fixed-length checklist it always was.
+
+# Animate only on a real console, and never under -Quiet, with output redirected, or
+# in CI, where the carriage returns would pile up in a log nobody is watching live.
+# [Console]::IsOutputRedirected is the .NET equivalent of bash's `[ -t 1 ]`.
+$script:Progress = (-not $Quiet) -and
+                   (-not $env:CI) -and
+                   ($Host.UI.RawUI -ne $null) -and
+                   (-not [Console]::IsOutputRedirected)
+
+function Get-ConsoleWidth {
+    # A host with no real window (the ISE, a remoting session) throws rather than
+    # answering, and a progress animation must never be the thing that fails a check.
+    try {
+        $width = $Host.UI.RawUI.WindowSize.Width
+        if ($width -ge 48) { return $width }
+    } catch { }
+    return 80
+}
+
+# Get-ProgressNote - one short phrase for where the step has got to, read out of the
+# logs docker is still writing. Build progress goes to STDERR, so both are read.
+function Get-ProgressNote([string[]]$Paths) {
+    $tail = @()
+    foreach ($path in $Paths) {
+        if (Test-Path -LiteralPath $path) {
+            try { $tail += @(Get-Content -LiteralPath $path -Tail 40) } catch { }
+        }
+    }
+    if ($tail.Count -eq 0) { return 'starting' }
+    $text = $tail -join "`n"
+    # Extraction is checked first: the download's byte counters stay in the log after
+    # the pull has finished, and would otherwise keep winning once it is over.
+    if ($text -match '(?i)extracting') { return 'extracting layers' }
+    # Docker's own layer counter - "742.8MB / 1.9GB" - is the single most reassuring
+    # thing on screen during a first run, because it is the part that visibly moves.
+    $sizes = [regex]::Matches($text, '[0-9.]+[KMG]i?B / [0-9.]+[KMG]i?B')
+    if ($sizes.Count -gt 0) { return 'pulling ' + $sizes[$sizes.Count - 1].Value }
+    $steps = [regex]::Matches($text, '(?m)^#\d+ \[(\d+/\d+)\] ([A-Za-z]+)')
+    if ($steps.Count -gt 0) {
+        $last = $steps[$steps.Count - 1]
+        return 'step ' + $last.Groups[1].Value + ' ' + $last.Groups[2].Value
+    }
+    return 'working'
+}
+
+# Repaint the current check row. The note is truncated so the line cannot wrap: a
+# wrapped line defeats the carriage return and leaves a trail of half-finished rows
+# up the screen.
+function Write-ProgressLine([int]$Seconds, [string]$Note) {
+    $room = (Get-ConsoleWidth) - $script:CurrentPrefix.Length - 10
+    if ($room -lt 8) { $room = 8 }
+    if ($Note.Length -gt $room) { $Note = $Note.Substring(0, $room - 3) + '...' }
+    Write-Host ("`r" + $script:CurrentPrefix + $DIM + $Note + " ${Seconds}s" + $RESET) -NoNewline
+}
+
+function Clear-ProgressLine {
+    Write-Host ("`r" + (' ' * ((Get-ConsoleWidth) - 1)) + "`r") -NoNewline
+}
+
+# Start-Process takes ONE argument string rather than an array, so any argument
+# containing whitespace has to be quoted here or it is silently split in two. This
+# matters: $ComposeFile is built from the repo root, and "C:\Users\Jo Smith\..." is
+# an ordinary thing for that to be.
+function Format-NativeArgs([string[]]$Arguments) {
+    $quoted = foreach ($argument in $Arguments) {
+        if ($argument -match '[\s"]') { '"' + ($argument -replace '"', '\"') + '"' } else { $argument }
+    }
+    return ($quoted -join ' ')
+}
+
 # Run a command, send every stream to a log file, return the exit code. Keeping
 # this in one place is what keeps the checklist the only thing on screen.
 function Invoke-Logged([string]$LogName, [string[]]$Arguments) {
@@ -128,6 +209,7 @@ function Invoke-Logged([string]$LogName, [string[]]$Arguments) {
     # a PowerShell stack trace across the checklist, which is precisely the wall of
     # output this script exists to suppress. Judge the command by its EXIT CODE, which
     # is what the callers do.
+    if ($script:Progress) { return Invoke-LoggedWithProgress $log $Arguments }
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
@@ -138,6 +220,49 @@ function Invoke-Logged([string]$LogName, [string[]]$Arguments) {
     } finally {
         $ErrorActionPreference = $previous
     }
+}
+
+# The same job as Invoke-Logged, run as a separate process so that this script can
+# read the log while docker is still writing it. Start-Process cannot send both
+# streams to one file, so they land in two and are merged once it exits.
+function Invoke-LoggedWithProgress([string]$Log, [string[]]$Arguments) {
+    $outFile = "$Log.out"
+    $errFile = "$Log.err"
+    foreach ($stale in @($outFile, $errFile)) {
+        if (Test-Path -LiteralPath $stale) { Remove-Item -LiteralPath $stale -Force }
+    }
+
+    $proc = Start-Process -FilePath 'docker' -ArgumentList (Format-NativeArgs $Arguments) `
+        -NoNewWindow -PassThru `
+        -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+
+    # Touching .Handle is load-bearing, not a debug leftover. Start-Process -PassThru
+    # hands back a Process object that has not cached the process handle, and .ExitCode
+    # on such an object comes back EMPTY once the process has gone - so every caller
+    # compared '' against 0, and a healthy check reported FAIL. Reading .Handle while
+    # the process is still alive caches it, and .ExitCode then works.
+    $null = $proc.Handle
+
+    $start = Get-Date
+    while (-not $proc.HasExited) {
+        Write-ProgressLine ([int]((Get-Date) - $start).TotalSeconds) (Get-ProgressNote @($errFile, $outFile))
+        Start-Sleep -Milliseconds 900
+    }
+    $proc.WaitForExit()
+    Clear-ProgressLine
+
+    # stderr first, stdout last. Docker's progress chatter goes to stderr, and check 3
+    # reads the TAIL of this log for the version the CLI printed on stdout - so the
+    # program's own output has to be the part that comes last.
+    $merged = @()
+    foreach ($part in @($errFile, $outFile)) {
+        if (Test-Path -LiteralPath $part) { $merged += @(Get-Content -LiteralPath $part) }
+    }
+    $merged | Out-File -LiteralPath $Log -Encoding UTF8
+    foreach ($part in @($outFile, $errFile)) {
+        if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Force }
+    }
+    return $proc.ExitCode
 }
 
 function Invoke-Compose([string]$LogName, [string[]]$Arguments) {
@@ -280,7 +405,7 @@ start Docker Desktop and wait for the whale icon to stop animating
         }
     }
 } else {
-    # THE check that distinguishes this script from verify.sh. A daemon in
+    # THE check that distinguishes this script from verify-setup.sh. A daemon in
     # Linux-container mode cannot run these Windows images, and the failure would
     # otherwise land three checks later as an unexplained build error.
     $osType = (& docker info --format '{{.OSType}}' 2>$null | Out-String).Trim()
@@ -289,7 +414,7 @@ start Docker Desktop and wait for the whale icon to stop animating
 you have two options, and the Linux one is the better-tested path:
 
                         A) use the Linux stack instead - from the repo root:
-                             bash ./verify.sh
+                             bash ./verify-setup.sh
 
                         B) switch Docker Desktop to Windows containers:
                              & "$Env:ProgramFiles\Docker\Docker\DockerCli.exe" -SwitchDaemon
@@ -401,9 +526,14 @@ port $Port is probably already in use on your machine
                 $siteOk = $true
                 break
             } catch {
+                if ($script:Progress) {
+                    Write-ProgressLine ([int]((Get-Date) - $siteStart).TotalSeconds) `
+                        "waiting for the site to answer on :$Port"
+                }
                 Start-Sleep -Seconds 1
             }
         }
+        if ($script:Progress) { Clear-ProgressLine }
         if ($siteOk) {
             Write-CheckPass ("HTTP 200 on :{0}, {1}s" -f $Port, [int]((Get-Date) - $siteStart).TotalSeconds)
         } else {

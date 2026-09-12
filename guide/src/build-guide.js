@@ -33,13 +33,13 @@ fs.mkdirSync(PAGES, { recursive: true });
 const FROM_ROOT = {
   home: "start-here.html",
   links: "pages/links.html",
-  platform: "pages/platform.html",
+  platform: "pages/environment-setup.html",
   page: f => `pages/${f}`,
 };
 const FROM_PAGES = {
   home: "../start-here.html",
   links: "links.html",
-  platform: "platform.html",
+  platform: "environment-setup.html",
   page: f => f,
 };
 
@@ -309,6 +309,37 @@ details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
   font-size: 14.5px;
 }
 
+/* "Which window do I type this into, and from where?" is the most common thing a
+   first-timer gets wrong, and a list of copyable commands answers neither half of
+   it. So it is a callout rather than a sentence of prose above the commands, and it
+   names the wrong shells explicitly - "not PowerShell" is the part people need. The
+   badge takes its text colour from --bg so it stays readable when --accent flips to
+   the light green in dark mode. */
+.shellreq {
+  border-left: 4px solid var(--accent); background: var(--surface);
+  padding: 13px 16px; border-radius: 0 6px 6px 0; margin: 0 0 14px;
+  color: var(--strong); font-size: 15px;
+}
+.shellreq .where {
+  display: inline-block; background: var(--accent); color: var(--bg);
+  font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .08em;
+  text-transform: uppercase; padding: 5px 8px; border-radius: 3px;
+  margin-right: 10px; vertical-align: 1px;
+}
+.shellreq strong { color: var(--strong); }
+
+/* Which shell does this command belong in. Two places, two colours, stated on every
+   block rather than once at the top of the page — by the time someone has scrolled
+   to the third command they have forgotten a heading. */
+.loc {
+  flex: none; margin-left: auto; margin-right: 10px; padding: 3px 8px; border-radius: 3px;
+  font: 700 10.5px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
+  text-transform: uppercase; white-space: nowrap;
+}
+.loc.host      { background: var(--amber);  color: var(--bg); }
+.loc.container { background: var(--accent); color: var(--bg); }
+.shellreq .not { color: var(--amber); font-weight: 700; }
+
 /* nav */
 nav.pager {
   display: flex; justify-content: space-between; gap: 14px;
@@ -446,9 +477,19 @@ function esc(s) {
 // activities.js intentionally contains inline markup (<code>, <strong>) in prose
 // fields, so those are trusted and passed through. Anything that lands inside a
 // <pre> is escaped — prompts and commands are literal text, never markup.
-function copyBlock(label, body, isPrompt) {
+// `where` marks which shell a command belongs in. It is the single most common
+// thing a first-timer gets wrong once there is a container involved, and a label on
+// the block itself is harder to miss than a sentence of prose above it.
+const LOCATIONS = {
+  host: { cls: "host", text: "your machine" },
+  container: { cls: "container", text: "in the container" },
+};
+
+function copyBlock(label, body, isPrompt, where) {
+  const loc = where ? LOCATIONS[where] : null;
+  const badge = loc ? `<span class="loc ${loc.cls}">${loc.text}</span>` : "";
   return `  <div class="copyblock${isPrompt ? " is-prompt" : ""}">
-    <div class="cb-head"><span>${esc(label)}</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>${esc(label)}</span>${badge}<button type="button">Copy</button></div>
     <pre>${esc(body)}</pre>
   </div>`;
 }
@@ -500,7 +541,14 @@ const siteHeader = (backLabel, L) =>
 
 const pathwayFor = id => PLATFORMS.find(p => p.id === id);
 
-// The two-step chooser plus every pathway panel. Rendered on both platform.html and
+// shellCallout — "run these HERE, from THIS folder". Takes a pathway (which knows
+// its own shell) or any object with the same two fields, so the platform panels and
+// the activity pages cannot disagree about the answer.
+const shellCallout = p => `      <div class="shellreq"><span class="where">Where</span>Run these in ${
+  p.shell ? `<strong>${esc(p.shell)}</strong>` : "your terminal"
+}${p.shellNote ? `, ${p.shellNote}` : "."}${p.cwd ? ` ${p.cwd}` : ""}</div>`;
+
+// The two-step chooser plus every pathway panel. Rendered on both environment-setup.html and
 // the environment-check activity page from the SAME data, so the commands cannot
 // drift between the page that teaches the choice and the page that uses it.
 function platformSwitcher() {
@@ -511,7 +559,7 @@ function platformSwitcher() {
   const pathwayPanel = p => `    <div class="pathway" data-pathway="${p.id}">
       <h3>${esc(p.label)}${p.os === "windows" ? " &middot; Windows" : ""}</h3>
       <p class="confirm">${p.confirm}</p>
-      <p>Run these in <strong>${esc(p.shell)}</strong>${p.shellNote ? `, ${p.shellNote}` : ""}.</p>
+${shellCallout(p)}
 ${p.commands.map(c => copyBlock(c.label, c.code, false)).join("\n")}
 ${(p.notes || []).map(n => `      <div class="note">${n}</div>`).join("\n")}
     </div>`;
@@ -558,9 +606,9 @@ ${pathwayPanel(winWindows)}`;
 }
 
 fs.writeFileSync(
-  path.join(PAGES, "platform.html"),
+  path.join(PAGES, "environment-setup.html"),
   page({
-    title: "Pick Your Operating System",
+    title: "Environment Setup",
     body: `${siteHeader("← ALL ACTIVITIES", FROM_PAGES)}
   <h1>Pick your operating system</h1>
   <p class="lede">The environment check is one command, but which command depends on
@@ -582,7 +630,7 @@ ${platformSwitcher()}
 
   <nav class="pager">
     <a href="../start-here.html">&larr; All activities</a>
-    <a href="01-environment-check.html">Environment Check &rarr;</a>
+    <a href="02-coding-challenges.html">Coding Challenges &rarr;</a>
   </nav>`,
   })
 );
@@ -607,7 +655,7 @@ fs.writeFileSync(
     title: "Workshop Guide",
     body: `  <header class="site">
     <a href="start-here.html">ORCHLAB WORKSHOP</a>
-    <a href="pages/platform.html">SETUP</a>
+    <a href="pages/environment-setup.html">SETUP</a>
     <a href="pages/links.html">ALL LINKS</a>
     <span class="spacer"></span>
     ${THEME_TOGGLE}
@@ -621,7 +669,7 @@ fs.writeFileSync(
     <span><strong>First time here?</strong> The setup command depends on your
     machine — and on Windows, on which Docker you have.</span>
     <span class="spacer"></span>
-    <a href="pages/platform.html">Pick your operating system &rarr;</a>
+    <a href="pages/environment-setup.html">Pick your operating system &rarr;</a>
   </div>
 
   <div class="cards">
@@ -629,15 +677,20 @@ ${cards}
   </div>
 
   <h2>The three commands</h2>
-${copyBlock("Prove your environment works — run once, before we start", "./verify.sh")}
-${copyBlock("See every checkpoint and where you are", "./checkpoint.sh --list")}
-${copyBlock("Jump to checkpoint N — your work is parked first, never lost", "./checkpoint.sh 4")}
+  <div class="shellreq"><span class="where">Where</span>All three run <strong>on your own
+  machine</strong> — not inside a container — from the root of the
+  <code>workshop-example</code> folder you cloned. That is the folder holding
+  <code>verify-setup.sh</code> and <code>checkpoint.sh</code>. On Windows use
+  <strong>Git Bash</strong>; on macOS, Terminal.</div>
+${copyBlock("Prove your environment works — run once, before we start", "./verify-setup.sh", false, "host")}
+${copyBlock("See every checkpoint and where you are", "./checkpoint.sh --list", false, "host")}
+${copyBlock("Jump to checkpoint N — your work is parked first, never lost", "./checkpoint.sh 4", false, "host")}
 
   <h2>If you fall behind</h2>
   <p>You are never locked out. Jumping to a checkpoint commits whatever you had
   in progress to a <code>wip/</code> branch before it moves you, so you can always
   get back to it:</p>
-${copyBlock("Find work an earlier jump parked for you", "./checkpoint.sh --parked")}
+${copyBlock("Find work an earlier jump parked for you", "./checkpoint.sh --parked", false, "host")}
   <p>Falling behind in one activity costs you that activity — nothing after it.</p>`,
   })
 );
@@ -665,7 +718,7 @@ ${copyBlock(l.url, l.url)}
   <h2>Clone the container</h2>
 ${copyBlock(
   "Everything you need for the day",
-  `git clone ${LINKS[0].url}.git\ncd workshop-example\ncp .env.example .env\n./verify.sh`
+  `git clone ${LINKS[0].url}.git\ncd workshop-example\ncp .env.example .env\n./verify-setup.sh`
 )}`,
   })
 );
@@ -705,7 +758,11 @@ ${a.steps.map(s => `    <li>${s}</li>`).join("\n")}
 ${a.platformSetup ? `
   <h2>Your setup, step by step</h2>
 ${platformSwitcher()}
-` : ""}${section("Commands", (a.commands || []).map(c => copyBlock(c.label, c.code, false)))}${section(
+` : ""}${section("Commands", [
+    ...(a.where ? [shellCallout(a.where)] : []),
+    ...(a.commands || []).map(c => copyBlock(c.label, c.code, false, c.where)),
+  ])}${a.note ? `  <div class="note">${a.note}</div>
+` : ""}${section(
     "Prompts — copy, don't retype",
     (a.prompts || []).map(p => copyBlock(p.label, p.text, true))
   )}${section("Links", (a.links || []).map(l => copyBlock(l.label, l.url, false)))}
@@ -728,5 +785,5 @@ ${a.cheat.map(c => `      <p>${c}</p>`).join("\n")}
 });
 
 console.log(
-  `Guide written: start-here.html + pages/{platform,links}.html + ${activities.length} activity pages`
+  `Guide written: start-here.html + pages/{environment-setup,links}.html + ${activities.length} activity pages`
 );

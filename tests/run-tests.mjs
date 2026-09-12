@@ -10,7 +10,7 @@
 //     workshop, and this must run on a machine that has only just been set up.
 //   * No Docker. These tests must run on a laptop in either container mode, in CI,
 //     and on a host that cannot build either image. The things Docker WOULD prove
-//     are covered by verify.sh / verify.ps1 themselves.
+//     are covered by verify-setup.sh / verify.ps1 themselves.
 //   * Node, not bash and not PowerShell. bash is awkward on a Windows host and
 //     PowerShell is awkward everywhere else; Node runs identically on all three and
 //     the repo already assumes it (guide/src/build-guide.js).
@@ -22,7 +22,7 @@
 //
 // WHAT IT DOES NOT COVER, and no green run here should be read as covering:
 //   * that either image builds (needs Docker, and the right daemon mode)
-//   * that a browser actually renders (that IS check 5; run verify.sh / verify.ps1)
+//   * that a browser actually renders (that IS check 5; run verify-setup.sh / verify.ps1)
 //   * anything about credentials or the network
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { join, dirname, resolve, extname } from "node:path";
@@ -65,7 +65,7 @@ test("gitattributes forces LF for shell scripts but leaves .ps1 alone", "WIN-011
   ok(exists(".gitattributes"), ".gitattributes is missing — a Windows checkout will be CRLF");
   const ga = read(".gitattributes");
   ok(/^\*\.sh\s+text\s+eol=lf/m.test(ga), "*.sh must be forced to LF (a CRLF shebang breaks a Linux container)");
-  ok(/^verify\.sh\s+text\s+eol=lf/m.test(ga), "verify.sh has no extension to match on and must be named explicitly");
+  ok(/^verify-setup\.sh\s+text\s+eol=lf/m.test(ga), "verify-setup.sh is named explicitly as well as covered by *.sh — belt and braces on the file a CRLF shebang breaks hardest");
   ok(/^\.env\s+text\s+eol=lf/m.test(ga), ".env must be LF — a stray CR ends up inside the credential");
   // The asymmetry is the point: forcing .ps1 to LF would be wrong.
   ok(!/^\*\.ps1\s+text\s+eol=lf/m.test(ga), "*.ps1 must NOT be forced to LF — CRLF is correct for PowerShell");
@@ -81,13 +81,13 @@ test("verify.ps1 is saved with a UTF-8 BOM", "WIN-011", () => {
 
 // -------------------------------------------------- regression guards, Linux
 
-test("verify.sh disables MSYS path conversion", "WIN-025", () => {
-  const sh = codeOf("verify.sh");
+test("verify-setup.sh disables MSYS path conversion", "WIN-025", () => {
+  const sh = codeOf("verify-setup.sh");
   ok(
     /export\s+MSYS_NO_PATHCONV=1/.test(sh),
-    "verify.sh must export MSYS_NO_PATHCONV=1, or Git Bash rewrites the CONTAINER path /work/screenshot.mjs into a Windows host path and check 5 fails with a MODULE_NOT_FOUND naming a path nobody wrote"
+    "verify-setup.sh must export MSYS_NO_PATHCONV=1, or Git Bash rewrites the CONTAINER path /work/screenshot.mjs into a Windows host path and check 5 fails with a MODULE_NOT_FOUND naming a path nobody wrote"
   );
-  ok(/export\s+MSYS2_ARG_CONV_EXCL=/.test(sh), "verify.sh must also set MSYS2_ARG_CONV_EXCL for MSYS2 shells");
+  ok(/export\s+MSYS2_ARG_CONV_EXCL=/.test(sh), "verify-setup.sh must also set MSYS2_ARG_CONV_EXCL for MSYS2 shells");
 });
 
 test("the Linux image puts playwright on the ESM resolution path", "WIN-012", () => {
@@ -254,18 +254,18 @@ test("both stacks serve the same site, rather than duplicating it", null, () => 
   );
 });
 
-test("verify.sh and verify.ps1 present the same five checks", null, () => {
+test("verify-setup.sh and verify.ps1 present the same five checks", null, () => {
   const labels = ["Docker daemon reachable", "Workshop image builds", "Claude Code CLI + auth", "Workshop site responds", "Playwright screenshot captured"];
-  const sh = read("verify.sh");
+  const sh = read("verify-setup.sh");
   const ps = read("windows/verify.ps1");
   for (const label of labels) {
-    ok(sh.includes(label), `verify.sh is missing the check labelled "${label}"`);
+    ok(sh.includes(label), `verify-setup.sh is missing the check labelled "${label}"`);
     ok(ps.includes(label), `windows/verify.ps1 is missing the check labelled "${label}" — the two must stay in step or a Windows attendee cannot compare notes with the room`);
   }
 });
 
 test("each entry point redirects to the other on the wrong daemon mode", "WIN-001", () => {
-  ok(/OSType/.test(codeOf("verify.sh")), "verify.sh must detect Windows-container mode rather than failing at check 2 blaming the network");
+  ok(/OSType/.test(codeOf("verify-setup.sh")), "verify-setup.sh must detect Windows-container mode rather than failing at check 2 blaming the network");
   ok(/OSType/.test(codeOf("windows/verify.ps1")), "windows/verify.ps1 must detect Linux-container mode");
 });
 
@@ -316,22 +316,22 @@ test("both checks diagnose a Docker PERMISSION failure separately", "WIN-026", (
     "membership must be read from the process TOKEN, not only the group's member list: a user added to docker-users two minutes ago is in the group and still cannot reach Docker until they sign out and back in"
   );
 
-  const sh = codeOf("verify.sh");
+  const sh = codeOf("verify-setup.sh");
   ok(
     /permission denied|access is denied/i.test(sh),
-    "verify.sh must recognise a permission failure rather than calling it a stopped daemon"
+    "verify-setup.sh must recognise a permission failure rather than calling it a stopped daemon"
   );
-  ok(/docker-users/.test(sh), "verify.sh must name docker-users for Git Bash users on Windows");
-  ok(/usermod -aG docker/.test(sh), "verify.sh must give the docker-group fix on Linux");
+  ok(/docker-users/.test(sh), "verify-setup.sh must name docker-users for Git Bash users on Windows");
+  ok(/usermod -aG docker/.test(sh), "verify-setup.sh must give the docker-group fix on Linux");
 });
 
 test("the permission fix tells the user to sign out, not just to re-run", "WIN-026", () => {
   // Windows grants group rights at LOGON, and the Linux docker group behaves the
   // same way. Advice that omits this reads as "the fix did not work".
   const ps = codeOf("windows/verify.ps1");
-  const sh = codeOf("verify.sh");
+  const sh = codeOf("verify-setup.sh");
   ok(/SIGN OUT|sign out/.test(ps), "verify.ps1's docker-users advice must say to sign out and back in");
-  ok(/SIGN OUT|LOG OUT|sign out|log out/i.test(sh), "verify.sh's permission advice must say to log out and back in");
+  ok(/SIGN OUT|LOG OUT|sign out|log out/i.test(sh), "verify-setup.sh's permission advice must say to log out and back in");
 });
 
 test("the static server never builds a path from the request", "WIN-027", () => {
@@ -438,9 +438,9 @@ test("the committed guide matches its source", null, () => {
 });
 
 test("the guide offers a macOS and a Windows pathway, with distinct commands", null, () => {
-  const html = read("guide/pages/platform.html");
+  const html = read("guide/pages/environment-setup.html");
   for (const id of ["macos", "windows-linux", "windows-windows"]) {
-    ok(html.includes(`data-pathway="${id}"`), `platform.html is missing the "${id}" pathway`);
+    ok(html.includes(`data-pathway="${id}"`), `environment-setup.html is missing the "${id}" pathway`);
   }
   ok(
     html.includes("docker info --format"),
@@ -452,7 +452,7 @@ test("the guide offers a macOS and a Windows pathway, with distinct commands", n
     return html.slice(start, html.indexOf("</div>", html.lastIndexOf("</div>", start + 4000)) + 6000);
   };
   ok(panel("windows-windows").includes("verify.ps1"), "the Windows-containers pathway must use verify.ps1");
-  ok(panel("macos").includes("./verify.sh"), "the macOS pathway must use ./verify.sh");
+  ok(panel("macos").includes("./verify-setup.sh"), "the macOS pathway must use ./verify-setup.sh");
 });
 
 // --------------------------------------------------------- functional test

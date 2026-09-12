@@ -260,6 +260,37 @@ details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
   font-size: 14.5px;
 }
 
+/* "Which window do I type this into, and from where?" is the most common thing a
+   first-timer gets wrong, and a list of copyable commands answers neither half of
+   it. So it is a callout rather than a sentence of prose above the commands, and it
+   names the wrong shells explicitly - "not PowerShell" is the part people need. The
+   badge takes its text colour from --bg so it stays readable when --accent flips to
+   the light green in dark mode. */
+.shellreq {
+  border-left: 4px solid var(--accent); background: var(--surface);
+  padding: 13px 16px; border-radius: 0 6px 6px 0; margin: 0 0 14px;
+  color: var(--strong); font-size: 15px;
+}
+.shellreq .where {
+  display: inline-block; background: var(--accent); color: var(--bg);
+  font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .08em;
+  text-transform: uppercase; padding: 5px 8px; border-radius: 3px;
+  margin-right: 10px; vertical-align: 1px;
+}
+.shellreq strong { color: var(--strong); }
+
+/* Which shell does this command belong in. Two places, two colours, stated on every
+   block rather than once at the top of the page — by the time someone has scrolled
+   to the third command they have forgotten a heading. */
+.loc {
+  flex: none; margin-left: auto; margin-right: 10px; padding: 3px 8px; border-radius: 3px;
+  font: 700 10.5px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
+  text-transform: uppercase; white-space: nowrap;
+}
+.loc.host      { background: var(--amber);  color: var(--bg); }
+.loc.container { background: var(--accent); color: var(--bg); }
+.shellreq .not { color: var(--amber); font-weight: 700; }
+
 /* nav */
 nav.pager {
   display: flex; justify-content: space-between; gap: 14px;
@@ -277,7 +308,7 @@ nav.pager a:hover { background: var(--surface); }
 <div class="wrap">
   <header class="site">
     <a href="../start-here.html">← ALL ACTIVITIES</a>
-    <a href="platform.html">SETUP</a>
+    <a href="environment-setup.html">SETUP</a>
     <a href="links.html">ALL LINKS</a>
     <span class="spacer"></span>
     <button class="theme-toggle" type="button" data-theme-toggle
@@ -339,7 +370,7 @@ nav.pager a:hover { background: var(--surface); }
     <pre>git clone https://github.com/OrchLab-ai/workshop-example.git
 cd workshop-example
 cp .env.example .env
-./verify.sh</pre>
+./verify-setup.sh</pre>
   </div>
 </div>
 <script>

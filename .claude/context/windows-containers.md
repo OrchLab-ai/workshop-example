@@ -5,7 +5,7 @@ The *what* is in `findings.yaml` and `environment-baseline.yaml`. This file is t
 
 ## The problem in one paragraph
 
-The workshop's environment check (`verify.sh`) is a Linux-container stack:
+The workshop's environment check (`verify-setup.sh`) is a Linux-container stack:
 `nginx:alpine` serves a page, and a `mcr.microsoft.com/playwright:...-noble` container
 screenshots it. On a Windows host whose Docker Desktop is set to **Windows
 containers**, none of that can run — a Docker daemon serves one mode or the other,
@@ -27,7 +27,7 @@ So `windows/` is a genuine second implementation rather than a compatibility shi
 
 | | Linux stack | Windows stack |
 |---|---|---|
-| Entry point | `./verify.sh` | `windows\verify.ps1` |
+| Entry point | `./verify-setup.sh` | `windows\verify.ps1` |
 | Compose | `docker-compose.verify.yml` | `windows/docker-compose.windows.yml` |
 | Web service | `nginx:alpine` | the same image, running `src/serve.mjs` |
 | Browser | Chromium | **Firefox** (Chromium cannot work — see below) |

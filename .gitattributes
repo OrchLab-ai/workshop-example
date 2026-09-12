@@ -38,7 +38,7 @@ Dockerfile  text eol=lf
 
 # Extensionless shebang scripts. These carry no suffix to match on, so they are
 # named individually - and anything added beside them must be added here too.
-verify.sh     text eol=lf
+verify-setup.sh     text eol=lf
 checkpoint.sh text eol=lf
 
 # .env and its template hold credentials that are read character-for-character.

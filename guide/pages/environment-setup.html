@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Pick Your Operating System — OrchLab Workshop Guide</title>
+<title>Environment Setup — OrchLab Workshop Guide</title>
 <script>
 (function () {
   try {
@@ -260,6 +260,37 @@ details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
   font-size: 14.5px;
 }
 
+/* "Which window do I type this into, and from where?" is the most common thing a
+   first-timer gets wrong, and a list of copyable commands answers neither half of
+   it. So it is a callout rather than a sentence of prose above the commands, and it
+   names the wrong shells explicitly - "not PowerShell" is the part people need. The
+   badge takes its text colour from --bg so it stays readable when --accent flips to
+   the light green in dark mode. */
+.shellreq {
+  border-left: 4px solid var(--accent); background: var(--surface);
+  padding: 13px 16px; border-radius: 0 6px 6px 0; margin: 0 0 14px;
+  color: var(--strong); font-size: 15px;
+}
+.shellreq .where {
+  display: inline-block; background: var(--accent); color: var(--bg);
+  font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .08em;
+  text-transform: uppercase; padding: 5px 8px; border-radius: 3px;
+  margin-right: 10px; vertical-align: 1px;
+}
+.shellreq strong { color: var(--strong); }
+
+/* Which shell does this command belong in. Two places, two colours, stated on every
+   block rather than once at the top of the page — by the time someone has scrolled
+   to the third command they have forgotten a heading. */
+.loc {
+  flex: none; margin-left: auto; margin-right: 10px; padding: 3px 8px; border-radius: 3px;
+  font: 700 10.5px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
+  text-transform: uppercase; white-space: nowrap;
+}
+.loc.host      { background: var(--amber);  color: var(--bg); }
+.loc.container { background: var(--accent); color: var(--bg); }
+.shellreq .not { color: var(--amber); font-weight: 700; }
+
 /* nav */
 nav.pager {
   display: flex; justify-content: space-between; gap: 14px;
@@ -277,7 +308,7 @@ nav.pager a:hover { background: var(--surface); }
 <div class="wrap">
   <header class="site">
     <a href="../start-here.html">← ALL ACTIVITIES</a>
-    <a href="platform.html">SETUP</a>
+    <a href="environment-setup.html">SETUP</a>
     <a href="links.html">ALL LINKS</a>
     <span class="spacer"></span>
     <button class="theme-toggle" type="button" data-theme-toggle
@@ -330,7 +361,7 @@ nav.pager a:hover { background: var(--surface); }
     <div class="pathway" data-pathway="macos">
       <h3>macOS</h3>
       <p class="confirm">Docker Desktop on macOS only runs Linux containers — there is nothing to determine.</p>
-      <p>Run these in <strong>Terminal</strong>.</p>
+      <div class="shellreq"><span class="where">Where</span>Run these in <strong>Terminal</strong>. Start from wherever you keep projects — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.</div>
   <div class="copyblock">
     <div class="cb-head"><span>1. Clone and enter the repo</span><button type="button">Copy</button></div>
     <pre>git clone https://github.com/OrchLab-ai/workshop-example.git
@@ -346,18 +377,19 @@ cd workshop-example</pre>
   </div>
   <div class="copyblock">
     <div class="cb-head"><span>4. Run the check</span><button type="button">Copy</button></div>
-    <pre>./verify.sh</pre>
+    <pre>./verify-setup.sh</pre>
   </div>
   <div class="copyblock">
     <div class="cb-head"><span>If port 8080 is already taken</span><button type="button">Copy</button></div>
-    <pre>VERIFY_PORT=8081 ./verify.sh</pre>
+    <pre>VERIFY_PORT=8081 ./verify-setup.sh</pre>
   </div>
-
+      <div class="note"><strong>About step 3.</strong> <code>claude setup-token</code> is a command of the Claude Code CLI, so it needs Claude Code installed on <strong>your own machine</strong> (<code>npm install -g @anthropic-ai/claude-code</code>) and a Claude subscription. It opens a browser window to sign in to your Claude account, and then prints a long-lived token to the terminal. Copy that value into <code>.env</code> as <code>CLAUDE_CODE_OAUTH_TOKEN</code>. Run it on your host machine, never inside the container.</div>
+      <div class="note"><strong>No subscription, or you would rather use an API key?</strong> Create one at <a href="https://console.anthropic.com">console.anthropic.com</a>, put it in <code>.env</code> as <code>ANTHROPIC_API_KEY</code>, and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> blank. Set <strong>one</strong> of the two, not both. Either way the value is a credential: <code>.env</code> is gitignored, and it should not be pasted into chat along with a report.</div>
     </div>
     <div class="pathway" data-pathway="windows-linux">
       <h3>Linux containers &middot; Windows</h3>
       <p class="confirm">This is the usual setup on Windows, and the better-tested path.</p>
-      <p>Run these in <strong>Git Bash</strong>, which comes with Git for Windows — not PowerShell or CMD.</p>
+      <div class="shellreq"><span class="where">Where</span>Run these in <strong>Git Bash</strong>, which comes with Git for Windows. <span class="not">Not PowerShell, and not CMD</span> — the commands below are POSIX shell and will not run there. Start from wherever you keep projects — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.</div>
   <div class="copyblock">
     <div class="cb-head"><span>1. Clone and enter the repo</span><button type="button">Copy</button></div>
     <pre>git clone https://github.com/OrchLab-ai/workshop-example.git
@@ -373,18 +405,20 @@ cd workshop-example</pre>
   </div>
   <div class="copyblock">
     <div class="cb-head"><span>4. Run the check</span><button type="button">Copy</button></div>
-    <pre>./verify.sh</pre>
+    <pre>./verify-setup.sh</pre>
   </div>
   <div class="copyblock">
     <div class="cb-head"><span>If port 8080 is already taken</span><button type="button">Copy</button></div>
-    <pre>VERIFY_PORT=8081 ./verify.sh</pre>
+    <pre>VERIFY_PORT=8081 ./verify-setup.sh</pre>
   </div>
+      <div class="note"><strong>About step 3.</strong> <code>claude setup-token</code> is a command of the Claude Code CLI, so it needs Claude Code installed on <strong>your own machine</strong> (<code>npm install -g @anthropic-ai/claude-code</code>) and a Claude subscription. It opens a browser window to sign in to your Claude account, and then prints a long-lived token to the terminal. Copy that value into <code>.env</code> as <code>CLAUDE_CODE_OAUTH_TOKEN</code>. Run it on your host machine, never inside the container.</div>
+      <div class="note"><strong>No subscription, or you would rather use an API key?</strong> Create one at <a href="https://console.anthropic.com">console.anthropic.com</a>, put it in <code>.env</code> as <code>ANTHROPIC_API_KEY</code>, and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> blank. Set <strong>one</strong> of the two, not both. Either way the value is a credential: <code>.env</code> is gitignored, and it should not be pasted into chat along with a report.</div>
       <div class="note">If Docker says <strong>access is denied</strong>, or the check reports you are not in <code>docker-users</code>: an administrator needs to run <code>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</code> once — and then you must <strong>sign out of Windows and back in</strong>. Group rights are granted at logon, so nothing changes until a new session. Restarting Docker Desktop will not help.</div>
     </div>
     <div class="pathway" data-pathway="windows-windows">
       <h3>Windows containers &middot; Windows</h3>
       <p class="confirm">Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same five things.</p>
-      <p>Run these in <strong>PowerShell</strong>.</p>
+      <div class="shellreq"><span class="where">Where</span>Run these in <strong>PowerShell</strong>. Start from wherever you keep projects — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.</div>
   <div class="copyblock">
     <div class="cb-head"><span>1. Clone and enter the repo</span><button type="button">Copy</button></div>
     <pre>git clone https://github.com/OrchLab-ai/workshop-example.git
@@ -406,6 +440,8 @@ cd workshop-example</pre>
     <div class="cb-head"><span>If port 8080 is already taken</span><button type="button">Copy</button></div>
     <pre>$env:VERIFY_PORT=8081; powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
+      <div class="note"><strong>About step 3.</strong> <code>claude setup-token</code> is a command of the Claude Code CLI, so it needs Claude Code installed on <strong>your own machine</strong> (<code>npm install -g @anthropic-ai/claude-code</code>) and a Claude subscription. It opens a browser window to sign in to your Claude account, and then prints a long-lived token to the terminal. Copy that value into <code>.env</code> as <code>CLAUDE_CODE_OAUTH_TOKEN</code>. Run it on your host machine, never inside the container.</div>
+      <div class="note"><strong>No subscription, or you would rather use an API key?</strong> Create one at <a href="https://console.anthropic.com">console.anthropic.com</a>, put it in <code>.env</code> as <code>ANTHROPIC_API_KEY</code>, and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> blank. Set <strong>one</strong> of the two, not both. Either way the value is a credential: <code>.env</code> is gitignored, and it should not be pasted into chat along with a report.</div>
       <div class="note">The first run pulls a ~2 GB Windows base image, so give it longer than you would expect. Later runs reuse it.</div>
       <div class="note">If Docker says <strong>access is denied</strong>, or the check reports you are not in <code>docker-users</code>: an administrator needs to run <code>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</code> once — and then you must <strong>sign out of Windows and back in</strong>. Group rights are granted at logon, so nothing changes until a new session. Restarting Docker Desktop will not help.</div>
       <div class="note">If <strong>Switch to Windows containers</strong> appears to do nothing, the <code>Containers</code> optional feature is off. It is separate from Hyper-V. Enable it from an elevated PowerShell and <strong>reboot</strong>: <code>Enable-WindowsOptionalFeature -Online -FeatureName Containers -All -NoRestart</code></div>
@@ -425,7 +461,7 @@ cd workshop-example</pre>
 
   <nav class="pager">
     <a href="../start-here.html">&larr; All activities</a>
-    <a href="01-environment-check.html">Environment Check &rarr;</a>
+    <a href="02-coding-challenges.html">Coding Challenges &rarr;</a>
   </nav>
 </div>
 <script>

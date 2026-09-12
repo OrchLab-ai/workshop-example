@@ -28,7 +28,7 @@ const LINKS = [
 // WHY THIS EXISTS: "Windows" is not one answer. Docker Desktop on Windows runs
 // EITHER Linux containers (the common case, WSL2 backend) OR Windows containers —
 // one daemon, one mode, never both — and the workshop's check is a different script
-// in each case. An attendee in Windows-container mode who runs ./verify.sh gets a
+// in each case. An attendee in Windows-container mode who runs ./verify-setup.sh gets a
 // build failure that reads "this is almost always a network problem", which sends
 // them off debugging their wifi. So the guide asks the question up front and has
 // them RUN a command to answer it rather than guess.
@@ -43,6 +43,17 @@ const DETECT_COMMAND = "docker info --format '{{.OSType}}'";
 const DOCKER_USERS_NOTE =
   'If Docker says <strong>access is denied</strong>, or the check reports you are not in <code>docker-users</code>: an administrator needs to run <code>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</code> once — and then you must <strong>sign out of Windows and back in</strong>. Group rights are granted at logon, so nothing changes until a new session. Restarting Docker Desktop will not help.';
 
+// Where to run things, and what the token step actually involves. Both questions
+// come up on every pathway, so the text lives here once rather than three times.
+const CWD_CLONE =
+  "Start from wherever you keep projects — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.";
+
+const TOKEN_NOTE =
+  "<strong>About step 3.</strong> <code>claude setup-token</code> is a command of the Claude Code CLI, so it needs Claude Code installed on <strong>your own machine</strong> (<code>npm install -g @anthropic-ai/claude-code</code>) and a Claude subscription. It opens a browser window to sign in to your Claude account, and then prints a long-lived token to the terminal. Copy that value into <code>.env</code> as <code>CLAUDE_CODE_OAUTH_TOKEN</code>. Run it on your host machine, never inside the container.";
+
+const TOKEN_ALT_NOTE =
+  "<strong>No subscription, or you would rather use an API key?</strong> Create one at <a href=\"https://console.anthropic.com\">console.anthropic.com</a>, put it in <code>.env</code> as <code>ANTHROPIC_API_KEY</code>, and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> blank. Set <strong>one</strong> of the two, not both. Either way the value is a credential: <code>.env</code> is gitignored, and it should not be pasted into chat along with a report.";
+
 const PLATFORMS = [
   {
     id: "macos",
@@ -51,12 +62,14 @@ const PLATFORMS = [
     // Shown on the pathway panel so someone can sanity-check they picked right.
     confirm: "Docker Desktop on macOS only runs Linux containers — there is nothing to determine.",
     shell: "Terminal",
+    cwd: CWD_CLONE,
+    notes: [TOKEN_NOTE, TOKEN_ALT_NOTE],
     commands: [
       { label: "1. Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
       { label: "2. Create your .env", code: "cp .env.example .env" },
       { label: "3. Get your token, then paste it into .env", code: "claude setup-token" },
-      { label: "4. Run the check", code: "./verify.sh" },
-      { label: "If port 8080 is already taken", code: "VERIFY_PORT=8081 ./verify.sh" },
+      { label: "4. Run the check", code: "./verify-setup.sh" },
+      { label: "If port 8080 is already taken", code: "VERIFY_PORT=8081 ./verify-setup.sh" },
     ],
   },
   {
@@ -66,15 +79,18 @@ const PLATFORMS = [
     detectValue: "linux",
     confirm:
       "This is the usual setup on Windows, and the better-tested path.",
-    shellNote: "which comes with Git for Windows — not PowerShell or CMD",
+    shellNote:
+      'which comes with Git for Windows. <span class="not">Not PowerShell, and not CMD</span> — ' +
+      'the commands below are POSIX shell and will not run there.',
     shell: "Git Bash",
-    notes: [DOCKER_USERS_NOTE],
+    cwd: CWD_CLONE,
+    notes: [TOKEN_NOTE, TOKEN_ALT_NOTE, DOCKER_USERS_NOTE],
     commands: [
       { label: "1. Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
       { label: "2. Create your .env", code: "cp .env.example .env" },
       { label: "3. Get your token, then paste it into .env", code: "claude setup-token" },
-      { label: "4. Run the check", code: "./verify.sh" },
-      { label: "If port 8080 is already taken", code: "VERIFY_PORT=8081 ./verify.sh" },
+      { label: "4. Run the check", code: "./verify-setup.sh" },
+      { label: "If port 8080 is already taken", code: "VERIFY_PORT=8081 ./verify-setup.sh" },
     ],
   },
   {
@@ -85,6 +101,7 @@ const PLATFORMS = [
     confirm:
       "Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same five things.",
     shell: "PowerShell",
+    cwd: CWD_CLONE,
     commands: [
       { label: "1. Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
       { label: "2. Create your .env", code: "copy .env.example .env" },
@@ -93,12 +110,53 @@ const PLATFORMS = [
       { label: "If port 8080 is already taken", code: "$env:VERIFY_PORT=8081; powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
     ],
     notes: [
+      TOKEN_NOTE,
+      TOKEN_ALT_NOTE,
       "The first run pulls a ~2 GB Windows base image, so give it longer than you would expect. Later runs reuse it.",
       DOCKER_USERS_NOTE,
       'If <strong>Switch to Windows containers</strong> appears to do nothing, the <code>Containers</code> optional feature is off. It is separate from Hyper-V. Enable it from an elevated PowerShell and <strong>reboot</strong>: <code>Enable-WindowsOptionalFeature -Online -FeatureName Containers -All -NoRestart</code>',
     ],
   },
 ];
+
+// Where things run, stated once.
+//
+// Two places, and only two. Host commands are git and docker — the things that move
+// you between checkpoints and start the stack. Everything else happens inside the
+// container, including Claude Code itself: that is the isolation the deck argues for
+// on its "Levels of Safety" slide, and it is what makes skipping permission prompts
+// in Part 3 a contained risk rather than a reckless one.
+//
+// Each command block carries its own badge, because by the third command nobody
+// remembers a heading.
+const WHERE = {
+  shell: "two places — your machine, and the container",
+  cwd:
+    'Commands marked <strong>your machine</strong> run in Git Bash (Windows) or Terminal ' +
+    '(macOS), from the root of your <code>workshop-example</code> clone. Commands marked ' +
+    '<strong>in the container</strong> run after you are inside it — see ' +
+    '<em>Start your day</em> below.',
+}
+
+// The one-time start, repeated on every activity page because people arrive at the
+// guide mid-morning having closed their terminal.
+const DAILY_START = [
+  {
+    label: "1. Start the stack (once a day — leave it running)",
+    code: "docker compose -f docker-compose.workshop.yml up -d",
+    where: "host",
+  },
+  {
+    label: "2. Get a shell inside the container",
+    code: "docker compose -f docker-compose.workshop.yml exec claude-container bash",
+    where: "host",
+  },
+  {
+    label: "3. Check the site is up — open this in your browser",
+    code: "http://localhost:5173",
+    where: "host",
+  },
+]
 
 const activities = [
   {
@@ -139,9 +197,24 @@ const activities = [
     to: "cp-01",
     summary:
       "Pick one of three changes that would take half a day by hand. Twenty minutes with an agent that can see the whole repo.",
+    where: WHERE,
     commands: [
-      { label: "Start from the right checkpoint", code: "./checkpoint.sh 0" },
-      { label: "Run the tests when you think you're done", code: "./scripts/ci-check.sh" },
+      ...DAILY_START,
+      {
+        label: "Jump to the starting checkpoint — parks any work you have, then moves you",
+        code: "./checkpoint.sh 0",
+        where: "host",
+      },
+      {
+        label: "Start Claude Code. It runs in here, not on your machine",
+        code: "claude",
+        where: "container",
+      },
+      {
+        label: "Run the same gates CI runs, when you think you are done",
+        code: "./scripts/ci-check.sh",
+        where: "container",
+      },
     ],
     prompts: [
       {
@@ -158,9 +231,12 @@ const activities = [
       },
     ],
     steps: [
-      "Pick <strong>one</strong> challenge and copy its prompt.",
-      "Work in <code>packages/</code> — the agent has the whole repo in context.",
-      "Run the tests when you think you are done.",
+      "Jump to the starting checkpoint, so everyone begins the challenge from the same code.",
+      "Pick <strong>one</strong> challenge and paste its prompt into Claude Code.",
+      "Let the agent find the files itself. You do not need to know the layout, and you should not " +
+        "go hunting for the right folder first — the point of the exercise is that the agent has the " +
+        "whole repo in context and you do not.",
+      "Run the tests when you think you are done, and read what the agent changed before you believe it.",
     ],
     success:
       "The change is applied across every file it touches — including the ones you would have forgotten — and the tests still pass.",
@@ -178,30 +254,57 @@ const activities = [
     from: "cp-01",
     to: "cp-02",
     summary:
-      "Wire Playwright into the container so the agent can open the running app, navigate it, and screenshot what it did.",
+      "Your container already has Playwright. The skill is asking the agent to use it — to open the running app, look at what it changed, and prove it with a screenshot.",
+    where: WHERE,
     commands: [
-      { label: "Start from the right checkpoint", code: "./checkpoint.sh 1" },
+      ...DAILY_START,
+      {
+        label: "Jump to the starting checkpoint",
+        code: "./checkpoint.sh 1",
+        where: "host",
+      },
+      {
+        label: "Confirm the agent has a browser to drive",
+        code: "claude mcp list",
+        where: "container",
+      },
+      {
+        label: "Start Claude Code, then ask it to look at the page itself",
+        code: "claude",
+        where: "container",
+      },
+      {
+        label: "Screenshots it takes land here, on your machine",
+        code: "screenshots/",
+        where: "host",
+      },
     ],
     prompts: [
       {
-        label: "The prompt",
-        text: "Add Playwright to this container so you can open the running app, navigate it, and take screenshots. Then screenshot the page you changed in the last exercise and show me before and after.",
+        label: "Ask it to look",
+        text: "Use Playwright to open http://localhost:5173, navigate to the page I changed in the last exercise, and take a screenshot to /screenshots. Then tell me what you actually see on the page — not what the code says it should do.",
+      },
+      {
+        label: "Ask it to compare",
+        text: "Use Playwright to screenshot the page before and after your change, save both to /screenshots, and tell me what visibly differs. If the change did not render, say so plainly rather than explaining why it should have worked.",
+      },
+      {
+        label: "Ask it to check itself",
+        text: "Use Playwright to verify the change actually works in the browser: click through the flow a user would take, and report anything that errors or looks wrong. Fix what you find, then screenshot the result.",
       },
     ],
     steps: [
-      "Paste the prompt and let the agent work out the Docker wiring itself.",
-      "Point it at the page you changed in the last activity.",
-      "Ask for a before and after.",
+      "Start Claude Code in the container — Playwright and its MCP server are already installed, so there is nothing to wire up.",
+      "Paste one of the prompts. The words that matter are <strong>use Playwright</strong>: without them the agent will reason about the code instead of looking at the page.",
+      "Read what it reports back against what you can see yourself at <code>http://localhost:5173</code>.",
+      "Check the screenshots it wrote — they land in <code>screenshots/</code> on your own machine.",
     ],
     success:
       "You have two screenshots on disk that the agent captured itself, without you driving a browser.",
     cheat: [
-      "<code>./checkpoint.sh 2</code> gives you a container that already has sight.",
-      "Want to read a working version instead of building one? The <code>verify/</code> directory is exactly this, wired up — it is what your environment check ran.",
+"If the agent says it cannot find a browser, check <code>claude mcp list</code> inside the container — the Playwright MCP server should be listed.",
+      "Want to read a working version instead? The <code>verify/</code> directory drives a real browser in a container and captures a screenshot — it is what your environment check ran this morning.",
       "This matters more than it looks: everything in Part 3 depends on an agent that can check its own work.",
-    ],
-    links: [
-      { label: "Playwright in Docker — standalone reference", url: "https://github.com/OrchLab-ai/playwright-in-docker" },
     ],
   },
   {
@@ -213,7 +316,25 @@ const activities = [
     to: "cp-03",
     summary:
       "Build Mission Updates twice — once from a one-line prompt, once from a long one. This is the baseline everything later is measured against.",
-    commands: [{ label: "Start from the right checkpoint", code: "./checkpoint.sh 2" }],
+    where: WHERE,
+    commands: [
+      ...DAILY_START,
+      {
+        label: "Jump to the starting checkpoint",
+        code: "./checkpoint.sh 2",
+        where: "host",
+      },
+      {
+        label: "Start Claude Code",
+        code: "claude",
+        where: "container",
+      },
+      {
+        label: "Look at what it built — the site reloads as files change",
+        code: "http://localhost:5173",
+        where: "host",
+      },
+    ],
     prompts: [
       {
         label: "The micro-prompt — use exactly this, resist improving it",
@@ -245,9 +366,24 @@ const activities = [
     to: "cp-04",
     summary:
       "Write <code>mission-updates.spec.md</code> — role, context, standards, acceptance criteria — then build from it and compare.",
+    where: WHERE,
     commands: [
-      { label: "Start from the right checkpoint", code: "./checkpoint.sh 3" },
-      { label: "Read a worked spec instead of writing one", code: "./checkpoint.sh 4" },
+      ...DAILY_START,
+      {
+        label: "Jump to the starting checkpoint",
+        code: "./checkpoint.sh 3",
+        where: "host",
+      },
+      {
+        label: "Start Claude Code",
+        code: "claude",
+        where: "container",
+      },
+      {
+        label: "The spec you are writing lives here",
+        code: "specs/mission-updates.spec.md",
+        where: "container",
+      },
     ],
     prompts: [
       {
@@ -298,7 +434,25 @@ You are a senior full-stack engineer working in this codebase.
     to: "cp-05",
     summary:
       "Invent a brand, write it down, and have the agent regenerate the app's design tokens from it. Everyone's screen ends up different.",
-    commands: [{ label: "Start from the right checkpoint", code: "./checkpoint.sh 4" }],
+    where: WHERE,
+    commands: [
+      ...DAILY_START,
+      {
+        label: "Jump to the starting checkpoint",
+        code: "./checkpoint.sh 4",
+        where: "host",
+      },
+      {
+        label: "Start Claude Code",
+        code: "claude",
+        where: "container",
+      },
+      {
+        label: "Your brand, and the tokens generated from it",
+        code: "specs/standards/brand.md\npackages/client/src/tokens.css",
+        where: "container",
+      },
+    ],
     prompts: [
       {
         label: "1. Let it interview you",
@@ -332,7 +486,25 @@ You are a senior full-stack engineer working in this codebase.
     to: "cp-06",
     summary:
       "Spec plus brand, through a Socratic interview, all the way to working code — and it renders in your colours.",
-    commands: [{ label: "Start from the right checkpoint", code: "./checkpoint.sh 5" }],
+    where: WHERE,
+    commands: [
+      ...DAILY_START,
+      {
+        label: "Jump to the starting checkpoint",
+        code: "./checkpoint.sh 5",
+        where: "host",
+      },
+      {
+        label: "Start Claude Code",
+        code: "claude",
+        where: "container",
+      },
+      {
+        label: "Prove it works before you believe it",
+        code: "./scripts/ci-check.sh",
+        where: "container",
+      },
+    ],
     prompts: [
       {
         label: "The Socratic build",
@@ -352,6 +524,8 @@ You are a senior full-stack engineer working in this codebase.
   },
   {
     slug: "autonomous-agent",
+    note:
+      "<strong>You are watching, not driving.</strong> The loop runs <code>claude --dangerously-skip-permissions --print</code> headlessly against a prompt, and the interesting part is what bounds it: <code>MAX_ITERATIONS</code>, <code>COOLDOWN_SECONDS</code>, <code>TIMEOUT_SECONDS</code>, and a 4&nbsp;GB / 2&nbsp;CPU ceiling, all set in <code>docker-compose.workshop.yml</code> where you can read them. Constraints are what make autonomy safe — an unbounded loop is the Loop of Death from the previous slide.",
     title: "Build an Autonomous Agent",
     intent: "I want to let it run on its own — safely",
     part: "Part 3 — Orchestration",
@@ -359,10 +533,34 @@ You are a senior full-stack engineer working in this codebase.
     to: "cp-07",
     summary:
       "Hand the same feature to an agent that loops without you. The container is the safety boundary; the guardrails are the actual lesson.",
+    where: WHERE,
     commands: [
-      { label: "Start from the right checkpoint", code: "./checkpoint.sh 6" },
-      { label: "Read the loop's own README first", code: "cat autonomous-demo/README.md" },
-      { label: "Run the loop", code: "cd autonomous-demo && docker compose up --build" },
+      ...DAILY_START,
+      {
+        label: "Jump to the starting checkpoint",
+        code: "./checkpoint.sh 6",
+        where: "host",
+      },
+      {
+        label: "Read what it is about to do",
+        code: "cat app/autonomous-demo/README.md",
+        where: "host",
+      },
+      {
+        label: "Start the agent. It runs headless — you watch, you do not drive",
+        code: "docker compose -f docker-compose.workshop.yml --profile l4 up autonomous-agent",
+        where: "host",
+      },
+      {
+        label: "Follow what it is doing",
+        code: "docker compose -f docker-compose.workshop.yml logs -f autonomous-agent",
+        where: "host",
+      },
+      {
+        label: "Stop it early if you have seen enough",
+        code: "docker compose -f docker-compose.workshop.yml --profile l4 down autonomous-agent",
+        where: "host",
+      },
     ],
     steps: [
       "Follow <code>autonomous-demo/README.md</code>.",
@@ -380,6 +578,8 @@ You are a senior full-stack engineer working in this codebase.
   },
   {
     slug: "plan-first",
+    note:
+      "<strong>About that flag.</strong> <code>--dangerously-skip-permissions</code> turns off every approval prompt — the deck calls it YOLO mode, and on its own it is exactly as reckless as it sounds. What makes it reasonable <em>here</em> is the layer underneath it: Claude has been running inside a container since this morning, with its own filesystem and its own network. That is the isolation the <em>Levels of Safety</em> slide puts first, and it is the only reason the speed is worth having. <strong>Do not take the flag home to your own machine</strong>, where nothing is containing it.",
     title: "Plan-First Orchestration",
     intent: "I want one agent to plan and another to execute",
     part: "Part 3 — Orchestration",
@@ -387,7 +587,20 @@ You are a senior full-stack engineer working in this codebase.
     to: "cp-08",
     summary:
       "Split the work. A planning agent produces the plan; a separate coding agent executes it and nothing else.",
-    commands: [{ label: "Start from the right checkpoint", code: "./checkpoint.sh 7" }],
+    where: WHERE,
+    commands: [
+      ...DAILY_START,
+      {
+        label: "Jump to the starting checkpoint",
+        code: "./checkpoint.sh 7",
+        where: "host",
+      },
+      {
+        label: "Start Claude Code with permission prompts off — see the note below",
+        code: "claude --dangerously-skip-permissions",
+        where: "container",
+      },
+    ],
     prompts: [
       {
         label: "1. The planning agent",
@@ -412,6 +625,8 @@ You are a senior full-stack engineer working in this codebase.
   },
   {
     slug: "automated-review",
+    note:
+      "<strong>About that flag.</strong> <code>--dangerously-skip-permissions</code> turns off every approval prompt — the deck calls it YOLO mode, and on its own it is exactly as reckless as it sounds. What makes it reasonable <em>here</em> is the layer underneath it: Claude has been running inside a container since this morning, with its own filesystem and its own network. That is the isolation the <em>Levels of Safety</em> slide puts first, and it is the only reason the speed is worth having. <strong>Do not take the flag home to your own machine</strong>, where nothing is containing it.",
     title: "Automated Code Review",
     intent: "I want the agent to review the work and report up",
     part: "Part 3 — Orchestration",
@@ -419,9 +634,24 @@ You are a senior full-stack engineer working in this codebase.
     to: null,
     summary:
       "A third specialist reads the diff, summarises the tests, and writes something a non-technical stakeholder could act on.",
+    where: WHERE,
     commands: [
-      { label: "Start from the right checkpoint", code: "./checkpoint.sh 8" },
-      { label: "Get the diff to review", code: "git diff main...HEAD > /tmp/review.diff" },
+      ...DAILY_START,
+      {
+        label: "Jump to the starting checkpoint",
+        code: "./checkpoint.sh 8",
+        where: "host",
+      },
+      {
+        label: "Collect the diff the reviewer will read",
+        code: "git diff main...HEAD > /tmp/review.diff",
+        where: "container",
+      },
+      {
+        label: "Start the reviewing agent",
+        code: "claude --dangerously-skip-permissions",
+        where: "container",
+      },
     ],
     prompts: [
       {

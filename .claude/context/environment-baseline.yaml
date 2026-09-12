@@ -51,7 +51,7 @@ host_tooling:
   available: [bash, curl, git, node, sed, awk, seq, wc, tr, file, perl, python]
   line_endings_in_worktree: CRLF for every tracked file (see finding WIN-011)
   crlf_tolerance: >-
-    This Cygwin bash RUNS CRLF scripts without complaint - verify.sh and
+    This Cygwin bash RUNS CRLF scripts without complaint - verify-setup.sh and
     checkpoint.sh both parse and execute. Do not generalise: a Linux container will
     not tolerate a CRLF shebang.
 
@@ -153,7 +153,7 @@ proven:
 
   # --- The LINUX stack, after switching the daemon (2026-09-12, ~10:20-10:35) ---
   linux_stack_five_of_five:
-    command: ./verify.sh          # from Git Bash, Docker Desktop in Linux-container mode
+    command: ./verify-setup.sh          # from Git Bash, Docker Desktop in Linux-container mode
     result: |
       [1/5] Docker daemon reachable ...  PASS  29.7.2
       [2/5] Workshop image builds .....  PASS  175s cold (base pull ~1.5 GB), 2s warm
