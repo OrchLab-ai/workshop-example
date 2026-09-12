@@ -53,6 +53,15 @@ fi
 
 RULE="============================================================"
 
+# Git Bash / MSYS rewrites any argument that looks like a POSIX path into a Windows
+# path before the program sees it. That is right for host paths and catastrophic for
+# CONTAINER paths: `node /work/screenshot.mjs` reached docker as
+#   node C:/Program Files/Git/work/screenshot.mjs
+# and check 5 failed with a MODULE_NOT_FOUND naming a path nobody wrote. Harmless
+# on macOS and Linux, where these variables mean nothing.
+export MSYS_NO_PATHCONV=1
+export MSYS2_ARG_CONV_EXCL='*'
+
 # say: to screen (unless --quiet) and always to the report file, with colour
 # stripped from the file so it can be pasted into chat.
 say() {
