@@ -140,7 +140,11 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   OS_TYPE=$(docker info --format '{{.OSType}}' 2>/dev/null || echo "")
   if [ "$OS_TYPE" = "windows" ]; then
     if [ "$QUIET" -eq 1 ]; then
-      echo "FAIL  Docker is in Windows-container mode - run windows\\verify.ps1 instead"
+      # printf with a single-quoted %s argument, not echo: `echo` is allowed to
+      # interpret backslash escapes (SC2028), and this string contains a Windows
+      # path. The same \v-becomes-a-vertical-tab mistake already turned
+      # "windows\verify.ps1" into "windowserify.ps1" once in this file.
+      printf '%s\n' 'FAIL  Docker is in Windows-container mode - run windows\verify.ps1 instead'
       exit 2
     fi
     cat <<'BANNER'
