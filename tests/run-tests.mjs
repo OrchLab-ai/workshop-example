@@ -298,6 +298,70 @@ test("finding ids are unique and every referenced id exists", null, () => {
   }
 });
 
+test("both checks diagnose a Docker PERMISSION failure separately", "WIN-026", () => {
+  // The failure mode this guards: without membership of docker-users, `docker info`
+  // fails and the daemon is running perfectly. Reporting "the daemon is not running
+  // / start Docker Desktop" puts that person in a restart loop they cannot win. Same
+  // shape as the wrong-container-mode bug — a true symptom, the wrong cause.
+  const ps = codeOf("windows/verify.ps1");
+  ok(
+    /Get-DockerGroupStatus/.test(ps),
+    "windows/verify.ps1 must diagnose docker-users membership when `docker info` fails"
+  );
+  for (const state of ["not-member", "stale-token"]) {
+    ok(ps.includes(state), `verify.ps1 must distinguish the "${state}" case — the fixes are different`);
+  }
+  ok(
+    /Groups/.test(ps) && /WindowsIdentity/.test(ps),
+    "membership must be read from the process TOKEN, not only the group's member list: a user added to docker-users two minutes ago is in the group and still cannot reach Docker until they sign out and back in"
+  );
+
+  const sh = codeOf("verify.sh");
+  ok(
+    /permission denied|access is denied/i.test(sh),
+    "verify.sh must recognise a permission failure rather than calling it a stopped daemon"
+  );
+  ok(/docker-users/.test(sh), "verify.sh must name docker-users for Git Bash users on Windows");
+  ok(/usermod -aG docker/.test(sh), "verify.sh must give the docker-group fix on Linux");
+});
+
+test("the permission fix tells the user to sign out, not just to re-run", "WIN-026", () => {
+  // Windows grants group rights at LOGON, and the Linux docker group behaves the
+  // same way. Advice that omits this reads as "the fix did not work".
+  const ps = codeOf("windows/verify.ps1");
+  const sh = codeOf("verify.sh");
+  ok(/SIGN OUT|sign out/.test(ps), "verify.ps1's docker-users advice must say to sign out and back in");
+  ok(/SIGN OUT|LOG OUT|sign out|log out/i.test(sh), "verify.sh's permission advice must say to log out and back in");
+});
+
+test("the static server never builds a path from the request", "WIN-027", () => {
+  // CodeQL flagged the previous version as js/path-injection (high). The fix was not
+  // a better sanitiser but an allowlist: the request is used only as a KEY, and every
+  // path handed to readFile comes from readdir. This guards that property, because
+  // the obvious "improvement" is to go back to joining ROOT with the request.
+  const src = read("windows/src/serve.mjs");
+  const body = src.split(/\r?\n/).filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+  ok(/buildIndex/.test(body), "serve.mjs must build an allowlist of servable files");
+  ok(
+    !/readFile\(\s*(target|join\(|resolve\()/.test(body),
+    "readFile must be handed a path from the allowlist, never one constructed from the request"
+  );
+  ok(
+    !/join\(\s*ROOT\s*,\s*(rel|key|urlPath)/.test(body),
+    "do not rejoin ROOT with request-derived data — that is the path-injection shape CodeQL caught"
+  );
+});
+
+test("workflows declare least-privilege permissions", "WIN-027", () => {
+  for (const f of readdirSync(join(ROOT, ".github/workflows"))) {
+    const wf = read(`.github/workflows/${f}`);
+    ok(
+      /^permissions:/m.test(wf) || /^\s{4}permissions:/m.test(wf),
+      `${f} must declare an explicit permissions block; without one the repository default applies, which for older orgs is read-write`
+    );
+  }
+});
+
 // ------------------------------------------------------------------ guide
 
 // Every .html under guide/, with its path relative to the repo root.

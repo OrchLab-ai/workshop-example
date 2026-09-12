@@ -78,6 +78,25 @@ extra setup, and nothing to prepare. Close the terminal.
 Open `screenshots/verify.png` if you want to see it for yourself — a real
 headless browser rendered that page and captured it from inside your container.
 
+### You do not need administrator rights
+
+The workshop runs as an ordinary user. There is one prerequisite that an
+administrator has to grant once, though, and it is worth doing **before** the day:
+
+| Platform | Requirement | Granted by |
+|---|---|---|
+| Windows | membership of the **`docker-users`** group | `Add-LocalGroupMember -Group docker-users -Member <you>` from an elevated PowerShell |
+| Linux | membership of the **`docker`** group | `sudo usermod -aG docker $USER` |
+| macOS | nothing | — |
+
+After being added, **log out and back in.** Group rights are granted at login, so
+nothing changes until a new session — restarting Docker will not do it.
+
+Both checks detect this and say so, rather than reporting a stopped daemon and
+sending you into a restart loop. They also tell the two cases apart: *not in the
+group* (needs an administrator) versus *in the group, but this session started
+before that* (needs a new login).
+
 ### What a failure looks like
 
 The run stops at the first failed check and tells you exactly what to do:
