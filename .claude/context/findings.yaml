@@ -1,0 +1,556 @@
+#
+# Findings register - Windows host / Windows containers
+#
+# Each record is something that cost real time to discover. Read the `verified` field
+# before you trust one:
+#
+#   here      - reproduced on this machine in this repo, with the command recorded
+#   inherited - established by the ../ai-codebase-accelerator pilot on a real host and
+#               adopted without re-testing. Trustworthy, but not re-proven here.
+#   suspected - reasoned from evidence, NOT yet proven. Treat as a lead, not a fact.
+#
+version: 1
+updated: 2026-09-12
+severity_scale: [blocker, high, medium, low]
+
+findings:
+
+  - id: WIN-001
+    title: Docker Desktop in Windows-container mode cannot run the Linux check stack
+    area: docker
+    severity: blocker
+    verified: here
+    symptom: |
+      docker pull nginx:alpine fails with:
+        no matching manifest for windows(10.0.26200)/amd64 in the manifest list entries
+      Check 1 of verify.sh still PASSES (the daemon is reachable), so the run dies at
+      check 2 with "the container image failed to build / this is almost always a
+      network problem" - a misleading diagnosis that sends people to debug wifi.
+    cause: >-
+      One Docker daemon serves Linux OR Windows containers, never both. The workshop's
+      images (nginx:alpine, mcr.microsoft.com/playwright:v1.49.1-noble) are Linux-only.
+    fix: >-
+      Two paths, neither of which is "just switch": switching stops the user's running
+      Windows containers, which may be someone else's active work. So (a) verify.sh now
+      detects OSType=windows up front and exits 2 with both options spelled out, and
+      (b) windows/ provides a real Windows-container check that needs no switch.
+    evidence:
+      command: docker info --format '{{.OSType}}'
+      result: windows
+    files: [verify.sh, windows/]
+
+  - id: WIN-002
+    title: Chromium cannot render in a Windows Server Core container - use Firefox
+    area: playwright
+    severity: blocker
+    verified: inherited
+    corroborated_here: true
+    symptom: |
+      The browser installs and starts, and answers --version, then dies on any actual
+      page render:
+        chrome-headless-shell.exe  exit -1073741571  0xC00000FD STATUS_STACK_OVERFLOW
+        chrome.exe                 exit -2147483645  0x80000003 STATUS_BREAKPOINT
+      Through the Playwright API it surfaces as the misleading
+        "Target page, context or browser has been closed"
+    cause: >-
+      Unresolved. The remaining suspect is the Server Core App-Compatibility FOD, which
+      is not practically installable in a container. It is NOT the obvious candidates.
+    ruled_out_by_measurement:
+      - fonts - installing 22 real DejaVu TTFs left the crash byte-identical
+      - memory - 4.5 GB / 4 CPUs produced the identical crash
+      - flags - six combinations (single-process, no-zygote, headless=old, headless=new,
+          no software rasterizer) all failed the same way
+      - missing DLLs - winldd/PrintDeps.exe resolves every direct dependency
+    fix: >-
+      Use Playwright's Firefox. It worked on the first try. The general lesson: when a
+      browser engine will not start in a constrained OS, try another engine before
+      debugging the first.
+    evidence:
+      command: node probe.mjs launching firefox/chromium/webkit in a Windows container
+      result: |
+        firefox:  OK in 3318ms, heading="ENVIRONMENT OK", PNG written to a host bind mount
+        chromium: FAIL Executable doesn't exist (not installed - the pilot proved the
+                  installed case crashes)
+        webkit:   FAIL Executable doesn't exist
+    note: >-
+      Treat Chromium here as UNSUPPORTED, not untested. Do not "fix" it back without a
+      rendered PNG to prove it. Keep the engine in env (PW_BROWSER), never hard-coded,
+      and if a repo is visual-tested on both editions keep the engine in the baseline
+      path or Linux/Chromium and Windows/Firefox will overwrite each other's PNGs.
+    files: [windows/Dockerfile, windows/src/screenshot.mjs]
+
+  - id: WIN-003
+    title: NODE_PATH does not apply to ESM imports
+    area: node
+    severity: high
+    verified: here
+    symptom: |
+      A script using `import { chromium } from "playwright"` fails with
+        Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright' imported from ...
+      even though NODE_PATH points at a directory that definitely contains it and
+      `npm root -g` confirms the package is installed there.
+    cause: >-
+      NODE_PATH is honoured only by the CommonJS resolver (require). The ESM resolver
+      ignores it entirely and walks node_modules up from the importing file.
+    fix: >-
+      Install the dependency LOCALLY next to the script (a real node_modules in the
+      script's directory) so a plain import resolves. Failing that, resolve explicitly
+      via createRequire('<global root>/') - which does work, because that is CJS.
+    evidence:
+      command: docker run ... -e NODE_PATH=C:\npm-global\node_modules node C:\probe\pw-probe.mjs
+      result: ERR_MODULE_NOT_FOUND, then success once resolved via createRequire
+    impact_elsewhere: >-
+      The LINUX image may have the same latent bug: verify/Dockerfile sets
+      NODE_PATH=/usr/lib/node_modules, installs playwright globally, and
+      verify/screenshot.mjs is ESM with a bare `import ... from "playwright"`. If that
+      resolves on Linux it is not because of NODE_PATH. See WIN-012.
+    files: [windows/src/package.json, windows/src/screenshot.mjs]
+
+  - id: WIN-004
+    title: Never grant a Windows-container ACL by username - use the SID
+    area: security
+    severity: high
+    verified: inherited
+    symptom: >-
+      An icacls or FileSystemAccessRule grant naming ContainerUser appears to succeed,
+      and the running process still gets access denied on the file it just wrote.
+    cause: >-
+      Two principals answer to the name. The process runs as the virtual account
+      User Manager\ContainerUser (S-1-5-93-2-2), while the NAME resolves to a local
+      account (S-1-5-21-...-1000). Granting the name hands rights to an identity the
+      process does not hold, so the grant looks applied and does nothing.
+    fix: >-
+      In a Dockerfile use the literal SID: icacls <path> /grant '*S-1-5-93-2-2:(OI)(CI)M'
+      In a script use [WindowsIdentity]::GetCurrent().User. Also build a FRESH DACL
+      rather than editing the inherited one - editing inherited ACEs throws
+      "not in canonical form" and silently leaves the file unrestricted.
+    files: [windows/Dockerfile]
+
+  - id: WIN-005
+    title: A double quote inside a shell-form RUN is silently stripped
+    area: dockerfile
+    severity: high
+    verified: inherited
+    symptom: >-
+      A RUN line dies with a PowerShell parse error such as "Missing ')' in method
+      call" that makes no sense when you read the line.
+    cause: >-
+      Docker folds a shell-form RUN into the SHELL's trailing -Command argument and
+      wraps the result in double quotes. Any " inside the RUN terminates that quoting
+      early and is stripped, so "$p;$add" reaches PowerShell as bare $p;$add.
+    fix: >-
+      Never use a double quote inside a shell-form RUN. Use single quotes and
+      concatenate: ($p + ';' + $add). ENV/ARG/SHELL/ENTRYPOINT/COPY are parsed by
+      Docker itself and are unaffected - which is why package.json is COPYd rather
+      than written by a RUN, since JSON is all double quotes.
+    related: >-
+      The same mangling hits `docker compose exec ... pwsh -Command "<script>"`. Write
+      the script to a mounted directory and run it with -File instead.
+    files: [windows/Dockerfile]
+
+  - id: WIN-006
+    title: ContainerUser gets a throwaway profile unless the profile env vars are pinned
+    area: dockerfile
+    severity: high
+    verified: inherited
+    symptom: >-
+      A declared volume or bind mount exists, is mounted, and stays EMPTY. Logins are
+      lost on restart and synced assets rebuild every start, with no error anywhere.
+    cause: >-
+      ContainerUser has no registered Windows profile, so the logon falls back to a
+      temporary profile at C:\Users\TEMP which is discarded when the container stops.
+      Everything keyed off %USERPROFILE% goes there instead of the volume.
+    fix: >-
+      Pin USERPROFILE, HOMEDRIVE, HOMEPATH, APPDATA and LOCALAPPDATA as ENV in the
+      image - Docker builds the process environment block, so these win over the logon
+      session. Pin TEMP and TMP too: a browser puts its profile under %TEMP%, which is
+      otherwise the same throwaway path.
+    diagnostic_signature: >-
+      A mount that is live and still receives nothing. Check where %USERPROFILE%
+      actually points before suspecting the mount.
+    files: [windows/Dockerfile]
+
+  - id: WIN-007
+    title: npm global installs land where ContainerUser cannot see them
+    area: dockerfile
+    severity: high
+    verified: inherited
+    symptom: >-
+      The image builds cleanly, then fails at runtime with "claude: not found".
+    cause: >-
+      On Windows `npm install --global` defaults to the INSTALLING user's %APPDATA%\npm.
+      Build layers run as ContainerAdministrator; the container runs as ContainerUser.
+    fix: >-
+      Set ENV NPM_CONFIG_PREFIX=C:\npm-global, add it to the machine PATH, and grant
+      ContainerUser RX on it by SID.
+    files: [windows/Dockerfile]
+
+  - id: WIN-008
+    title: Node CLIs on Windows are .cmd/.ps1 shims, never .exe
+    area: containers
+    severity: medium
+    verified: here
+    symptom: >-
+      `docker compose run verify-agent claude --version` fails to find the executable,
+      which reads as a broken install.
+    cause: >-
+      npm installs claude.cmd and claude.ps1, not claude.exe, and a container's exec
+      form runs real executables only.
+    fix: >-
+      Invoke through a shell: `cmd /c claude --version`. Never assert a .exe exists for
+      a Node CLI either - that assertion will fail on a perfectly good image.
+    evidence:
+      command: docker run --entrypoint pwsh ... -Command "(Get-Command claude).Source"
+      result: C:\npm-global\claude.ps1
+    files: [windows/verify.ps1]
+
+  - id: WIN-009
+    title: Windows containers cannot bind-mount a single file
+    area: containers
+    severity: medium
+    verified: inherited
+    symptom: An invalid-mount error, or the mount silently not behaving as a file.
+    cause: Windows container bind mounts operate on directories only.
+    fix: >-
+      Mount the containing DIRECTORY, or bake the file into the image. The Linux
+      stack's `./verify/screenshot.mjs:/work/screenshot.mjs:ro` has no direct
+      equivalent, so the Windows image bakes its check scripts in.
+    files: [windows/docker-compose.windows.yml]
+
+  - id: WIN-010
+    title: Windows Docker refuses to start on a missing bind source
+    area: containers
+    severity: medium
+    verified: inherited
+    symptom: >-
+      `up -d` dies with an opaque invalid-mount-config error on a host where the Linux
+      edition works fine.
+    cause: >-
+      The Linux daemon silently CREATES a missing bind source directory. Windows Docker
+      treats it as an error.
+    fix: >-
+      Pre-create every bind-mount source before calling compose. windows/verify.ps1
+      creates screenshots\ for exactly this reason.
+    files: [windows/verify.ps1]
+
+  - id: WIN-011
+    title: core.autocrlf=true makes every checkout CRLF, which breaks .env and LF scripts
+    area: git
+    severity: high
+    verified: here
+    symptom: |
+      Two distinct failures:
+      (a) .env parsed by `. ./.env` puts a trailing carriage return INSIDE the token
+          value, so authentication fails with nothing visibly wrong with the file.
+      (b) a shell script COPYd into a Linux image gets a shebang of
+          `/usr/bin/env bash\r` and the container fails to start with a
+          bad-interpreter error naming a file that plainly exists.
+    cause: git core.autocrlf=true on this machine, and this repo shipped no .gitattributes.
+    fix: >-
+      Add a .gitattributes forcing LF for everything a UNIX shell or Linux container
+      executes, and leave *.ps1 alone because their UTF-8 BOM is load-bearing
+      (powershell.exe 5.1 decodes a BOM-less file as Windows-1252 and mojibakes every
+      non-ASCII character). windows/verify.ps1 also strips \r while parsing .env.
+      To remediate an already-bad clone: re-clone, or `git rm --cached -r . && git reset --hard`.
+    evidence:
+      command: git config --get core.autocrlf ; file verify.sh
+      result: "true ; verify.sh: CRLF line terminators"
+    note: >-
+      This bash (Cygwin 5.3) tolerates CRLF scripts, so verify.sh itself still runs
+      here. Do not conclude from that that CRLF is harmless - a Linux container will
+      not tolerate it.
+    files: [.gitattributes, windows/verify.ps1]
+
+  - id: WIN-012
+    title: The Linux check's ESM import could never resolve - check 5 failed on EVERY platform
+    area: linux-parity
+    severity: blocker
+    verified: here
+    status: FIXED
+    symptom: |
+      Check 5 fails with:
+        Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright'
+        imported from /work/screenshot.mjs
+        Did you mean to import "playwright/index.js"?
+    cause: >-
+      verify/Dockerfile installed playwright with `npm install -g` (into
+      /usr/lib/node_modules) and set NODE_PATH to match, but verify/screenshot.mjs is
+      an ESM module importing "playwright" by bare specifier. Per WIN-003 the ESM
+      resolver ignores NODE_PATH entirely and walks node_modules up from the importing
+      file - and both /work/node_modules and /node_modules are absent on that base
+      image. Confirmed by inspection inside the container, not inferred.
+    fix: >-
+      `RUN ln -s /usr/lib/node_modules /work/node_modules` in verify/Dockerfile. A
+      symlink rather than a second `npm install` in /work, because it costs nothing
+      and keeps ONE pinned copy of playwright - a local install would be a second
+      version free to drift from the base image's browser revision, which is exactly
+      the "browser not found at runtime" failure the PLAYWRIGHT_VERSION ARG exists to
+      prevent.
+    evidence:
+      command: docker compose ... run --rm verify-agent node /work/screenshot.mjs
+      before: "ERR_MODULE_NOT_FOUND: Cannot find package 'playwright'"
+      after: "ALL 5 CHECKS PASSED - verify.png, 32 KB"
+      inspection: >-
+        NODE_PATH=/usr/lib/node_modules; npm root -g = /usr/lib/node_modules;
+        playwright present there; /work/node_modules and /node_modules both absent.
+    severity_note: >-
+      This is PLATFORM-INDEPENDENT. The ESM resolver behaves identically on macOS and
+      Linux, so check 5 of the pre-workshop environment check could not have passed
+      for anyone, anywhere. It was found only because the Windows port forced the same
+      resolution question to be answered from first principles.
+    lesson: >-
+      The suspicion was raised from reading alone and deliberately NOT acted on until
+      it could be run. That was right - but note the reasoning was correct and the
+      prediction exact. A "surely someone would have noticed" instinct is not
+      evidence; it delayed nothing here only because the test was cheap.
+    files: [verify/Dockerfile, verify/screenshot.mjs]
+
+  - id: WIN-025
+    title: Git Bash rewrites CONTAINER paths into Windows host paths
+    area: tooling
+    severity: blocker
+    verified: here
+    status: FIXED
+    symptom: |
+      On a Windows host running Git Bash, check 5 fails with a path nobody wrote:
+        Error: Cannot find module '/work/C:/Program Files/Git/work/screenshot.mjs'
+      The Linux stack is otherwise healthy - checks 1 to 4 all pass.
+    cause: >-
+      MSYS rewrites any argument that looks like a POSIX path into a Windows path
+      before the program sees it. That is correct for HOST paths and catastrophic for
+      CONTAINER paths: `node /work/screenshot.mjs` reached docker as
+      `node C:/Program Files/Git/work/screenshot.mjs`.
+    fix: >-
+      export MSYS_NO_PATHCONV=1 and MSYS2_ARG_CONV_EXCL='*' at the top of verify.sh.
+      Both are meaningless no-ops on macOS and Linux, so this is safe to set
+      unconditionally rather than detecting the platform.
+    note: >-
+      This bug is invisible on macOS and Linux and hits every Windows attendee who
+      runs the Linux stack from Git Bash - i.e. the exact population the workshop
+      README's `./verify.sh` instruction targets on Windows. It masked WIN-012
+      completely: the module path was mangled before Node ever got to the import.
+    files: [verify.sh]
+
+  - id: WIN-013
+    title: Expand-Archive hard-crashes PowerShell on Server Core base images
+    area: dockerfile
+    severity: medium
+    verified: inherited
+    symptom: exit 255, and not as a catchable exception - the process dies.
+    fix: Use [System.IO.Compression.ZipFile]::ExtractToDirectory after Add-Type.
+    files: [windows/Dockerfile]
+
+  - id: WIN-014
+    title: Server Core ships exactly one font, so pages render in monospace
+    area: playwright
+    severity: medium
+    verified: inherited
+    symptom: >-
+      Screenshots are legible but look nothing like the page in a real browser, because
+      everything falls back to Lucida Console or the default serif.
+    cause: >-
+      The base image ships only lucon.ttf. Chocolatey's dejavufonts package cannot fix
+      it either - it fails on Server Core with RPC_E_SERVERFAULT because there is no
+      Shell COM Fonts namespace.
+    fix: >-
+      Install fonts by copy-the-file + write-the-registry-value, then add a
+      FontSubstitutes map pointing Arial / Segoe UI / Times New Roman / Courier New at
+      the DejaVu faces. Without the map a page asking for Arial still falls through.
+    note: >-
+      Fonts are required for FIDELITY. They are explicitly NOT the fix for WIN-002.
+    files: [windows/Dockerfile]
+
+  - id: WIN-015
+    title: Hyper-V isolation defaults to 1 GB of memory
+    area: containers
+    severity: medium
+    verified: inherited
+    symptom: A browser dies for reasons that look like a Playwright or image fault.
+    fix: >-
+      Set an explicit memory limit (windows/docker-compose.windows.yml uses 4g) before
+      spending time on the browser.
+    files: [windows/docker-compose.windows.yml]
+
+  - id: WIN-016
+    title: The Containers optional feature is separate from Hyper-V and is easy to miss
+    area: host
+    severity: medium
+    verified: inherited
+    symptom: >-
+      Every other signal looks healthy - Docker Desktop ships dockerd.exe regardless,
+      so the Windows engine appears present and "Switch to Windows containers" appears
+      available - and the switch is a no-op.
+    fix: >-
+      Elevated: Enable-WindowsOptionalFeature -Online -FeatureName Containers -All
+      -NoRestart, then REBOOT. If the daemon switch does nothing, this is why.
+    note: >-
+      Do not probe for the cexecsvc service to detect container support: it is a
+      PROCESS-isolation component and is absent on a perfectly good hyperv-only host.
+      Derive from the daemon's reported OSType instead.
+
+  - id: WIN-017
+    title: No egress control is possible in Windows-container mode
+    area: security
+    severity: medium
+    verified: inherited
+    symptom: Not a failure - a capability gap to disclose rather than discover.
+    cause: >-
+      Egress allowlisting is implemented with a Squid sidecar, which is a Linux image,
+      and a daemon in Windows-container mode cannot run Linux containers at all. This
+      is structural, not a bug.
+    fix: >-
+      None available in-mode. Disclose it. Also absent: read_only rootfs, cap_drop,
+      no-new-privileges, and tmpfs - so secrets land on the ephemeral writable layer
+      rather than in RAM. Never describe the Windows sandbox as equivalent to the
+      Linux one.
+    files: [windows/docker-compose.windows.yml, windows/README.md]
+
+  - id: WIN-018
+    title: Check 3 proves the CLI runs and a credential is present - not that it works
+    area: verify
+    severity: low
+    verified: here
+    symptom: >-
+      The check is labelled "Claude Code CLI + auth" and passes with any non-empty
+      credential, because it only runs `claude --version` inside the container. A
+      typo'd or expired token passes.
+    cause: The check never calls the API.
+    fix: >-
+      windows/verify.ps1 reports "credential present (not validated)" so the pass does
+      not overclaim. A real validation would need a cheap authenticated call, which
+      costs tokens and needs a network path - a deliberate trade, not an oversight.
+    files: [windows/verify.ps1]
+
+  - id: WIN-019
+    title: compose derives a project name from the folder, which collides
+    area: containers
+    severity: low
+    verified: here
+    symptom: >-
+      Containers appear under a project called "windows" - meaningless in docker ps and
+      liable to collide with any other checkout on the same host.
+    fix: Pass an explicit -p (windows/verify.ps1 uses orchlab-workshop-win).
+    files: [windows/verify.ps1]
+
+  - id: WIN-020
+    title: printf eats backslashes in Windows paths
+    area: tooling
+    severity: low
+    verified: here
+    symptom: >-
+      A help message printed `windowserify.ps1` instead of `windows\verify.ps1`,
+      because printf read the \v as a vertical tab.
+    cause: Backslash-bearing text was placed in printf's FORMAT argument.
+    fix: >-
+      Pass such text as an ARGUMENT - printf '%s\n' "$path" - or emit the whole block
+      from a quoted heredoc, which needs no escaping at all. verify.sh uses a heredoc.
+    evidence:
+      command: ./verify.sh
+      result: "printed: powershell ... -File windowserify.ps1"
+    files: [verify.sh]
+
+  # --- Found while building and running the Windows image, 2026-09-12 ----------
+
+  - id: WIN-021
+    title: Move-Item preserves the SOURCE ACL, so a moved dir can be unreadable
+    area: dockerfile
+    severity: high
+    verified: here
+    symptom: |
+      node.exe is installed, is on PATH, and PATH is visibly correct inside the
+      container - and `node --version` still fails as ContainerUser with
+        'node' is not recognized as an internal or external command
+      while `claude --version` on the SAME PATH works. The asymmetry is what makes
+      this hard to read from the symptom.
+    cause: >-
+      The Dockerfile extracted Node under C:\Windows\Temp and then Move-Item'd it to
+      C:\nodejs. A move within a volume PRESERVES the source ACL rather than
+      inheriting from the new parent, so C:\nodejs kept C:\Windows\Temp's restrictive
+      permissions. C:\npm-global was created in place with New-Item and so inherited
+      C:\ normally - hence claude worked and node did not.
+    fix: >-
+      After the move, icacls <dir> /reset /T /C /Q to re-establish inheritance, then
+      grant '*S-1-5-93-2-2:(OI)(CI)RX'. The fix lives next to the move in the
+      Dockerfile, because the symptom appears nowhere near the cause.
+    evidence:
+      command: docker run --rm --entrypoint cmd <image> /c "dir C:\nodejs /b" as each user
+      result: >-
+        empty as ContainerUser; node.exe, npm, npx listed as ContainerAdministrator
+    generalise: >-
+      Any build step that downloads to a temp directory and moves the result into
+      place has this bug latent in it. Prefer creating in place, or always re-ACL
+      after a move.
+    files: [windows/Dockerfile]
+
+  - id: WIN-022
+    title: ErrorActionPreference=Stop turns native-command stderr into a crash
+    area: powershell
+    severity: high
+    verified: here
+    symptom: |
+      A completely healthy `docker compose build` printed a PowerShell stack trace
+      across the checklist:
+        docker.exe : Image ... Building
+        + CategoryInfo : NotSpecified: (...) [], RemoteException
+        + FullyQualifiedErrorId : NativeCommandError
+      and the run aborted at check 2.
+    cause: >-
+      With $ErrorActionPreference='Stop', PowerShell promotes ANY bytes a native
+      command writes to stderr into a terminating NativeCommandError. docker writes
+      ordinary progress to stderr, so success looked like failure - the exact problem
+      the checklist design exists to prevent.
+    fix: >-
+      Relax $ErrorActionPreference to 'Continue' around every native call and judge
+      the command by its EXIT CODE, restoring the previous value in a finally block.
+    note: >-
+      Any PowerShell script that sets Stop globally and then shells out to git, npm,
+      docker or gh has this latent. It fires only when the tool happens to write to
+      stderr, so it can lie dormant for a long time.
+    files: [windows/verify.ps1]
+
+  - id: WIN-023
+    title: Serving HTML as application/octet-stream makes Firefox download, not render
+    area: playwright
+    severity: high
+    verified: here
+    symptom: |
+      Playwright fails with an error that names nothing relevant:
+        page.goto: Download is starting
+        Call log: - navigating to "http://verify-web/", waiting until "load"
+    cause: >-
+      The static server resolved "/" to the site DIRECTORY, whose extension is empty,
+      so the content-type lookup fell through to application/octet-stream. Firefox
+      honours that and downloads the response instead of rendering it. Two small bugs
+      compounded: path.normalize("") returns "." rather than "", so the index.html
+      mapping was skipped; and the content type was derived from the REQUESTED path
+      rather than the path actually served after the fallback.
+    fix: >-
+      Map "", "." and any trailing separator to index.html explicitly, and derive the
+      content type from the path actually served.
+    why_it_matters_beyond_this_bug: >-
+      Chromium content-sniffs and would have rendered it anyway, so this class of bug
+      is INVISIBLE on the Linux stack and only appears on Windows. Expect a few more
+      like it: Firefox is generally stricter, and anywhere the two engines differ the
+      Windows edition is the one that finds the latent bug.
+    files: [windows/src/serve.mjs]
+
+  - id: WIN-024
+    title: A machine PATH set via the registry is not what Docker exec-form resolves
+    area: dockerfile
+    severity: low
+    verified: here
+    symptom: >-
+      Suspected initially for WIN-021, and worth recording because it is a plausible
+      wrong diagnosis for the same symptom.
+    detail: >-
+      This image sets PATH with [Environment]::SetEnvironmentVariable(...,'Machine')
+      and never sets ENV PATH, so the image CONFIG carries no PATH at all. That turned
+      out to be fine - the Windows container runtime builds the process environment
+      from the machine environment, so `echo %PATH%` inside the container shows
+      C:\nodejs and exec-form `docker run <image> node --version` resolves correctly
+      once the ACL of WIN-021 is fixed.
+    conclusion: >-
+      The registry approach works. If you hit a not-found for a tool that is on the
+      machine PATH, check the ACL (WIN-021) BEFORE adding an ENV PATH - the ENV would
+      not have fixed it and would have masked the real cause.
+    files: [windows/Dockerfile]

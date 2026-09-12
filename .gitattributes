@@ -1,0 +1,66 @@
+# Line-ending policy.
+#
+# Why this file exists: without it, a checkout on a machine with
+# core.autocrlf=true (the Windows default, and set on at least one real host)
+# produces CRLF for every file here. Two things break, one of them silently:
+#
+#   1. A shell script COPYd into a Linux image gets a shebang of
+#      `/usr/bin/env bash\r`, and the container fails to start with a
+#      bad-interpreter error naming a file that plainly exists.
+#
+#   2. `. ./.env` puts a trailing carriage return INSIDE the credential value, so
+#      authentication fails with nothing visibly wrong with the file. This is the
+#      nastier one - there is no error message pointing at line endings.
+#
+# The policy is deliberately ASYMMETRIC. Read the *.ps1 rule before changing it.
+
+# Let git decide for text it has no specific rule about, rather than guessing.
+* text=auto
+
+# --- Must be LF: executed by a UNIX shell or inside a Linux container ---------
+*.sh        text eol=lf
+*.bash      text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.js        text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+Dockerfile  text eol=lf
+*.Dockerfile text eol=lf
+
+# Extensionless shebang scripts. These carry no suffix to match on, so they are
+# named individually - and anything added beside them must be added here too.
+verify.sh     text eol=lf
+checkpoint.sh text eol=lf
+
+# .env and its template hold credentials that are read character-for-character.
+# A stray CR here is the silent auth failure described above.
+.env          text eol=lf
+.env.example  text eol=lf
+
+# --- Must NOT be forced: PowerShell ------------------------------------------
+# *.ps1 is deliberately absent from the LF list, and must stay absent.
+#
+# verify.ps1 runs on the HOST, where `powershell.exe` is Windows PowerShell 5.1.
+# 5.1 decodes a BOM-less file as Windows-1252, so the UTF-8 BOM on these files is
+# load-bearing - without it every non-ASCII character in a message becomes
+# mojibake. Forcing eol or normalising these files risks the BOM.
+# CRLF is also simply correct for PowerShell on Windows.
+*.ps1       text eol=crlf
+
+# --- Binary: never touch -----------------------------------------------------
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.pdf       binary
+*.zip       binary
+*.ttf       binary
+*.woff2     binary
+
+# NOTE for an existing clone made before this file landed: adding .gitattributes
+# does not rewrite files already in your working tree. Re-clone, or run
+#   git rm --cached -r . && git reset --hard
+# to renormalise.

@@ -1,0 +1,242 @@
+#
+# Measured host + container baseline
+#
+# Everything in this file was OBSERVED by running the recorded command on
+# 2026-09-12, not inferred from documentation. Where a number is inherited from the
+# ../ai-codebase-accelerator pilot rather than measured here, it says so.
+#
+# Use this instead of estimating. An estimate quoted to a client becomes a promise.
+#
+version: 1
+measured: 2026-09-12
+machine: DESKTOP-MATTF
+
+host:
+  os: Windows 11 Pro
+  build: 26200.9168
+  arch: amd64
+  command: cmd /c ver
+  notes: >-
+    Build 26200 is newer than the ltsc2022 container base (20348), so containers run
+    under Hyper-V isolation, which gives each container its own kernel and lifts the
+    host/container build-matching constraint that process isolation imposes.
+
+docker:
+  client: 29.7.2
+  server: Docker Desktop 4.87.0 (236836)
+  compose: v5.4.0
+  daemon_ostype: windows
+  containerd_snapshotter: true
+  command: docker version ; docker info --format '{{.OSType}}'
+  contexts:
+    - name: desktop-windows
+      state: ACTIVE
+    - name: desktop-linux
+      state: >-
+        present but NOT reachable while the Windows engine is active - returns
+        "500 Internal Server Error" on /info. This is expected: one daemon, one mode.
+  settings_store: >-
+    %APPDATA%\Docker\settings-store.json carries "UseWindowsContainers": true.
+    This is the authoritative signal for which mode Docker Desktop is in.
+  wsl:
+    default_distro: Ubuntu (v2, Stopped)
+    docker_desktop_distro: present (Stopped)
+    note: WSL2 is installed, so switching to Linux containers would work if wanted.
+
+host_tooling:
+  bash: GNU bash 5.3.15 (x86_64-pc-cygwin)
+  git: present, core.autocrlf=true
+  node: v24.19.0 (host)
+  python: 3.12.10
+  available: [bash, curl, git, node, sed, awk, seq, wc, tr, file, perl, python]
+  line_endings_in_worktree: CRLF for every tracked file (see finding WIN-011)
+  crlf_tolerance: >-
+    This Cygwin bash RUNS CRLF scripts without complaint - verify.sh and
+    checkpoint.sh both parse and execute. Do not generalise: a Linux container will
+    not tolerate a CRLF shebang.
+
+# Proven by running a real container, not by inference.
+proven:
+  windows_containers_run:
+    command: docker run --rm mcr.microsoft.com/windows/nanoserver:ltsc2022 cmd /c ver
+    result: Microsoft Windows [Version 10.0.20348.5499]
+    conclusion: ltsc2022 containers run on this host under Hyper-V isolation.
+
+  linux_image_pull_fails:
+    command: docker pull nginx:alpine
+    result: no matching manifest for windows(10.0.26200)/amd64 in the manifest list entries
+    conclusion: The Linux check stack cannot run in this mode at all. Finding WIN-001.
+
+  playwright_firefox_renders:
+    command: >-
+      docker run --rm --entrypoint pwsh <image> -Command "node probe.mjs" with a probe
+      that launches each engine, sets page content, reads back the h1 and screenshots
+    result: |
+      firefox:  OK in 3318ms, heading="ENVIRONMENT OK"
+      chromium: FAIL Executable doesn't exist at ...chromium_headless_shell-1234...
+      webkit:   FAIL Executable doesn't exist at ...webkit-2336\Playwright.exe
+    conclusion: >-
+      Firefox launches, renders and screenshots inside a Windows container. Only
+      firefox was installed in the probe image - deliberately, per finding WIN-002.
+
+  bind_mount_write_reaches_host:
+    command: probe wrote C:/out/probe-firefox.png to a bind-mounted host directory
+    result: PNG image data, 800 x 400, 8-bit/color RGBA, non-interlaced - 6429 bytes
+    conclusion: >-
+      A Windows container can write a real file through a bind mount to the host, so
+      check 5's screenshot-lands-on-the-host requirement is satisfiable.
+
+  claude_code_runs_as_containeruser:
+    command: docker run --rm --entrypoint pwsh <image> -Command "whoami; claude --version"
+    result: |
+      user manager\containeruser
+      2.1.239 (Claude Code)
+    conclusion: >-
+      The Claude Code CLI runs as the non-admin container user. Note the resolved
+      command is C:\npm-global\claude.ps1 - a PowerShell shim, not an .exe. Finding WIN-008.
+
+  # --- End to end, on the ACTUAL workshop image (not the probe image) ---------
+  workshop_image_builds:
+    command: docker compose -f windows/docker-compose.windows.yml build verify-agent
+    result: exit 0, 19 steps, "Successfully tagged orchlab-workshop-verify-windows:latest"
+    conclusion: Check 2 passes.
+
+  workshop_claude_cli:
+    command: docker compose ... run --rm --no-deps verify-agent cmd /c "claude --version"
+    result: 2.1.269 (Claude Code), running as user manager\containeruser
+    conclusion: >-
+      Check 3's container path works. Note `cmd /c` is required - see finding WIN-008.
+
+  workshop_site_responds:
+    command: docker compose ... up -d verify-web ; curl http://localhost:8080/
+    result: HTTP 200 in 1 s, 1782 bytes, content-type text/html; charset=utf-8
+    conclusion: >-
+      Check 4 passes. The Node static server is a working nginx:alpine replacement,
+      and the page is the SAME file the Linux stack serves.
+
+  workshop_screenshot:
+    command: docker compose ... run --rm verify-agent node C:/app/screenshot.mjs
+    result: |
+      "screenshot written to C:/screenshots/verify.png using firefox"
+      screenshots/verify.png - PNG image data, 1280 x 720, 8-bit/color RGBA - 40615 bytes
+    conclusion: >-
+      Check 5 passes end to end. The PNG was opened and visually inspected: it reads
+      ENVIRONMENT OK, in proportional DejaVu Sans (proving the font substitution
+      works - without it this would be monospace), with the container hostname, the
+      timestamp and "cp-00 (windows containers)".
+
+  full_five_of_five_run:
+    command: powershell -ExecutionPolicy Bypass -File windows\verify.ps1
+    result: |
+      [1/5]  Docker daemon reachable ....  PASS  29.7.2, windows containers, hyperv isolation, host build 26200
+      [2/5]  Workshop image builds ......  PASS  1s
+      [3/5]  Claude Code CLI + auth .....  PASS  claude 2.1.269, credential present (not validated)
+      [4/5]  Workshop site responds .....  PASS  HTTP 200 on :8080, 2s
+      [5/5]  Playwright screenshot ......  PASS  verify.png, 40 KB, firefox
+      ALL 5 CHECKS PASSED                       exit 0
+    conclusion: >-
+      The Windows-container check passes end to end through its own entry point. The
+      screenshot was confirmed FRESH rather than stale - a new container id and a
+      timestamp matching the file mtime to the second - and visually inspected again.
+      Teardown released port 8080 and left the user's unrelated Windows container
+      running.
+    credential_used: >-
+      An obviously-fake placeholder ANTHROPIC_API_KEY. That is sufficient because
+      check 3 only runs `claude --version` and never calls the API - which is the
+      point of finding WIN-018, not a shortcut taken here.
+    incidental_proof: >-
+      The .env was written deliberately with CRLF line endings, as a Windows user
+      pasting into Notepad would produce. It parsed correctly, exercising the
+      carriage-return stripping that finding WIN-011 exists for. The bash version,
+      which sources .env instead of parsing it, would have put a trailing \r inside
+      the credential.
+
+  # --- The LINUX stack, after switching the daemon (2026-09-12, ~10:20-10:35) ---
+  linux_stack_five_of_five:
+    command: ./verify.sh          # from Git Bash, Docker Desktop in Linux-container mode
+    result: |
+      [1/5] Docker daemon reachable ...  PASS  29.7.2
+      [2/5] Workshop image builds .....  PASS  175s cold (base pull ~1.5 GB), 2s warm
+      [3/5] Claude Code CLI + auth ....  PASS  claude 2.1.269, credential present
+      [4/5] Workshop site responds ....  PASS  HTTP 200 on :8080, 0s
+      [5/5] Playwright screenshot .....  PASS  verify.png, 32 KB
+      ALL 5 CHECKS PASSED                     exit 0
+    but_only_after_two_fixes: >-
+      The FIRST run of the Linux stack failed at check 5. Two independent, previously
+      unknown bugs were in the way - WIN-025 (Git Bash mangling container paths) and
+      WIN-012 (the ESM import that could never resolve, on any platform). Both are now
+      fixed and both fixes are verified by this run. Do not read this PASS as evidence
+      that the Linux stack was fine all along; it was not.
+    screenshot: >-
+      Confirmed fresh - container a3fd61e914f5, captured 02:33:40 UTC matching the
+      file mtime to the second, and visually inspected. Checkpoint reads "cp-00"
+      without the windows-containers suffix, i.e. the Linux path produced it.
+    engine_difference: >-
+      The Linux capture is 8-bit RGB, the Windows one 8-bit RGBA, and the glyph
+      rendering differs visibly. Chromium and Firefox do not produce identical PNGs -
+      see WIN-002 on keeping the engine in any baseline path.
+
+  esm_ignores_node_path:
+    command: docker run ... -e NODE_PATH=C:\npm-global\node_modules node <script>.mjs
+    result: "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'playwright'"
+    conclusion: Finding WIN-003. The fix is a local install, or createRequire.
+
+probe_image_used:
+  name: orchlab-accelerator-windows:latest
+  why: >-
+    A pre-existing image from the sibling ../ai-codebase-accelerator repo, used to
+    establish the Firefox and Claude Code facts cheaply BEFORE committing to a build.
+    Probing an existing image first is why the Dockerfile was written once rather
+    than iterated blind.
+  os_version: 10.0.20348.4171
+  contents:
+    node: v24.19.0
+    playwright: 1.62.1
+    playwright_browsers: [firefox-1538, ffmpeg-1011, winldd-1007]
+    claude: 2.1.239 at C:\npm-global\claude.ps1
+  telling_detail: >-
+    Only firefox is present in C:\playwright-browsers, and the image sets
+    ORCHLAB_PW_BROWSER=firefox. That is the prior art's conclusion about Chromium
+    encoded into the image itself.
+
+# Sizes and timings. Do not quote an estimate when a measurement exists.
+sizes_and_timings:
+  measured_here:
+    caveat: >-
+      One machine, one network, 2026-09-12. Honest to quote as "about", not as a spec.
+    servercore_ltsc2022_base: 4.92 GB on disk, ~6 min to pull (one-off)
+    workshop_windows_image: 6.65 GB on disk
+    layers_added_over_base: ~1.7 GB (Node, 23 fonts, Playwright + Firefox, Claude Code)
+    cold_build_over_a_present_base: ~4 min for all 19 steps
+    rebuild_after_a_script_change: ~30 s (only the COPY layer onward is invalidated)
+    attendee_first_run_estimate: ~10 min, most of it the base-image pull
+    downloads_during_build:
+      node_zip: node-v22.20.0-win-x64.zip
+      dejavu_fonts: dejavu-fonts-ttf-2.37.zip - yields 23 fonts installed
+      firefox: 85.8 MiB - Firefox 132.0, playwright build v1466
+    comparison: >-
+      The Linux check image is far smaller. This is the cost of Windows containers and
+      is not recoverable - Server Core images are roughly 20-40x the size of an Alpine
+      or slim Debian base. Set expectations accordingly rather than trying to optimise
+      it away.
+  inherited_from_pilot:
+    caveat: >-
+      These are for the accelerator's much heavier image (a .NET Framework SDK base).
+      The workshop image is deliberately far leaner - plain Server Core, Node,
+      Playwright/Firefox and the Claude CLI, with no MSBuild or .NET SDKs. Do not
+      quote these for the workshop image.
+    dotnet_framework_sdk_base_pull: 9.4 GB
+    accelerator_image: 15.5 GB
+    accelerator_build_no_cache: 9.8 min
+    accelerator_first_run_incl_pull: ~25 min
+    free_disk_required: ">= 30 GB"
+    note: >-
+      Any build-time number taken from a warm cache is not a number you can quote to
+      anyone. The pilot re-ran with --no-cache specifically to get an honest one.
+
+known_unverified:
+  - >-
+    Process isolation is untested here; only Hyper-V isolation has been exercised.
+  - >-
+    No checkpoint beyond cp-00 exists yet, so checkpoint.sh was reviewed but its
+    jump/park behaviour was not exercised.

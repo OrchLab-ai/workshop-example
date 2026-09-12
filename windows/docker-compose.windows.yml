@@ -1,0 +1,88 @@
+# Environment check stack — WINDOWS CONTAINERS edition.
+#
+# The Windows twin of ../docker-compose.verify.yml. Same two-service shape —
+# something serving a site, and an agent container that can see it through a real
+# browser — with four forced differences, all of them commented below:
+#
+#   1. Both services run the SAME image. There is no Windows equivalent of
+#      nginx:alpine, and the official IIS image is a multi-gigabyte second pull to
+#      serve one static HTML file. The image already has Node, so the web service
+#      is a ~70-line Node static server. One build, one pull, two services.
+#   2. Mounts are DIRECTORIES only. Windows containers cannot bind-mount a single
+#      file, so the Linux stack's `./verify/screenshot.mjs:/work/screenshot.mjs:ro`
+#      has no equivalent — the check scripts are baked into the image instead.
+#   3. Every bind SOURCE must already exist. Windows Docker refuses to start on a
+#      missing bind source where the Linux daemon silently creates it. verify.ps1
+#      pre-creates screenshots\ before calling compose.
+#   4. isolation + mem_limit are set explicitly. See the notes on each.
+#
+# Driven by .\verify.ps1 — you should not need to run these by hand.
+
+services:
+  verify-web:
+    build: &build
+      # Context is the REPO ROOT, not this folder, so the Dockerfile can COPY
+      # windows/src/* and the site can be shared with the Linux stack rather than
+      # duplicated.
+      context: ..
+      dockerfile: windows/Dockerfile
+    image: orchlab-workshop-verify-windows:latest
+    command: ["node", "C:/app/serve.mjs"]
+    environment:
+      SERVE_ROOT: "C:/site"
+      SERVE_PORT: "80"
+    volumes:
+      # The SAME site the Linux stack serves — one source of truth for the page.
+      - ../verify/site:C:\site:ro
+    ports:
+      # Host-side port only exists so check 4 can prove the site is reachable from
+      # *your machine*, not just from inside the Docker network. Override with
+      # VERIFY_PORT if 8080 is already taken.
+      - "${VERIFY_PORT:-8080}:80"
+    isolation: ${WINDOWS_ISOLATION:-hyperv}
+    healthcheck:
+      # No wget/curl on Server Core. Invoke-WebRequest is the portable probe, and
+      # -UseBasicParsing matters: without it the call can depend on IE engine
+      # components Server Core does not ship.
+      test:
+        ["CMD", "powershell", "-NoProfile", "-Command",
+         "try { Invoke-WebRequest http://localhost/ -UseBasicParsing -TimeoutSec 3 | Out-Null; exit 0 } catch { exit 1 }"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      # Windows containers start slower than Linux ones; without this the first few
+      # probes fail while the runtime is still coming up and read as a broken image.
+      start_period: 20s
+
+  verify-agent:
+    build: *build
+    image: orchlab-workshop-verify-windows:latest
+    depends_on:
+      verify-web:
+        condition: service_healthy
+    environment:
+      VERIFY_URL: http://verify-web/
+      VERIFY_OUT: "C:/screenshots/verify.png"
+      VERIFY_CHECKPOINT: "${VERIFY_CHECKPOINT:-cp-00}"
+      # Firefox, not Chromium — Chromium cannot render on Server Core at all.
+      # See the long comment in windows/Dockerfile.
+      PW_BROWSER: "${PW_BROWSER:-firefox}"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
+    volumes:
+      - ../screenshots:C:\screenshots
+    # Hyper-V isolation gives the container its own kernel — materially stronger
+    # than process isolation, which shares the host kernel and which Microsoft does
+    # not treat as a security boundary for untrusted workloads. On Windows Server
+    # without Hyper-V, set WINDOWS_ISOLATION=process.
+    isolation: ${WINDOWS_ISOLATION:-hyperv}
+    # The Hyper-V isolation default is 1 GB, which is not enough headroom for a
+    # browser. Raising it here is cheaper than debugging a browser that dies for
+    # reasons that look like a Playwright fault.
+    mem_limit: ${WINDOWS_MEMORY:-4g}
+    # NOTE ON HARDENING: the Linux stack's read_only, cap_drop and tmpfs have NO
+    # Windows-container equivalent. They are absent because they are unsupported,
+    # not because they were forgotten. What is available — a non-admin
+    # ContainerUser, Hyper-V isolation, and the same restricted mount surface — is
+    # in place. Never describe this as equivalent to the Linux sandbox.
+    command: ["node", "--version"]

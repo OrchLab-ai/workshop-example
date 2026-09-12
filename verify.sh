@@ -124,6 +124,54 @@ if [ -f .env ]; then
   set +a
 fi
 
+# ------------------------------------------------- wrong-container-mode gate
+
+# A Docker daemon in Windows-container mode cannot run ANY of the Linux images
+# this stack uses (nginx:alpine, the Playwright base), and one daemon cannot
+# serve both modes at once. Without this gate the run gets as far as check 2 and
+# reports "the container image failed to build / this is almost always a network
+# problem" — which sends the attendee off debugging their wifi over what is
+# really a one-line mode switch. Found on a real Windows 11 host, 2026-09-12.
+#
+# The message is a quoted heredoc so the Windows paths inside it need no
+# escaping: writing them into a printf FORMAT string turns windows\verify.ps1
+# into windowserify.ps1, because printf reads the \v as a vertical tab.
+if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  OS_TYPE=$(docker info --format '{{.OSType}}' 2>/dev/null || echo "")
+  if [ "$OS_TYPE" = "windows" ]; then
+    if [ "$QUIET" -eq 1 ]; then
+      echo "FAIL  Docker is in Windows-container mode - run windows\\verify.ps1 instead"
+      exit 2
+    fi
+    cat <<'BANNER'
+
+============================================================
+   ORCHLAB WORKSHOP - WRONG CONTAINER MODE
+============================================================
+
+   Docker Desktop is in WINDOWS-container mode, and every image this
+   check needs is a Linux image. Nothing here can run as-is.
+
+   This is not your fault and nothing is broken. Pick one:
+
+   A) Run the Windows-container check instead. No daemon switch, and it
+      proves the same five things:
+
+          powershell -ExecutionPolicy Bypass -File windows\verify.ps1
+
+   B) Switch Docker Desktop to Linux containers, then re-run this script:
+
+          & "$Env:ProgramFiles\Docker\Docker\DockerCli.exe" -SwitchDaemon
+
+      This stops any Windows containers you have running.
+
+   See windows\README.md for the difference between the two.
+============================================================
+BANNER
+    exit 2
+  fi
+fi
+
 # ---------------------------------------------------------------------- banner
 
 if [ "$QUIET" -eq 0 ]; then
