@@ -329,9 +329,10 @@ nav.pager a:hover { background: var(--surface); }
   <h2>What to do</h2>
   <ol>
     <li>Jump to the starting checkpoint, so everyone begins the challenge from the same code.</li>
-    <li>Pick <strong>one</strong> challenge and paste its prompt into Claude Code.</li>
+    <li>Get a shell in the container and start Claude Code there. It runs inside the container all day — that is what keeps it away from the rest of your machine.</li>
+    <li>Pick <strong>one</strong> challenge and paste its prompt.</li>
     <li>Let the agent find the files itself. You do not need to know the layout, and you should not go hunting for the right folder first — the point of the exercise is that the agent has the whole repo in context and you do not.</li>
-    <li>Run the tests when you think you are done, and read what the agent changed before you believe it.</li>
+    <li>Run <code>./scripts/ci-check.sh</code> in the container when you think you are done, and read what the agent changed before you believe it.</li>
   </ol>
 
   <h2>Commands</h2>

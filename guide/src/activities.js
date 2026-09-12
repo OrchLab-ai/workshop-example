@@ -232,11 +232,12 @@ const activities = [
     ],
     steps: [
       "Jump to the starting checkpoint, so everyone begins the challenge from the same code.",
-      "Pick <strong>one</strong> challenge and paste its prompt into Claude Code.",
+      "Get a shell in the container and start Claude Code there. It runs inside the container all day — that is what keeps it away from the rest of your machine.",
+      "Pick <strong>one</strong> challenge and paste its prompt.",
       "Let the agent find the files itself. You do not need to know the layout, and you should not " +
         "go hunting for the right folder first — the point of the exercise is that the agent has the " +
         "whole repo in context and you do not.",
-      "Run the tests when you think you are done, and read what the agent changed before you believe it.",
+      "Run <code>./scripts/ci-check.sh</code> in the container when you think you are done, and read what the agent changed before you believe it.",
     ],
     success:
       "The change is applied across every file it touches — including the ones you would have forgotten — and the tests still pass.",
@@ -346,9 +347,11 @@ const activities = [
       },
     ],
     steps: [
-      "Run the micro-prompt. Keep whatever you get — do not fix it.",
-      "Run the mega-prompt in a fresh session.",
-      "Look at both. Note what each one had to guess at.",
+      "Start Claude Code <strong>in the container</strong> — <code>claude</code>, from the shell you opened, not from your own machine.",
+      "Paste the micro-prompt. Keep whatever you get and do not fix it: this attempt is the baseline, and its weaknesses are the whole point.",
+      "Look at what it built in your own browser at <code>http://localhost:5173</code>. Vite reloads as the agent edits files, so there is nothing to restart.",
+      "Exit Claude Code and start it again before the mega-prompt, so the second attempt begins with no memory of the first.",
+      "Compare the two, and note what each prompt left the agent to guess at.",
     ],
     success:
       "Two working-ish attempts and a clear sense of what neither prompt managed to pin down.",
@@ -414,9 +417,10 @@ You are a senior full-stack engineer working in this codebase.
       { label: "Then build from it", text: "Read mission-updates.spec.md and implement it exactly. Check your work against the acceptance criteria before you tell me it's done." },
     ],
     steps: [
-      "Write the spec file: who the AI is acting as, what context applies, which standards to follow, how you will know it is done.",
-      "Feed it to the agent and ask for Mission Updates.",
-      "Compare against your two prompt attempts. Same feature, same codebase, third try.",
+      "Read what is already in <code>specs/</code> first. The app ships standards, domain notes and ADRs — a spec that contradicts them will be argued with.",
+      "Write your spec in the container at <code>specs/mission-updates.spec.md</code>: who the agent is acting as, what context applies, which standards to follow, and how you will know it is done.",
+      "Start a fresh Claude Code session, hand it the spec, and ask for Mission Updates.",
+      "Compare the result against your two prompt attempts at <code>http://localhost:5173</code>. Same feature, same codebase, third try.",
     ],
     success:
       "The difference between this and the mega-prompt is visible without being told what to look for.",
@@ -464,10 +468,10 @@ You are a senior full-stack engineer working in this codebase.
       },
     ],
     steps: [
-      "Let the agent interview you: who is this for, what should they feel, what are you not willing to look like.",
-      "Save the result as <code>specs/standards/brand.md</code>.",
-      "Ask the agent to regenerate <code>packages/client/src/tokens.css</code> from your brand.",
-      "Screenshot it with the Playwright sight you wired up earlier.",
+      "Start Claude Code in the container and let it interview you: who is this for, what should they feel, what are you not willing to look like.",
+      "Save the result as <code>specs/standards/brand.md</code>. There is a brand file there already — read it first to see the shape expected, then replace it with yours.",
+      "Ask the agent to regenerate <code>packages/client/src/tokens.css</code> from your brand, and to change nothing else.",
+      "Ask it to screenshot the result with Playwright. The image lands in <code>screenshots/</code> on your own machine; the live page is at <code>http://localhost:5173</code>.",
     ],
     success:
       "The whole app is wearing your brand, and no component file was edited to do it.",
@@ -512,9 +516,11 @@ You are a senior full-stack engineer working in this codebase.
       },
     ],
     steps: [
-      "Hand the agent your spec and your brand and let it ask about the gaps.",
-      "Watch which questions it asks: routes, schema, API conventions, backward compatibility.",
-      "Take it through brief, tasks, then code.",
+      "Start a fresh Claude Code session in the container and hand it both your spec and your brand.",
+      "Make it interview you <strong>before</strong> it writes anything. If it starts coding, stop it and ask what it still does not know.",
+      "Watch which questions it asks — routes, schema, API conventions, what happens to existing records. Those are the gaps your spec left.",
+      "Take it through brief, then tasks, then code.",
+      "Run <code>./scripts/ci-check.sh</code> in the container before you believe it, and look at the page yourself.",
     ],
     success: "Mission Updates works, tests pass, and it looks like yours.",
     cheat: [
@@ -563,10 +569,10 @@ You are a senior full-stack engineer working in this codebase.
       },
     ],
     steps: [
-      "Follow <code>autonomous-demo/README.md</code>.",
-      "Read the loop prompt before you run it: analyse, change, test, verify, repeat.",
-      "Set the guardrails — iteration cap, cost limit, rollback on failing tests.",
-      "Watch. Note where it gets stuck and where it succeeds.",
+      "Read <code>app/autonomous-demo/README.md</code> on your own machine before starting anything — the loop is far easier to watch if you know what it intends to do.",
+      "Read the guardrails in <code>docker-compose.workshop.yml</code>: <code>MAX_ITERATIONS</code>, <code>COOLDOWN_SECONDS</code>, <code>TIMEOUT_SECONDS</code>, and the memory and CPU ceiling. These are the lesson, not the feature it builds.",
+      "Start it with the <code>l4</code> profile and follow the log. <strong>You are not driving this one</strong> — there is no prompt to answer.",
+      "Watch where it gets stuck as closely as where it succeeds, and stop it once you have seen enough.",
     ],
     success:
       "Either it works, or you watch it hit the Loop of Death. Both are the intended outcome.",
@@ -612,9 +618,11 @@ You are a senior full-stack engineer working in this codebase.
       },
     ],
     steps: [
-      "Have a planning agent produce the plan: affected files, likely breakages, steps, tests that must pass.",
-      "Start a <strong>fresh</strong> session and feed that plan to a coding agent as its instruction set.",
-      "Compare the result to the autonomous run.",
+      "Start Claude Code in the container with permission prompts off — see the note below — and ask it for a <strong>plan only</strong>: affected files, likely breakages, ordered steps, and the tests that must pass.",
+      "Have it write the plan to a file, so the next session can read it rather than be told about it.",
+      "Exit, and start a <strong>fresh</strong> session. A planning agent that then writes the code itself is not a handoff.",
+      "Give the coding agent the plan as its instruction set and nothing else.",
+      "Compare the result to the autonomous run. The feature is the same; the only thing that changed is the handoff.",
     ],
     success:
       "The quality gap against the autonomous attempt is obvious — and the only thing that changed was the handoff.",
@@ -664,9 +672,10 @@ You are a senior full-stack engineer working in this codebase.
       },
     ],
     steps: [
-      "Feed the git diff to a review agent — risks, regressions, style violations.",
-      "Have it summarise the test results: passed, failed, missing.",
-      "Ask for three sentences for leadership: what changed, what risk, what is next.",
+      "In the container, write the diff to a file. The reviewer should read what changed, not the whole repository.",
+      "Start a fresh session as a reviewing agent: risks, regressions, standards violations, and anything the tests do not cover.",
+      "Have it summarise the test results — passed, failed, and missing.",
+      "Ask for three sentences a non-technical stakeholder could act on: what changed, what the risk is, what happens next.",
     ],
     success:
       "You planned a feature, delegated it, and reviewed it — without writing a line of code yourself.",

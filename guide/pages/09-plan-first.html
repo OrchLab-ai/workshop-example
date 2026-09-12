@@ -328,9 +328,11 @@ nav.pager a:hover { background: var(--surface); }
 
   <h2>What to do</h2>
   <ol>
-    <li>Have a planning agent produce the plan: affected files, likely breakages, steps, tests that must pass.</li>
-    <li>Start a <strong>fresh</strong> session and feed that plan to a coding agent as its instruction set.</li>
-    <li>Compare the result to the autonomous run.</li>
+    <li>Start Claude Code in the container with permission prompts off — see the note below — and ask it for a <strong>plan only</strong>: affected files, likely breakages, ordered steps, and the tests that must pass.</li>
+    <li>Have it write the plan to a file, so the next session can read it rather than be told about it.</li>
+    <li>Exit, and start a <strong>fresh</strong> session. A planning agent that then writes the code itself is not a handoff.</li>
+    <li>Give the coding agent the plan as its instruction set and nothing else.</li>
+    <li>Compare the result to the autonomous run. The feature is the same; the only thing that changed is the handoff.</li>
   </ol>
 
   <h2>Commands</h2>

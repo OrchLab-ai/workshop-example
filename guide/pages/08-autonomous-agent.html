@@ -328,10 +328,10 @@ nav.pager a:hover { background: var(--surface); }
 
   <h2>What to do</h2>
   <ol>
-    <li>Follow <code>autonomous-demo/README.md</code>.</li>
-    <li>Read the loop prompt before you run it: analyse, change, test, verify, repeat.</li>
-    <li>Set the guardrails — iteration cap, cost limit, rollback on failing tests.</li>
-    <li>Watch. Note where it gets stuck and where it succeeds.</li>
+    <li>Read <code>app/autonomous-demo/README.md</code> on your own machine before starting anything — the loop is far easier to watch if you know what it intends to do.</li>
+    <li>Read the guardrails in <code>docker-compose.workshop.yml</code>: <code>MAX_ITERATIONS</code>, <code>COOLDOWN_SECONDS</code>, <code>TIMEOUT_SECONDS</code>, and the memory and CPU ceiling. These are the lesson, not the feature it builds.</li>
+    <li>Start it with the <code>l4</code> profile and follow the log. <strong>You are not driving this one</strong> — there is no prompt to answer.</li>
+    <li>Watch where it gets stuck as closely as where it succeeds, and stop it once you have seen enough.</li>
   </ol>
 
   <h2>Commands</h2>
