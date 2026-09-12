@@ -328,9 +328,10 @@ nav.pager a:hover { background: var(--surface); }
 
   <h2>What to do</h2>
   <ol>
-    <li>Write the spec file: who the AI is acting as, what context applies, which standards to follow, how you will know it is done.</li>
-    <li>Feed it to the agent and ask for Mission Updates.</li>
-    <li>Compare against your two prompt attempts. Same feature, same codebase, third try.</li>
+    <li>Read what is already in <code>specs/</code> first. The app ships standards, domain notes and ADRs — a spec that contradicts them will be argued with.</li>
+    <li>Write your spec in the container at <code>specs/mission-updates.spec.md</code>: who the agent is acting as, what context applies, which standards to follow, and how you will know it is done.</li>
+    <li>Start a fresh Claude Code session, hand it the spec, and ask for Mission Updates.</li>
+    <li>Compare the result against your two prompt attempts at <code>http://localhost:5173</code>. Same feature, same codebase, third try.</li>
   </ol>
 
   <h2>Commands</h2>

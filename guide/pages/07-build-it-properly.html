@@ -328,9 +328,11 @@ nav.pager a:hover { background: var(--surface); }
 
   <h2>What to do</h2>
   <ol>
-    <li>Hand the agent your spec and your brand and let it ask about the gaps.</li>
-    <li>Watch which questions it asks: routes, schema, API conventions, backward compatibility.</li>
-    <li>Take it through brief, tasks, then code.</li>
+    <li>Start a fresh Claude Code session in the container and hand it both your spec and your brand.</li>
+    <li>Make it interview you <strong>before</strong> it writes anything. If it starts coding, stop it and ask what it still does not know.</li>
+    <li>Watch which questions it asks — routes, schema, API conventions, what happens to existing records. Those are the gaps your spec left.</li>
+    <li>Take it through brief, then tasks, then code.</li>
+    <li>Run <code>./scripts/ci-check.sh</code> in the container before you believe it, and look at the page yourself.</li>
   </ol>
 
   <h2>Commands</h2>

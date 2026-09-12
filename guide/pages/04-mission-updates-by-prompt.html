@@ -328,9 +328,11 @@ nav.pager a:hover { background: var(--surface); }
 
   <h2>What to do</h2>
   <ol>
-    <li>Run the micro-prompt. Keep whatever you get — do not fix it.</li>
-    <li>Run the mega-prompt in a fresh session.</li>
-    <li>Look at both. Note what each one had to guess at.</li>
+    <li>Start Claude Code <strong>in the container</strong> — <code>claude</code>, from the shell you opened, not from your own machine.</li>
+    <li>Paste the micro-prompt. Keep whatever you get and do not fix it: this attempt is the baseline, and its weaknesses are the whole point.</li>
+    <li>Look at what it built in your own browser at <code>http://localhost:5173</code>. Vite reloads as the agent edits files, so there is nothing to restart.</li>
+    <li>Exit Claude Code and start it again before the mega-prompt, so the second attempt begins with no memory of the first.</li>
+    <li>Compare the two, and note what each prompt left the agent to guess at.</li>
   </ol>
 
   <h2>Commands</h2>
