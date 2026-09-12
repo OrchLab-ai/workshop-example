@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Give Your Agent Sight — OrchLab Workshop Guide</title>
+<title>Workshop Guide — OrchLab Workshop Guide</title>
 <script>
 (function () {
   try {
@@ -65,6 +65,10 @@
   --well-accent:#8cc26c;
 }
 * { box-sizing: border-box; }
+/* Needed because several things toggled with el.hidden also carry a class that
+   sets display (.chosen is a flex row). A class rule beats the UA sheet's
+   [hidden]{display:none}, so without this the element stays visible. */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   padding: 0 20px 80px;
@@ -209,6 +213,53 @@ details.cheat[open] > summary::before { content: "▾ "; }
 details.cheat .body { padding: 0 18px 16px; }
 details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
 
+/* platform picker
+   Choices are real <button>s so they are keyboard-reachable and announce their
+   pressed state. The panels are VISIBLE by default and hidden by script — that way
+   a browser with JavaScript off, or a page opened before the script runs, shows
+   every pathway rather than an empty page with nothing to click. */
+.picker { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 10px; }
+.picker button {
+  flex: 1 1 200px; cursor: pointer; text-align: left;
+  padding: 16px 18px; border-radius: 6px;
+  border: 1px solid var(--border); border-left: 4px solid var(--brand);
+  background: var(--surface); color: var(--text);
+  font: 600 17px/1.3 inherit;
+  transition: background .15s, transform .1s;
+}
+.picker button:hover { background: var(--surface-alt); transform: translateY(-1px); }
+.picker button .sub { display: block; font: 400 13.5px/1.5 inherit; color: var(--muted); margin-top: 5px; }
+.picker button[aria-pressed="true"] {
+  background: var(--brand); color: var(--on-brand); border-color: var(--brand);
+}
+.picker button[aria-pressed="true"] .sub { color: var(--on-brand); opacity: .8; }
+
+/* the "you chose X" strip, with a way back out */
+.chosen {
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 4px solid var(--brand);
+  border-radius: 6px; padding: 13px 18px; margin: 0 0 22px; font-size: 14.5px;
+}
+.chosen b { color: var(--strong); }
+.chosen .spacer { flex: 1 1 auto; }
+.chosen button {
+  cursor: pointer; border: 1px solid var(--border); background: var(--panel);
+  color: var(--accent); font: 600 12px/1 inherit; padding: 7px 12px; border-radius: 4px;
+}
+.chosen button:hover { border-color: var(--accent); }
+
+.pathway { margin: 0 0 10px; }
+.pathway h3 {
+  font-size: 17px; margin: 26px 0 6px; color: var(--strong);
+}
+.pathway .confirm { margin: 0 0 18px; color: var(--text); }
+.note {
+  border-left: 4px solid var(--amber); background: var(--panel);
+  padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 0 0 12px;
+  font-size: 14.5px;
+}
+
 /* nav */
 nav.pager {
   display: flex; justify-content: space-between; gap: 14px;
@@ -225,67 +276,151 @@ nav.pager a:hover { background: var(--surface); }
 <body>
 <div class="wrap">
   <header class="site">
-    <a href="index.html">← ALL ACTIVITIES</a>
-    <a href="links.html">ALL LINKS</a>
+    <a href="start-here.html">ORCHLAB WORKSHOP</a>
+    <a href="pages/platform.html">SETUP</a>
+    <a href="pages/links.html">ALL LINKS</a>
     <span class="spacer"></span>
     <button class="theme-toggle" type="button" data-theme-toggle
       aria-label="Switch between light and dark theme"
     ><span class="to-dark">☀ LIGHT</span><span class="to-light">☾ DARK</span></button>
   </header>
-  <span class="actnum">ACTIVITY 03</span>
-  <p class="eyebrow">Part 1 — AI Coding</p>
-  <h1>Give Your Agent Sight</h1>
-  <p class="lede">Wire Playwright into the container so the agent can open the running app, navigate it, and screenshot what it did.</p>
+  <h1>What are you trying to do?</h1>
+  <p class="lede">Every activity runs in this one container. Pick the thing you
+  are trying to achieve — each page has the steps, every command and prompt as a
+  one-click copy, and a way to catch up if you fall behind.</p>
 
-  <div class="cp">
-    <span>start from <b>cp-01</b></span>
-    <span>produces <b>cp-02</b></span>
-    <span>behind? <code>./checkpoint.sh 1</code></span>
+  <div class="chosen">
+    <span><strong>First time here?</strong> The setup command depends on your
+    machine — and on Windows, on which Docker you have.</span>
+    <span class="spacer"></span>
+    <a href="pages/platform.html">Pick your operating system &rarr;</a>
   </div>
 
-  <h2>What to do</h2>
-  <ol>
-    <li>Paste the prompt and let the agent work out the Docker wiring itself.</li>
-    <li>Point it at the page you changed in the last activity.</li>
-    <li>Ask for a before and after.</li>
-  </ol>
+  <div class="cards">
+      <a class="card" href="pages/01-environment-check.html">
+        <span class="num">01</span>
+        <span class="want">I want to prove my setup works</span>
+        <span class="meta">Environment Check &middot; Before we start &middot; <span class="tag">cp-00</span></span>
+      </a>
+      <a class="card" href="pages/02-coding-challenges.html">
+        <span class="num">02</span>
+        <span class="want">I want to feel what a whole-codebase edit is like</span>
+        <span class="meta">Coding Challenges &middot; Part 1 — AI Coding &middot; <span class="tag">cp-01</span></span>
+      </a>
+      <a class="card" href="pages/03-agent-sight.html">
+        <span class="num">03</span>
+        <span class="want">I want my agent to see the UI it is changing</span>
+        <span class="meta">Give Your Agent Sight &middot; Part 1 — AI Coding &middot; <span class="tag">cp-02</span></span>
+      </a>
+      <a class="card" href="pages/04-mission-updates-by-prompt.html">
+        <span class="num">04</span>
+        <span class="want">I want to see how far a plain prompt gets me</span>
+        <span class="meta">Mission Updates, by Prompt &middot; Part 2 — Prompt Engineering &middot; <span class="tag">cp-03</span></span>
+      </a>
+      <a class="card" href="pages/05-create-the-spec.html">
+        <span class="num">05</span>
+        <span class="want">I want to specify it properly this time</span>
+        <span class="meta">Create the Spec &middot; Part 2 — Prompt Engineering &middot; <span class="tag">cp-04</span></span>
+      </a>
+      <a class="card" href="pages/06-brand-your-app.html">
+        <span class="num">06</span>
+        <span class="want">I want the app to look unmistakably mine</span>
+        <span class="meta">Brand Your Mission Updates &middot; Part 2 — Prompt Engineering &middot; <span class="tag">cp-05</span></span>
+      </a>
+      <a class="card" href="pages/07-build-it-properly.html">
+        <span class="num">07</span>
+        <span class="want">I want the AI to interview me before it writes anything</span>
+        <span class="meta">Build It Properly &middot; Part 2 — Prompt Engineering &middot; <span class="tag">cp-06</span></span>
+      </a>
+      <a class="card" href="pages/08-autonomous-agent.html">
+        <span class="num">08</span>
+        <span class="want">I want to let it run on its own — safely</span>
+        <span class="meta">Build an Autonomous Agent &middot; Part 3 — Orchestration &middot; <span class="tag">cp-07</span></span>
+      </a>
+      <a class="card" href="pages/09-plan-first.html">
+        <span class="num">09</span>
+        <span class="want">I want one agent to plan and another to execute</span>
+        <span class="meta">Plan-First Orchestration &middot; Part 3 — Orchestration &middot; <span class="tag">cp-08</span></span>
+      </a>
+      <a class="card" href="pages/10-automated-review.html">
+        <span class="num">10</span>
+        <span class="want">I want the agent to review the work and report up</span>
+        <span class="meta">Automated Code Review &middot; Part 3 — Orchestration</span>
+      </a>
+  </div>
 
-  <h2>Commands</h2>
+  <h2>The three commands</h2>
   <div class="copyblock">
-    <div class="cb-head"><span>Start from the right checkpoint</span><button type="button">Copy</button></div>
-    <pre>./checkpoint.sh 1</pre>
+    <div class="cb-head"><span>Prove your environment works — run once, before we start</span><button type="button">Copy</button></div>
+    <pre>./verify.sh</pre>
   </div>
-
-  <h2>Prompts — copy, don't retype</h2>
-  <div class="copyblock is-prompt">
-    <div class="cb-head"><span>The prompt</span><button type="button">Copy</button></div>
-    <pre>Add Playwright to this container so you can open the running app, navigate it, and take screenshots. Then screenshot the page you changed in the last exercise and show me before and after.</pre>
-  </div>
-
-  <h2>Links</h2>
   <div class="copyblock">
-    <div class="cb-head"><span>Playwright in Docker — standalone reference</span><button type="button">Copy</button></div>
-    <pre>https://github.com/OrchLab-ai/playwright-in-docker</pre>
+    <div class="cb-head"><span>See every checkpoint and where you are</span><button type="button">Copy</button></div>
+    <pre>./checkpoint.sh --list</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Jump to checkpoint N — your work is parked first, never lost</span><button type="button">Copy</button></div>
+    <pre>./checkpoint.sh 4</pre>
   </div>
 
-  <h2>You are done when</h2>
-  <div class="success">You have two screenshots on disk that the agent captured itself, without you driving a browser.</div>
-
-  <details class="cheat">
-    <summary>Stuck? Open this</summary>
-    <div class="body">
-      <p><code>./checkpoint.sh 2</code> gives you a container that already has sight.</p>
-      <p>Want to read a working version instead of building one? The <code>verify/</code> directory is exactly this, wired up — it is what your environment check ran.</p>
-      <p>This matters more than it looks: everything in Part 3 depends on an agent that can check its own work.</p>
-    </div>
-  </details>
-
-  <nav class="pager">
-    <a href="02-coding-challenges.html">&larr; Coding Challenges</a>
-    <a href="04-mission-updates-by-prompt.html">Mission Updates, by Prompt &rarr;</a>
-  </nav>
+  <h2>If you fall behind</h2>
+  <p>You are never locked out. Jumping to a checkpoint commits whatever you had
+  in progress to a <code>wip/</code> branch before it moves you, so you can always
+  get back to it:</p>
+  <div class="copyblock">
+    <div class="cb-head"><span>Find work an earlier jump parked for you</span><button type="button">Copy</button></div>
+    <pre>./checkpoint.sh --parked</pre>
+  </div>
+  <p>Falling behind in one activity costs you that activity — nothing after it.</p>
 </div>
 <script>
+// Platform choice. Remembered across pages so the environment-check activity shows
+// the same pathway the picker page did, and so nobody has to re-answer it.
+//
+// State is ONE string: '', 'macos', 'windows', 'windows-linux' or 'windows-windows'.
+// 'windows' is the half-answered state — the OS is known but the container mode is
+// not — which is exactly the moment the guide needs to ask the second question.
+var PLATFORM_KEY = 'orchlab-guide-platform';
+
+function applyPlatform(state) {
+  var os = state ? state.split('-')[0] : '';
+  var final = state && state !== 'windows';
+
+  document.querySelectorAll('[data-step="mode"]').forEach(function (el) {
+    el.hidden = os !== 'windows';
+  });
+  document.querySelectorAll('[data-pathway]').forEach(function (el) {
+    el.hidden = el.getAttribute('data-pathway') !== state;
+  });
+  document.querySelectorAll('[data-pick-empty]').forEach(function (el) {
+    el.hidden = !!final;
+  });
+  document.querySelectorAll('[data-pick-chosen]').forEach(function (el) {
+    el.hidden = !final;
+  });
+  document.querySelectorAll('[data-pick-label]').forEach(function (el) {
+    if (final) el.textContent = el.getAttribute('data-label-' + state) || state;
+  });
+  document.querySelectorAll('[data-pick]').forEach(function (b) {
+    var v = b.getAttribute('data-pick');
+    b.setAttribute('aria-pressed', String(v === state || v === os));
+  });
+}
+
+function setPlatform(state) {
+  try {
+    if (state) localStorage.setItem(PLATFORM_KEY, state);
+    else localStorage.removeItem(PLATFORM_KEY);
+  } catch (err) {}
+  applyPlatform(state || '');
+}
+
+(function () {
+  var stored = '';
+  try { stored = localStorage.getItem(PLATFORM_KEY) || ''; } catch (err) {}
+  applyPlatform(stored);
+})();
+
 document.addEventListener('click', function (e) {
   var toggle = e.target.closest('[data-theme-toggle]');
   if (toggle) {
@@ -298,6 +433,16 @@ document.addEventListener('click', function (e) {
     var next = current === 'light' ? 'dark' : 'light';
     root.setAttribute('data-theme', next);
     try { localStorage.setItem('orchlab-guide-theme', next); } catch (err) {}
+    return;
+  }
+
+  var pick = e.target.closest('[data-pick]');
+  if (pick) {
+    setPlatform(pick.getAttribute('data-pick'));
+    return;
+  }
+  if (e.target.closest('[data-pick-reset]')) {
+    setPlatform(null);
     return;
   }
 
