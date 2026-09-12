@@ -46,8 +46,27 @@ time. Later runs reuse both.
 |---|---|
 | Windows 10/11 or Server, **amd64** | Windows containers need a Windows kernel; there is no emulation, and the base images are x86-64 only |
 | Docker Desktop in Windows-container mode | One daemon serves one mode |
+| Membership of the **`docker-users`** group | Docker Desktop will not talk to you without it — see below |
 | The **Containers** optional feature enabled | Separate from Hyper-V, and easy to miss — see below |
 | ~10 GB free disk | Base image plus the workshop layers |
+
+> **You do not need administrator rights to run the workshop** — but you do need to
+> be in `docker-users`, and *putting* you there needs an administrator once.
+>
+> If check 1 reports it, an admin runs this from an **elevated** PowerShell:
+>
+> ```powershell
+> Add-LocalGroupMember -Group docker-users -Member <your-username>
+> ```
+>
+> Then **sign out of Windows and back in.** Windows grants group rights at *logon*,
+> so being added changes nothing until a new session. Restarting Docker Desktop does
+> not help, and neither does re-running the check.
+>
+> The check distinguishes the two cases: *not in the group* (needs an admin) and *in
+> the group but this session predates it* (needs a new logon). It reads your process
+> token rather than the group's member list, which is what makes that distinction
+> possible.
 
 > **If "Switch to Windows containers" appears to do nothing,** the `Containers`
 > optional feature is probably off. It is *separate* from Hyper-V and can be disabled
@@ -159,6 +178,7 @@ every step lands in `.verify-logs\`, and a pasteable plain-text copy of the verd
 
 | Symptom | Cause |
 |---|---|
+| `access is denied` on the pipe, or check 1 says you are not in `docker-users` | See below — it is a permissions problem, not a stopped daemon |
 | `no matching manifest for windows/...` | A Linux-only image is being pulled. Tell a facilitator. |
 | Build fails early, no network error | Check `.verify-logs\02-build.log`; the first build pulls ~2 GB. |
 | `claude: not found` inside the container | The npm global prefix grant. See `.claude/context/findings.yaml` → WIN-007. |

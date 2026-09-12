@@ -145,6 +145,55 @@ function Invoke-Compose([string]$LogName, [string[]]$Arguments) {
     return Invoke-Logged $LogName ($base + $Arguments)
 }
 
+# Why the current process TOKEN is inspected rather than the group's membership
+# list: Windows grants group rights at LOGON. Someone added to docker-users two
+# minutes ago is in the group and still cannot reach the Docker pipe, because their
+# token predates the change. Checking the group alone would report "you are fine"
+# to the one person who most needs telling to sign out and back in.
+#
+# Returns: 'member' | 'stale-token' | 'not-member' | 'unknown'
+# 'unknown' on any failure — a diagnostic must never be the thing that breaks the
+# check it is trying to explain.
+#
+# $GroupName is a parameter purely so this can be exercised against a group the
+# caller IS in, one they are NOT in, and one that does not exist — all three
+# branches, from a single account. A diagnostic that has only ever been run down
+# its happy path is not a diagnostic.
+function Get-DockerGroupStatus([string]$GroupName = 'docker-users') {
+    try {
+        $sid = (New-Object System.Security.Principal.NTAccount($GroupName)).Translate(
+            [System.Security.Principal.SecurityIdentifier])
+    } catch {
+        # No such group: Docker Desktop is not installed the way we expect, so this
+        # diagnostic has nothing useful to say. Stay quiet and let the generic
+        # message stand.
+        return 'unknown'
+    }
+    try {
+        $token = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        foreach ($g in $token.Groups) {
+            if ($g.Value -eq $sid.Value) { return 'member' }
+        }
+    } catch {
+        return 'unknown'
+    }
+    # Not in the token. Distinguish "never added" from "added, not signed in again",
+    # because the fix is completely different and one of them needs an administrator.
+    try {
+        $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $members = Get-LocalGroupMember -Group $GroupName -ErrorAction Stop
+        foreach ($m in $members) {
+            if ($m.Name -eq $me) { return 'stale-token' }
+        }
+        return 'not-member'
+    } catch {
+        # Get-LocalGroupMember can fail on domain-joined machines or for a local
+        # account with no rights to read the group. We know the token lacks the SID,
+        # which is the part that matters.
+        return 'not-member'
+    }
+}
+
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 # The screenshots folder must exist BEFORE compose runs: Windows Docker refuses to
 # start a container on a missing bind source, where the Linux daemon silently
@@ -197,10 +246,39 @@ install Docker Desktop from https://docker.com/products/docker-desktop
                         then re-run  .\verify.ps1
 '@
 } elseif ((Invoke-Logged '01-docker.log' @('info')) -ne 0) {
-    Write-CheckFail 'Docker is installed but the daemon is not running' @'
+    # `docker info` failing has two very different causes that look identical from
+    # here, and guessing wrong is expensive. Without membership of docker-users the
+    # daemon is running perfectly and simply will not talk to you — so the old
+    # message ("the daemon is not running / start Docker Desktop") sent that person
+    # into a restart loop they could never win. Same failure shape as the
+    # wrong-container-mode bug: a true symptom attached to the wrong cause.
+    switch (Get-DockerGroupStatus) {
+        'not-member' {
+            Write-CheckFail 'you are not in the docker-users group, so Docker will not talk to you' @'
+this needs an administrator, once:
+                          Add-LocalGroupMember -Group "docker-users" -Member "<your-username>"
+                        run that from an ELEVATED PowerShell, then SIGN OUT and back
+                        in - Windows only grants group rights at logon.
+                        Docker Desktop itself is almost certainly running fine.
+'@
+        }
+        'stale-token' {
+            Write-CheckFail 'you are in the docker-users group, but this logon session predates that' @'
+sign out of Windows and sign back in, then re-run  .\verify.ps1
+
+                        Windows grants group rights at logon, so being added to a
+                        group does nothing until you start a new session. A reboot
+                        works too; restarting Docker Desktop does not.
+'@
+        }
+        default {
+            Write-CheckFail 'Docker is installed but the daemon is not answering' @'
 start Docker Desktop and wait for the whale icon to stop animating
                         then re-run  .\verify.ps1
+                        the full error is in .verify-logs\01-docker.log
 '@
+        }
+    }
 } else {
     # THE check that distinguishes this script from verify.sh. A daemon in
     # Linux-container mode cannot run these Windows images, and the failure would

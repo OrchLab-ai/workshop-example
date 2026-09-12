@@ -451,6 +451,48 @@ findings:
 
   # --- Found while building and running the Windows image, 2026-09-12 ----------
 
+  - id: WIN-026
+    title: Without docker-users membership the check blamed a stopped daemon
+    area: verify
+    severity: high
+    verified: here
+    status: FIXED
+    symptom: |
+      `docker info` fails, so check 1 reported
+        "Docker is installed but the daemon is not running"
+        fix: start Docker Desktop and wait for the whale icon to stop animating
+      The daemon IS running. Docker Desktop simply will not talk to a user who is
+      not in the docker-users group, so the attendee restarts Docker Desktop
+      repeatedly and never gets anywhere.
+    cause: >-
+      Docker Desktop on Windows gates access to its named pipe on membership of the
+      local docker-users group. A fresh non-admin account is in Users only. The same
+      shape exists on Linux via the docker group and the unix socket.
+    fix: >-
+      Diagnose the two causes apart. windows/verify.ps1 gained Get-DockerGroupStatus;
+      verify.sh classifies the error text (permission denied / access is denied)
+      before deciding what to say.
+    the_subtle_part: >-
+      Membership is read from the process TOKEN, not from the group's member list.
+      Windows grants group rights at LOGON, so someone added to docker-users two
+      minutes ago is in the group and still cannot reach Docker. Checking the group
+      alone would tell the one person who most needs to sign out and back in that
+      they are fine. The check therefore reports three distinct states - not-member
+      (needs an administrator), stale-token (needs a new logon), and unknown (say
+      nothing, fall back to the generic message).
+    evidence:
+      command: >-
+        The function was lifted out of verify.ps1 by AST extraction and called
+        against a group the account is in, one it is not in, and one that does not
+        exist; the stale-token branch was exercised by shadowing
+        Get-LocalGroupMember, since reproducing it for real needs an admin plus a
+        logout.
+      result: all four branches returned the expected state
+    note: >-
+      Found while preparing to test the workshop as a non-admin user, BEFORE running
+      that test - the prospective test was what prompted reading the group state.
+    files: [windows/verify.ps1, verify.sh]
+
   - id: WIN-021
     title: Move-Item preserves the SOURCE ACL, so a moved dir can be unreadable
     area: dockerfile

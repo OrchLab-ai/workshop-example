@@ -194,9 +194,41 @@ if ! command -v docker >/dev/null 2>&1; then
 "install Docker Desktop from https://docker.com/products/docker-desktop
                         then re-run  ./verify.sh"
 elif ! docker info >"$LOG_DIR/01-docker.log" 2>&1; then
-  fail_check "Docker is installed but the daemon is not running" \
+  # `docker info` failing has two very different causes that look identical from
+  # here. If you lack permission to reach the socket or pipe, the daemon is running
+  # perfectly and simply will not talk to you — and "start Docker Desktop" sends
+  # that person into a restart loop they can never win. Judge by the error text.
+  if grep -qiE 'permission denied|access is denied|denied while trying to connect|dial unix.*permission' \
+       "$LOG_DIR/01-docker.log"; then
+    case "$(uname -s)" in
+      MINGW*|MSYS*|CYGWIN*)
+        fail_check "you do not have permission to reach Docker - you are probably not in the docker-users group" \
+"this needs an administrator, once. In an ELEVATED PowerShell:
+                          Add-LocalGroupMember -Group docker-users -Member <your-username>
+                        then SIGN OUT of Windows and back in - group rights are
+                        granted at logon, so nothing changes until a new session.
+                        Docker Desktop itself is almost certainly running fine."
+        ;;
+      Linux)
+        fail_check "you do not have permission to reach the Docker socket" \
+"add yourself to the docker group, once:
+                          sudo usermod -aG docker \$USER
+                        then LOG OUT and back in - group membership is applied at
+                        login, so nothing changes until a new session.
+                        The daemon itself is almost certainly running fine."
+        ;;
+      *)
+        fail_check "you do not have permission to reach the Docker socket" \
+"the daemon is running but will not talk to you - this is a permissions
+                        problem, not a startup one. See $LOG_DIR/01-docker.log"
+        ;;
+    esac
+  else
+    fail_check "Docker is installed but the daemon is not answering" \
 "start Docker Desktop and wait for the whale icon to stop animating
-                        then re-run  ./verify.sh"
+                        then re-run  ./verify.sh
+                        the full error is in $LOG_DIR/01-docker.log"
+  fi
 else
   DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || echo "unknown")
   pass_check "$DOCKER_VERSION"

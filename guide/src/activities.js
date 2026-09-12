@@ -37,6 +37,12 @@ const LINKS = [
 // Windows-container mode at all, so there is nothing to determine.
 const DETECT_COMMAND = "docker info --format '{{.OSType}}'";
 
+// Both Windows pathways share this: docker-users gates access to Docker Desktop
+// regardless of which container mode it is in. Defined once so the two pathways
+// cannot drift apart.
+const DOCKER_USERS_NOTE =
+  'If Docker says <strong>access is denied</strong>, or the check reports you are not in <code>docker-users</code>: an administrator needs to run <code>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</code> once — and then you must <strong>sign out of Windows and back in</strong>. Group rights are granted at logon, so nothing changes until a new session. Restarting Docker Desktop will not help.';
+
 const PLATFORMS = [
   {
     id: "macos",
@@ -62,6 +68,7 @@ const PLATFORMS = [
       "This is the usual setup on Windows, and the better-tested path.",
     shellNote: "which comes with Git for Windows — not PowerShell or CMD",
     shell: "Git Bash",
+    notes: [DOCKER_USERS_NOTE],
     commands: [
       { label: "1. Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
       { label: "2. Create your .env", code: "cp .env.example .env" },
@@ -87,6 +94,7 @@ const PLATFORMS = [
     ],
     notes: [
       "The first run pulls a ~2 GB Windows base image, so give it longer than you would expect. Later runs reuse it.",
+      DOCKER_USERS_NOTE,
       'If <strong>Switch to Windows containers</strong> appears to do nothing, the <code>Containers</code> optional feature is off. It is separate from Hyper-V. Enable it from an elevated PowerShell and <strong>reboot</strong>: <code>Enable-WindowsOptionalFeature -Online -FeatureName Containers -All -NoRestart</code>',
     ],
   },

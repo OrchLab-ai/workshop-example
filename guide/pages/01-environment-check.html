@@ -395,7 +395,7 @@ cd workshop-example</pre>
     <div class="cb-head"><span>If port 8080 is already taken</span><button type="button">Copy</button></div>
     <pre>VERIFY_PORT=8081 ./verify.sh</pre>
   </div>
-
+      <div class="note">If Docker says <strong>access is denied</strong>, or the check reports you are not in <code>docker-users</code>: an administrator needs to run <code>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</code> once — and then you must <strong>sign out of Windows and back in</strong>. Group rights are granted at logon, so nothing changes until a new session. Restarting Docker Desktop will not help.</div>
     </div>
     <div class="pathway" data-pathway="windows-windows">
       <h3>Windows containers &middot; Windows</h3>
@@ -423,6 +423,7 @@ cd workshop-example</pre>
     <pre>$env:VERIFY_PORT=8081; powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
       <div class="note">The first run pulls a ~2 GB Windows base image, so give it longer than you would expect. Later runs reuse it.</div>
+      <div class="note">If Docker says <strong>access is denied</strong>, or the check reports you are not in <code>docker-users</code>: an administrator needs to run <code>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</code> once — and then you must <strong>sign out of Windows and back in</strong>. Group rights are granted at logon, so nothing changes until a new session. Restarting Docker Desktop will not help.</div>
       <div class="note">If <strong>Switch to Windows containers</strong> appears to do nothing, the <code>Containers</code> optional feature is off. It is separate from Hyper-V. Enable it from an elevated PowerShell and <strong>reboot</strong>: <code>Enable-WindowsOptionalFeature -Online -FeatureName Containers -All -NoRestart</code></div>
     </div>
 

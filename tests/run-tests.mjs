@@ -298,6 +298,42 @@ test("finding ids are unique and every referenced id exists", null, () => {
   }
 });
 
+test("both checks diagnose a Docker PERMISSION failure separately", "WIN-026", () => {
+  // The failure mode this guards: without membership of docker-users, `docker info`
+  // fails and the daemon is running perfectly. Reporting "the daemon is not running
+  // / start Docker Desktop" puts that person in a restart loop they cannot win. Same
+  // shape as the wrong-container-mode bug — a true symptom, the wrong cause.
+  const ps = codeOf("windows/verify.ps1");
+  ok(
+    /Get-DockerGroupStatus/.test(ps),
+    "windows/verify.ps1 must diagnose docker-users membership when `docker info` fails"
+  );
+  for (const state of ["not-member", "stale-token"]) {
+    ok(ps.includes(state), `verify.ps1 must distinguish the "${state}" case — the fixes are different`);
+  }
+  ok(
+    /Groups/.test(ps) && /WindowsIdentity/.test(ps),
+    "membership must be read from the process TOKEN, not only the group's member list: a user added to docker-users two minutes ago is in the group and still cannot reach Docker until they sign out and back in"
+  );
+
+  const sh = codeOf("verify.sh");
+  ok(
+    /permission denied|access is denied/i.test(sh),
+    "verify.sh must recognise a permission failure rather than calling it a stopped daemon"
+  );
+  ok(/docker-users/.test(sh), "verify.sh must name docker-users for Git Bash users on Windows");
+  ok(/usermod -aG docker/.test(sh), "verify.sh must give the docker-group fix on Linux");
+});
+
+test("the permission fix tells the user to sign out, not just to re-run", "WIN-026", () => {
+  // Windows grants group rights at LOGON, and the Linux docker group behaves the
+  // same way. Advice that omits this reads as "the fix did not work".
+  const ps = codeOf("windows/verify.ps1");
+  const sh = codeOf("verify.sh");
+  ok(/SIGN OUT|sign out/.test(ps), "verify.ps1's docker-users advice must say to sign out and back in");
+  ok(/SIGN OUT|LOG OUT|sign out|log out/i.test(sh), "verify.sh's permission advice must say to log out and back in");
+});
+
 // ------------------------------------------------------------------ guide
 
 // Every .html under guide/, with its path relative to the repo root.
