@@ -13,7 +13,7 @@
 //     are covered by verify.sh / verify.ps1 themselves.
 //   * Node, not bash and not PowerShell. bash is awkward on a Windows host and
 //     PowerShell is awkward everywhere else; Node runs identically on all three and
-//     the repo already assumes it (guide/build-guide.js).
+//     the repo already assumes it (guide/src/build-guide.js).
 //
 // WHAT THIS SUITE IS FOR: most checks below are REGRESSION GUARDS for bugs that
 // actually happened, and each names the finding in .claude/context/findings.yaml
@@ -24,10 +24,10 @@
 //   * that either image builds (needs Docker, and the right daemon mode)
 //   * that a browser actually renders (that IS check 5; run verify.sh / verify.ps1)
 //   * anything about credentials or the network
-import { readFileSync, existsSync, statSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { join, dirname, resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 
 // fileURLToPath, NOT new URL(...).pathname — the latter yields "/C:/..." on Windows
 // and path.join then builds "C:\C:\...". A real cross-platform bug that POSIX hides.
@@ -296,6 +296,99 @@ test("finding ids are unique and every referenced id exists", null, () => {
   for (const id of cited) {
     ok(seen.has(id), `${id} is referenced somewhere in the repo but is not in findings.yaml`);
   }
+});
+
+// ------------------------------------------------------------------ guide
+
+// Every .html under guide/, with its path relative to the repo root.
+function guidePages() {
+  const found = [];
+  const walk = (rel) => {
+    for (const entry of readdirSync(join(ROOT, rel), { withFileTypes: true })) {
+      const child = `${rel}/${entry.name}`;
+      if (entry.isDirectory()) walk(child);
+      else if (entry.name.endsWith(".html")) found.push(child);
+    }
+  };
+  walk("guide");
+  return found;
+}
+
+test("the guide has exactly one entry page at its root", null, () => {
+  const atRoot = readdirSync(join(ROOT, "guide"), { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith(".html"))
+    .map((e) => e.name);
+  ok(
+    atRoot.length === 1 && atRoot[0] === "start-here.html",
+    `guide/ must contain exactly one HTML file, start-here.html, so there is no doubt which to open — found: ${atRoot.join(", ") || "none"}`
+  );
+  ok(exists("guide/pages"), "the other pages belong in guide/pages/");
+  ok(exists("guide/src/build-guide.js"), "the generator belongs in guide/src/");
+});
+
+test("every internal link in the guide resolves", null, () => {
+  const broken = [];
+  for (const page of guidePages()) {
+    const dir = dirname(page);
+    for (const m of read(page).matchAll(/href="([^"]+)"/g)) {
+      const href = m[1];
+      // Skip anything that does not name a file in this repo.
+      if (/^(https?:|mailto:|#|data:)/.test(href)) continue;
+      const target = href.split("#")[0].split("?")[0];
+      if (!target) continue;
+      if (!existsSync(resolve(ROOT, dir, target))) broken.push(`${page} -> ${href}`);
+    }
+  }
+  // Worth having as a test rather than a spot-check: relative links are exactly
+  // what a directory restructure breaks, and a dead link in a workshop guide is
+  // found by an attendee mid-exercise rather than by whoever moved the file.
+  ok(broken.length === 0, `broken internal links:\n      ${broken.join("\n      ")}`);
+});
+
+test("the committed guide matches its source", null, () => {
+  // The generated pages are committed so attendees never have to run a build. That
+  // is only safe if they cannot drift from activities.js — hence this test.
+  // It regenerates, compares, and puts the originals back, so it never leaves the
+  // working tree modified whether it passes or fails.
+  const pages = guidePages();
+  const before = new Map(pages.map((p) => [p, readFileSync(join(ROOT, p))]));
+  const result = spawnSync(process.execPath, [join(ROOT, "guide/src/build-guide.js")], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  try {
+    ok(result.status === 0, `build-guide.js exited ${result.status}: ${result.stderr || result.stdout}`);
+    const after = guidePages();
+    const added = after.filter((p) => !before.has(p));
+    const removed = pages.filter((p) => !after.includes(p));
+    const changed = after.filter(
+      (p) => before.has(p) && !before.get(p).equals(readFileSync(join(ROOT, p)))
+    );
+    ok(
+      added.length === 0 && removed.length === 0 && changed.length === 0,
+      `guide/ is out of date — run: node guide/src/build-guide.js\n      changed: ${changed.join(", ") || "none"}\n      added: ${added.join(", ") || "none"}\n      removed: ${removed.join(", ") || "none"}`
+    );
+  } finally {
+    for (const [p, buf] of before) writeFileSync(join(ROOT, p), buf);
+  }
+});
+
+test("the guide offers a macOS and a Windows pathway, with distinct commands", null, () => {
+  const html = read("guide/pages/platform.html");
+  for (const id of ["macos", "windows-linux", "windows-windows"]) {
+    ok(html.includes(`data-pathway="${id}"`), `platform.html is missing the "${id}" pathway`);
+  }
+  ok(
+    html.includes("docker info --format"),
+    "the Windows branch must have attendees RUN a command to find out which container mode they are in, rather than guess"
+  );
+  // The whole point of the page: the two Windows answers lead to different commands.
+  const panel = (id) => {
+    const start = html.indexOf(`data-pathway="${id}"`);
+    return html.slice(start, html.indexOf("</div>", html.lastIndexOf("</div>", start + 4000)) + 6000);
+  };
+  ok(panel("windows-windows").includes("verify.ps1"), "the Windows-containers pathway must use verify.ps1");
+  ok(panel("macos").includes("./verify.sh"), "the macOS pathway must use ./verify.sh");
 });
 
 // --------------------------------------------------------- functional test

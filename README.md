@@ -145,9 +145,15 @@ checkpoints/
   manifest.txt               # The ladder — single source of truth
   README.md                  # How checkpoints work; publishing guide
 guide/
-  index.html                 # The how-to guide — open this in a browser
-  activities.js              # Guide content as data
-  build-guide.js             # Regenerates the guide (no dependencies)
+  start-here.html            # The how-to guide — open this in a browser
+  pages/                     # Activities, platform.html (setup), links.html
+  src/activities.js          # Guide content as data
+  src/build-guide.js         # Regenerates the guide (no dependencies)
+windows/                     # Windows-containers support layer
+  verify.ps1                 # The check, for Docker in Windows-container mode
+  Dockerfile                 # Server Core + Node + Playwright/Firefox + Claude Code
+  README.md                  # When you need this, and how it differs
+tests/run-tests.mjs          # Repo invariant tests — no deps, no Docker
 screenshots/                 # verify.png lands here
 ```
 
@@ -157,20 +163,65 @@ More arrives with each checkpoint — see below.
 
 ## The how-to guide
 
-Open **[`guide/index.html`](guide/index.html)** in a browser — double-click it,
-no server needed. The index asks *what are you trying to do?* and each activity
-has its own page: the steps, what success looks like, every command and prompt
-as a one-click copy, and a collapsed "Stuck? Open this" section with the
-shortcut when you need it.
+Open **[`guide/start-here.html`](guide/start-here.html)** in a browser — double-click
+it, no server needed. That is the only file at the top of `guide/`, so there is never
+a question about which one to open.
 
-There is a **light / dark toggle** in the header of every page. It follows your
-system setting to begin with and remembers your choice after that.
+It asks *what are you trying to do?* and each activity has its own page: the steps,
+what success looks like, every command and prompt as a one-click copy, and a
+collapsed "Stuck? Open this" section with the shortcut when you need it.
 
-Regenerate it after editing `guide/activities.js`:
+### Pick your operating system first
+
+**[`guide/pages/platform.html`](guide/pages/platform.html)** — linked as **SETUP** in
+the header of every page — asks which machine you are on and gives you the exact
+commands for it. It is worth doing before anything else, because the environment
+check is a *different script* depending on your setup.
+
+On Windows it asks a second question, and hands you a command to answer it rather
+than having you guess:
 
 ```bash
-node guide/build-guide.js
+docker info --format '{{.OSType}}'
 ```
+
+Docker Desktop on Windows runs **either** Linux containers **or** Windows
+containers — one daemon, one mode, never both — and each needs a different check.
+Your answer is remembered across pages, so the environment-check activity shows the
+same pathway you chose.
+
+| Answer | Pathway | Shell | Check |
+|---|---|---|---|
+| macOS | Only one — there is no Windows-container mode on a Mac | Terminal | `./verify.sh` |
+| `linux` | Linux containers — the usual Windows setup | Git Bash | `./verify.sh` |
+| `windows` | Windows containers — see [`windows/README.md`](windows/README.md) | PowerShell | `windows\verify.ps1` |
+
+Guess wrong and nothing breaks: each script detects the wrong container mode and
+points you at the other one.
+
+There is also a **light / dark toggle** in the header of every page. It follows your
+system setting to begin with and remembers your choice after that.
+
+### Layout
+
+```
+guide/
+  start-here.html    The entry point — the only file here, double-click it
+  pages/             Every other page: the 10 activities, platform.html, links.html
+  src/
+    activities.js    The workshop content as data — edit this
+    build-guide.js   The generator: no dependencies, no build tooling
+```
+
+The generated pages are committed so attendees never need to run a build. After
+editing `guide/src/activities.js`, regenerate them:
+
+```bash
+node guide/src/build-guide.js
+```
+
+`node tests/run-tests.mjs` fails if you forget — it regenerates the guide and
+compares, and separately checks that every internal link still resolves.
 
 ---
 

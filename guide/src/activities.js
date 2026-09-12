@@ -23,6 +23,75 @@ const LINKS = [
   { label: "The bug AI found in seconds (HdrHistogram PR)", url: "https://github.com/HdrHistogram/HdrHistogram.NET/pull/130/" },
 ];
 
+// The setup pathways, as data.
+//
+// WHY THIS EXISTS: "Windows" is not one answer. Docker Desktop on Windows runs
+// EITHER Linux containers (the common case, WSL2 backend) OR Windows containers —
+// one daemon, one mode, never both — and the workshop's check is a different script
+// in each case. An attendee in Windows-container mode who runs ./verify.sh gets a
+// build failure that reads "this is almost always a network problem", which sends
+// them off debugging their wifi. So the guide asks the question up front and has
+// them RUN a command to answer it rather than guess.
+//
+// macOS is deliberately a single pathway: Docker Desktop there has no
+// Windows-container mode at all, so there is nothing to determine.
+const DETECT_COMMAND = "docker info --format '{{.OSType}}'";
+
+const PLATFORMS = [
+  {
+    id: "macos",
+    os: "macos",
+    label: "macOS",
+    // Shown on the pathway panel so someone can sanity-check they picked right.
+    confirm: "Docker Desktop on macOS only runs Linux containers — there is nothing to determine.",
+    shell: "Terminal",
+    commands: [
+      { label: "1. Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
+      { label: "2. Create your .env", code: "cp .env.example .env" },
+      { label: "3. Get your token, then paste it into .env", code: "claude setup-token" },
+      { label: "4. Run the check", code: "./verify.sh" },
+      { label: "If port 8080 is already taken", code: "VERIFY_PORT=8081 ./verify.sh" },
+    ],
+  },
+  {
+    id: "windows-linux",
+    os: "windows",
+    label: "Linux containers",
+    detectValue: "linux",
+    confirm:
+      "This is the usual setup on Windows, and the better-tested path.",
+    shellNote: "which comes with Git for Windows — not PowerShell or CMD",
+    shell: "Git Bash",
+    commands: [
+      { label: "1. Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
+      { label: "2. Create your .env", code: "cp .env.example .env" },
+      { label: "3. Get your token, then paste it into .env", code: "claude setup-token" },
+      { label: "4. Run the check", code: "./verify.sh" },
+      { label: "If port 8080 is already taken", code: "VERIFY_PORT=8081 ./verify.sh" },
+    ],
+  },
+  {
+    id: "windows-windows",
+    os: "windows",
+    label: "Windows containers",
+    detectValue: "windows",
+    confirm:
+      "Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same five things.",
+    shell: "PowerShell",
+    commands: [
+      { label: "1. Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
+      { label: "2. Create your .env", code: "copy .env.example .env" },
+      { label: "3. Get your token, then paste it into .env", code: "claude setup-token" },
+      { label: "4. Run the check", code: "powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
+      { label: "If port 8080 is already taken", code: "$env:VERIFY_PORT=8081; powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
+    ],
+    notes: [
+      "The first run pulls a ~2 GB Windows base image, so give it longer than you would expect. Later runs reuse it.",
+      'If <strong>Switch to Windows containers</strong> appears to do nothing, the <code>Containers</code> optional feature is off. It is separate from Hyper-V. Enable it from an elevated PowerShell and <strong>reboot</strong>: <code>Enable-WindowsOptionalFeature -Online -FeatureName Containers -All -NoRestart</code>',
+    ],
+  },
+];
+
 const activities = [
   {
     slug: "environment-check",
@@ -33,24 +102,24 @@ const activities = [
     to: "cp-00",
     summary:
       "One command that checks five things and gives you a straight answer. Run it before the workshop, not on the day.",
-    commands: [
-      { label: "Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
-      { label: "Create your .env", code: "cp .env.example .env" },
-      { label: "Get your token (run on your own machine)", code: "claude setup-token" },
-      { label: "Run the check", code: "./verify.sh" },
-      { label: "If port 8080 is taken", code: "VERIFY_PORT=8081 ./verify.sh" },
-    ],
+    // Renders the platform switcher in place of a fixed `commands` list. The exact
+    // commands differ by operating system AND, on Windows, by which container mode
+    // Docker is in — so they come from PLATFORMS above rather than being repeated
+    // here, where the two copies would drift.
+    platformSetup: true,
     steps: [
+      "Pick your operating system below. On Windows there is one extra question, and a command that answers it for you.",
       "Clone the repo and <code>cd</code> into it.",
       "Copy <code>.env.example</code> to <code>.env</code>.",
       "Run <code>claude setup-token</code> on your own machine and paste the value into <code>.env</code>.",
-      "Run <code>./verify.sh</code>.",
+      "Run the check for your platform.",
     ],
     success:
       "The last line reads <strong>ALL 5 CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof.",
     cheat: [
       "There is no shortcut past this one, and you do not want one — every later activity assumes it passed.",
       "If a check fails, the script names the cause and the fix and writes <code>verify-report.txt</code>. Paste that file when you ask for help rather than describing the problem.",
+      "Ran the wrong one for your setup? No harm done — each script detects the wrong container mode and points you at the other one instead of failing confusingly.",
     ],
   },
   {
@@ -370,4 +439,4 @@ You are a senior full-stack engineer working in this codebase.
   },
 ];
 
-module.exports = { activities, LINKS, REPO_URL };
+module.exports = { activities, LINKS, REPO_URL, PLATFORMS, DETECT_COMMAND };

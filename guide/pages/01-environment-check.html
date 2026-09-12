@@ -65,6 +65,10 @@
   --well-accent:#8cc26c;
 }
 * { box-sizing: border-box; }
+/* Needed because several things toggled with el.hidden also carry a class that
+   sets display (.chosen is a flex row). A class rule beats the UA sheet's
+   [hidden]{display:none}, so without this the element stays visible. */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   padding: 0 20px 80px;
@@ -209,6 +213,53 @@ details.cheat[open] > summary::before { content: "▾ "; }
 details.cheat .body { padding: 0 18px 16px; }
 details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
 
+/* platform picker
+   Choices are real <button>s so they are keyboard-reachable and announce their
+   pressed state. The panels are VISIBLE by default and hidden by script — that way
+   a browser with JavaScript off, or a page opened before the script runs, shows
+   every pathway rather than an empty page with nothing to click. */
+.picker { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 10px; }
+.picker button {
+  flex: 1 1 200px; cursor: pointer; text-align: left;
+  padding: 16px 18px; border-radius: 6px;
+  border: 1px solid var(--border); border-left: 4px solid var(--brand);
+  background: var(--surface); color: var(--text);
+  font: 600 17px/1.3 inherit;
+  transition: background .15s, transform .1s;
+}
+.picker button:hover { background: var(--surface-alt); transform: translateY(-1px); }
+.picker button .sub { display: block; font: 400 13.5px/1.5 inherit; color: var(--muted); margin-top: 5px; }
+.picker button[aria-pressed="true"] {
+  background: var(--brand); color: var(--on-brand); border-color: var(--brand);
+}
+.picker button[aria-pressed="true"] .sub { color: var(--on-brand); opacity: .8; }
+
+/* the "you chose X" strip, with a way back out */
+.chosen {
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 4px solid var(--brand);
+  border-radius: 6px; padding: 13px 18px; margin: 0 0 22px; font-size: 14.5px;
+}
+.chosen b { color: var(--strong); }
+.chosen .spacer { flex: 1 1 auto; }
+.chosen button {
+  cursor: pointer; border: 1px solid var(--border); background: var(--panel);
+  color: var(--accent); font: 600 12px/1 inherit; padding: 7px 12px; border-radius: 4px;
+}
+.chosen button:hover { border-color: var(--accent); }
+
+.pathway { margin: 0 0 10px; }
+.pathway h3 {
+  font-size: 17px; margin: 26px 0 6px; color: var(--strong);
+}
+.pathway .confirm { margin: 0 0 18px; color: var(--text); }
+.note {
+  border-left: 4px solid var(--amber); background: var(--panel);
+  padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 0 0 12px;
+  font-size: 14.5px;
+}
+
 /* nav */
 nav.pager {
   display: flex; justify-content: space-between; gap: 14px;
@@ -225,7 +276,8 @@ nav.pager a:hover { background: var(--surface); }
 <body>
 <div class="wrap">
   <header class="site">
-    <a href="index.html">← ALL ACTIVITIES</a>
+    <a href="../start-here.html">← ALL ACTIVITIES</a>
+    <a href="platform.html">SETUP</a>
     <a href="links.html">ALL LINKS</a>
     <span class="spacer"></span>
     <button class="theme-toggle" type="button" data-theme-toggle
@@ -244,34 +296,135 @@ nav.pager a:hover { background: var(--surface); }
 
   <h2>What to do</h2>
   <ol>
+    <li>Pick your operating system below. On Windows there is one extra question, and a command that answers it for you.</li>
     <li>Clone the repo and <code>cd</code> into it.</li>
     <li>Copy <code>.env.example</code> to <code>.env</code>.</li>
     <li>Run <code>claude setup-token</code> on your own machine and paste the value into <code>.env</code>.</li>
-    <li>Run <code>./verify.sh</code>.</li>
+    <li>Run the check for your platform.</li>
   </ol>
 
-  <h2>Commands</h2>
+  <h2>Your setup, step by step</h2>
+  <div class="picker">
+    <button type="button" data-pick="macos" aria-pressed="false">macOS
+      <span class="sub">Docker Desktop on a Mac</span></button>
+    <button type="button" data-pick="windows" aria-pressed="false">Windows
+      <span class="sub">Docker Desktop on Windows 10 or 11</span></button>
+  </div>
+
+  <div data-step="mode">
+    <h2>Which Docker installation do you have?</h2>
+    <p>This is the question that catches people out. Docker Desktop on Windows runs
+    <strong>either</strong> Linux containers <strong>or</strong> Windows containers —
+    one daemon, one mode, never both — and the workshop uses a different check for
+    each. Don't guess. Run this and read the one word it prints:</p>
   <div class="copyblock">
-    <div class="cb-head"><span>Clone and enter the repo</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Tells you which mode Docker is in</span><button type="button">Copy</button></div>
+    <pre>docker info --format '{{.OSType}}'</pre>
+  </div>
+    <div class="picker">
+      <button type="button" data-pick="windows-linux" aria-pressed="false">It printed <code>linux</code>
+        <span class="sub">Linux containers — the usual setup</span></button>
+      <button type="button" data-pick="windows-windows" aria-pressed="false">It printed <code>windows</code>
+        <span class="sub">Windows containers — usually deliberate</span></button>
+    </div>
+    <div class="note">If that command errors, Docker Desktop is not running. Start it,
+    wait for the whale icon to stop animating, and run it again.</div>
+  </div>
+
+  <div class="chosen" data-pick-chosen hidden>
+    <span>Your pathway: <b data-pick-label
+      data-label-macos="macOS"
+      data-label-windows-linux="Windows, Linux containers"
+      data-label-windows-windows="Windows, Windows containers"></b></span>
+    <span class="spacer"></span>
+    <button type="button" data-pick-reset>Change</button>
+  </div>
+
+  <p data-pick-empty>Pick your operating system above and the exact commands for your
+  machine will appear here.</p>
+
+    <div class="pathway" data-pathway="macos">
+      <h3>macOS</h3>
+      <p class="confirm">Docker Desktop on macOS only runs Linux containers — there is nothing to determine.</p>
+      <p>Run these in <strong>Terminal</strong>.</p>
+  <div class="copyblock">
+    <div class="cb-head"><span>1. Clone and enter the repo</span><button type="button">Copy</button></div>
     <pre>git clone https://github.com/OrchLab-ai/workshop-example.git
 cd workshop-example</pre>
   </div>
   <div class="copyblock">
-    <div class="cb-head"><span>Create your .env</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>2. Create your .env</span><button type="button">Copy</button></div>
     <pre>cp .env.example .env</pre>
   </div>
   <div class="copyblock">
-    <div class="cb-head"><span>Get your token (run on your own machine)</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>3. Get your token, then paste it into .env</span><button type="button">Copy</button></div>
     <pre>claude setup-token</pre>
   </div>
   <div class="copyblock">
-    <div class="cb-head"><span>Run the check</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>4. Run the check</span><button type="button">Copy</button></div>
     <pre>./verify.sh</pre>
   </div>
   <div class="copyblock">
-    <div class="cb-head"><span>If port 8080 is taken</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>If port 8080 is already taken</span><button type="button">Copy</button></div>
     <pre>VERIFY_PORT=8081 ./verify.sh</pre>
   </div>
+
+    </div>
+    <div class="pathway" data-pathway="windows-linux">
+      <h3>Linux containers &middot; Windows</h3>
+      <p class="confirm">This is the usual setup on Windows, and the better-tested path.</p>
+      <p>Run these in <strong>Git Bash</strong>, which comes with Git for Windows — not PowerShell or CMD.</p>
+  <div class="copyblock">
+    <div class="cb-head"><span>1. Clone and enter the repo</span><button type="button">Copy</button></div>
+    <pre>git clone https://github.com/OrchLab-ai/workshop-example.git
+cd workshop-example</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>2. Create your .env</span><button type="button">Copy</button></div>
+    <pre>cp .env.example .env</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>3. Get your token, then paste it into .env</span><button type="button">Copy</button></div>
+    <pre>claude setup-token</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>4. Run the check</span><button type="button">Copy</button></div>
+    <pre>./verify.sh</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>If port 8080 is already taken</span><button type="button">Copy</button></div>
+    <pre>VERIFY_PORT=8081 ./verify.sh</pre>
+  </div>
+
+    </div>
+    <div class="pathway" data-pathway="windows-windows">
+      <h3>Windows containers &middot; Windows</h3>
+      <p class="confirm">Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same five things.</p>
+      <p>Run these in <strong>PowerShell</strong>.</p>
+  <div class="copyblock">
+    <div class="cb-head"><span>1. Clone and enter the repo</span><button type="button">Copy</button></div>
+    <pre>git clone https://github.com/OrchLab-ai/workshop-example.git
+cd workshop-example</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>2. Create your .env</span><button type="button">Copy</button></div>
+    <pre>copy .env.example .env</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>3. Get your token, then paste it into .env</span><button type="button">Copy</button></div>
+    <pre>claude setup-token</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>4. Run the check</span><button type="button">Copy</button></div>
+    <pre>powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>If port 8080 is already taken</span><button type="button">Copy</button></div>
+    <pre>$env:VERIFY_PORT=8081; powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
+  </div>
+      <div class="note">The first run pulls a ~2 GB Windows base image, so give it longer than you would expect. Later runs reuse it.</div>
+      <div class="note">If <strong>Switch to Windows containers</strong> appears to do nothing, the <code>Containers</code> optional feature is off. It is separate from Hyper-V. Enable it from an elevated PowerShell and <strong>reboot</strong>: <code>Enable-WindowsOptionalFeature -Online -FeatureName Containers -All -NoRestart</code></div>
+    </div>
 
   <h2>You are done when</h2>
   <div class="success">The last line reads <strong>ALL 5 CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof.</div>
@@ -281,6 +434,7 @@ cd workshop-example</pre>
     <div class="body">
       <p>There is no shortcut past this one, and you do not want one — every later activity assumes it passed.</p>
       <p>If a check fails, the script names the cause and the fix and writes <code>verify-report.txt</code>. Paste that file when you ask for help rather than describing the problem.</p>
+      <p>Ran the wrong one for your setup? No harm done — each script detects the wrong container mode and points you at the other one instead of failing confusingly.</p>
     </div>
   </details>
 
@@ -290,6 +444,53 @@ cd workshop-example</pre>
   </nav>
 </div>
 <script>
+// Platform choice. Remembered across pages so the environment-check activity shows
+// the same pathway the picker page did, and so nobody has to re-answer it.
+//
+// State is ONE string: '', 'macos', 'windows', 'windows-linux' or 'windows-windows'.
+// 'windows' is the half-answered state — the OS is known but the container mode is
+// not — which is exactly the moment the guide needs to ask the second question.
+var PLATFORM_KEY = 'orchlab-guide-platform';
+
+function applyPlatform(state) {
+  var os = state ? state.split('-')[0] : '';
+  var final = state && state !== 'windows';
+
+  document.querySelectorAll('[data-step="mode"]').forEach(function (el) {
+    el.hidden = os !== 'windows';
+  });
+  document.querySelectorAll('[data-pathway]').forEach(function (el) {
+    el.hidden = el.getAttribute('data-pathway') !== state;
+  });
+  document.querySelectorAll('[data-pick-empty]').forEach(function (el) {
+    el.hidden = !!final;
+  });
+  document.querySelectorAll('[data-pick-chosen]').forEach(function (el) {
+    el.hidden = !final;
+  });
+  document.querySelectorAll('[data-pick-label]').forEach(function (el) {
+    if (final) el.textContent = el.getAttribute('data-label-' + state) || state;
+  });
+  document.querySelectorAll('[data-pick]').forEach(function (b) {
+    var v = b.getAttribute('data-pick');
+    b.setAttribute('aria-pressed', String(v === state || v === os));
+  });
+}
+
+function setPlatform(state) {
+  try {
+    if (state) localStorage.setItem(PLATFORM_KEY, state);
+    else localStorage.removeItem(PLATFORM_KEY);
+  } catch (err) {}
+  applyPlatform(state || '');
+}
+
+(function () {
+  var stored = '';
+  try { stored = localStorage.getItem(PLATFORM_KEY) || ''; } catch (err) {}
+  applyPlatform(stored);
+})();
+
 document.addEventListener('click', function (e) {
   var toggle = e.target.closest('[data-theme-toggle]');
   if (toggle) {
@@ -302,6 +503,16 @@ document.addEventListener('click', function (e) {
     var next = current === 'light' ? 'dark' : 'light';
     root.setAttribute('data-theme', next);
     try { localStorage.setItem('orchlab-guide-theme', next); } catch (err) {}
+    return;
+  }
+
+  var pick = e.target.closest('[data-pick]');
+  if (pick) {
+    setPlatform(pick.getAttribute('data-pick'));
+    return;
+  }
+  if (e.target.closest('[data-pick-reset]')) {
+    setPlatform(null);
     return;
   }
 

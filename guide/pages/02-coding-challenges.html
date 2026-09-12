@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Build It Properly — OrchLab Workshop Guide</title>
+<title>Coding Challenges — OrchLab Workshop Guide</title>
 <script>
 (function () {
   try {
@@ -65,6 +65,10 @@
   --well-accent:#8cc26c;
 }
 * { box-sizing: border-box; }
+/* Needed because several things toggled with el.hidden also carry a class that
+   sets display (.chosen is a flex row). A class rule beats the UA sheet's
+   [hidden]{display:none}, so without this the element stays visible. */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   padding: 0 20px 80px;
@@ -209,6 +213,53 @@ details.cheat[open] > summary::before { content: "▾ "; }
 details.cheat .body { padding: 0 18px 16px; }
 details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
 
+/* platform picker
+   Choices are real <button>s so they are keyboard-reachable and announce their
+   pressed state. The panels are VISIBLE by default and hidden by script — that way
+   a browser with JavaScript off, or a page opened before the script runs, shows
+   every pathway rather than an empty page with nothing to click. */
+.picker { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 10px; }
+.picker button {
+  flex: 1 1 200px; cursor: pointer; text-align: left;
+  padding: 16px 18px; border-radius: 6px;
+  border: 1px solid var(--border); border-left: 4px solid var(--brand);
+  background: var(--surface); color: var(--text);
+  font: 600 17px/1.3 inherit;
+  transition: background .15s, transform .1s;
+}
+.picker button:hover { background: var(--surface-alt); transform: translateY(-1px); }
+.picker button .sub { display: block; font: 400 13.5px/1.5 inherit; color: var(--muted); margin-top: 5px; }
+.picker button[aria-pressed="true"] {
+  background: var(--brand); color: var(--on-brand); border-color: var(--brand);
+}
+.picker button[aria-pressed="true"] .sub { color: var(--on-brand); opacity: .8; }
+
+/* the "you chose X" strip, with a way back out */
+.chosen {
+  display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 4px solid var(--brand);
+  border-radius: 6px; padding: 13px 18px; margin: 0 0 22px; font-size: 14.5px;
+}
+.chosen b { color: var(--strong); }
+.chosen .spacer { flex: 1 1 auto; }
+.chosen button {
+  cursor: pointer; border: 1px solid var(--border); background: var(--panel);
+  color: var(--accent); font: 600 12px/1 inherit; padding: 7px 12px; border-radius: 4px;
+}
+.chosen button:hover { border-color: var(--accent); }
+
+.pathway { margin: 0 0 10px; }
+.pathway h3 {
+  font-size: 17px; margin: 26px 0 6px; color: var(--strong);
+}
+.pathway .confirm { margin: 0 0 18px; color: var(--text); }
+.note {
+  border-left: 4px solid var(--amber); background: var(--panel);
+  padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 0 0 12px;
+  font-size: 14.5px;
+}
+
 /* nav */
 nav.pager {
   display: flex; justify-content: space-between; gap: 14px;
@@ -225,60 +276,121 @@ nav.pager a:hover { background: var(--surface); }
 <body>
 <div class="wrap">
   <header class="site">
-    <a href="index.html">← ALL ACTIVITIES</a>
+    <a href="../start-here.html">← ALL ACTIVITIES</a>
+    <a href="platform.html">SETUP</a>
     <a href="links.html">ALL LINKS</a>
     <span class="spacer"></span>
     <button class="theme-toggle" type="button" data-theme-toggle
       aria-label="Switch between light and dark theme"
     ><span class="to-dark">☀ LIGHT</span><span class="to-light">☾ DARK</span></button>
   </header>
-  <span class="actnum">ACTIVITY 07</span>
-  <p class="eyebrow">Part 2 — Prompt Engineering</p>
-  <h1>Build It Properly</h1>
-  <p class="lede">Spec plus brand, through a Socratic interview, all the way to working code — and it renders in your colours.</p>
+  <span class="actnum">ACTIVITY 02</span>
+  <p class="eyebrow">Part 1 — AI Coding</p>
+  <h1>Coding Challenges</h1>
+  <p class="lede">Pick one of three changes that would take half a day by hand. Twenty minutes with an agent that can see the whole repo.</p>
 
   <div class="cp">
-    <span>start from <b>cp-05</b></span>
-    <span>produces <b>cp-06</b></span>
-    <span>behind? <code>./checkpoint.sh 5</code></span>
+    <span>start from <b>cp-00</b></span>
+    <span>produces <b>cp-01</b></span>
+    <span>behind? <code>./checkpoint.sh 0</code></span>
   </div>
 
   <h2>What to do</h2>
   <ol>
-    <li>Hand the agent your spec and your brand and let it ask about the gaps.</li>
-    <li>Watch which questions it asks: routes, schema, API conventions, backward compatibility.</li>
-    <li>Take it through brief, tasks, then code.</li>
+    <li>Pick <strong>one</strong> challenge and copy its prompt.</li>
+    <li>Work in <code>packages/</code> — the agent has the whole repo in context.</li>
+    <li>Run the tests when you think you are done.</li>
   </ol>
 
   <h2>Commands</h2>
   <div class="copyblock">
     <div class="cb-head"><span>Start from the right checkpoint</span><button type="button">Copy</button></div>
-    <pre>./checkpoint.sh 5</pre>
+    <pre>./checkpoint.sh 0</pre>
+  </div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Run the tests when you think you're done</span><button type="button">Copy</button></div>
+    <pre>./scripts/ci-check.sh</pre>
   </div>
 
   <h2>Prompts — copy, don't retype</h2>
   <div class="copyblock is-prompt">
-    <div class="cb-head"><span>The Socratic build</span><button type="button">Copy</button></div>
-    <pre>Read mission-updates.spec.md and specs/standards/brand.md. Before writing any code, interview me about what the spec leaves ambiguous — the existing campaign routes, the database schema, API conventions, backward compatibility. Ask one question at a time. Then produce a brief, turn the brief into explicit tasks, and only then write the code. Run the tests when you're done.</pre>
+    <div class="cb-head"><span>Challenge 1 — Refactor-Rename</span><button type="button">Copy</button></div>
+    <pre>Rename 'Campaign' to 'Proposal' across the entire codebase, including API endpoints, documentation, and database references. Update the tests to match and make sure they still pass.</pre>
+  </div>
+  <div class="copyblock is-prompt">
+    <div class="cb-head"><span>Challenge 2 — Observability</span><button type="button">Copy</button></div>
+    <pre>Add structured JSON request logging using the existing pino logger. Each log line should include the method, path, status code, duration in milliseconds, and a correlation ID that follows the request through the system.</pre>
+  </div>
+  <div class="copyblock is-prompt">
+    <div class="cb-head"><span>Challenge 3 — New Feature</span><button type="button">Copy</button></div>
+    <pre>Add a 'Trending Missions' section to the Explore page: the three most popular live campaigns by contributor count, shown above the main grid. Match the existing page's styling and add tests.</pre>
   </div>
 
   <h2>You are done when</h2>
-  <div class="success">Mission Updates works, tests pass, and it looks like yours.</div>
+  <div class="success">The change is applied across every file it touches — including the ones you would have forgotten — and the tests still pass.</div>
 
   <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
-      <p><code>./checkpoint.sh 6</code> has the finished feature.</p>
-      <p>Notice how different the questions are from the brand exercise. Same method, brownfield instead of greenfield — the agent can ask about the schema because the real code is right there.</p>
+      <p>Twenty minutes is deliberately tight. If you run out, that is fine and expected.</p>
+      <p><code>./checkpoint.sh 1</code> lands you on the finished state so you start the next activity level with everyone else.</p>
+      <p>Your unfinished attempt is committed to a <code>wip/</code> branch first — nothing is thrown away.</p>
     </div>
   </details>
 
   <nav class="pager">
-    <a href="06-brand-your-app.html">&larr; Brand Your Mission Updates</a>
-    <a href="08-autonomous-agent.html">Build an Autonomous Agent &rarr;</a>
+    <a href="01-environment-check.html">&larr; Environment Check</a>
+    <a href="03-agent-sight.html">Give Your Agent Sight &rarr;</a>
   </nav>
 </div>
 <script>
+// Platform choice. Remembered across pages so the environment-check activity shows
+// the same pathway the picker page did, and so nobody has to re-answer it.
+//
+// State is ONE string: '', 'macos', 'windows', 'windows-linux' or 'windows-windows'.
+// 'windows' is the half-answered state — the OS is known but the container mode is
+// not — which is exactly the moment the guide needs to ask the second question.
+var PLATFORM_KEY = 'orchlab-guide-platform';
+
+function applyPlatform(state) {
+  var os = state ? state.split('-')[0] : '';
+  var final = state && state !== 'windows';
+
+  document.querySelectorAll('[data-step="mode"]').forEach(function (el) {
+    el.hidden = os !== 'windows';
+  });
+  document.querySelectorAll('[data-pathway]').forEach(function (el) {
+    el.hidden = el.getAttribute('data-pathway') !== state;
+  });
+  document.querySelectorAll('[data-pick-empty]').forEach(function (el) {
+    el.hidden = !!final;
+  });
+  document.querySelectorAll('[data-pick-chosen]').forEach(function (el) {
+    el.hidden = !final;
+  });
+  document.querySelectorAll('[data-pick-label]').forEach(function (el) {
+    if (final) el.textContent = el.getAttribute('data-label-' + state) || state;
+  });
+  document.querySelectorAll('[data-pick]').forEach(function (b) {
+    var v = b.getAttribute('data-pick');
+    b.setAttribute('aria-pressed', String(v === state || v === os));
+  });
+}
+
+function setPlatform(state) {
+  try {
+    if (state) localStorage.setItem(PLATFORM_KEY, state);
+    else localStorage.removeItem(PLATFORM_KEY);
+  } catch (err) {}
+  applyPlatform(state || '');
+}
+
+(function () {
+  var stored = '';
+  try { stored = localStorage.getItem(PLATFORM_KEY) || ''; } catch (err) {}
+  applyPlatform(stored);
+})();
+
 document.addEventListener('click', function (e) {
   var toggle = e.target.closest('[data-theme-toggle]');
   if (toggle) {
@@ -291,6 +403,16 @@ document.addEventListener('click', function (e) {
     var next = current === 'light' ? 'dark' : 'light';
     root.setAttribute('data-theme', next);
     try { localStorage.setItem('orchlab-guide-theme', next); } catch (err) {}
+    return;
+  }
+
+  var pick = e.target.closest('[data-pick]');
+  if (pick) {
+    setPlatform(pick.getAttribute('data-pick'));
+    return;
+  }
+  if (e.target.closest('[data-pick-reset]')) {
+    setPlatform(null);
     return;
   }
 
