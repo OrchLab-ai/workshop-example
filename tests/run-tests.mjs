@@ -254,21 +254,114 @@ test("both stacks serve the same site, rather than duplicating it", null, () => 
   );
 });
 
-test("verify-setup.sh and verify.ps1 present the same five checks", null, () => {
-  const labels = ["Docker daemon reachable", "Workshop image builds", "Claude Code CLI + auth", "Workshop site responds", "Playwright screenshot captured"];
+test("verify-setup.sh and verify.ps1 present the same six checks", null, () => {
+  const labels = [
+    "Workshop app cloned",
+    "Docker daemon reachable",
+    "Workshop image builds",
+    "Claude Code CLI + auth",
+    "Workshop site responds",
+    "Playwright screenshot captured",
+  ];
   const sh = read("verify-setup.sh");
   const ps = read("windows/verify.ps1");
   for (const label of labels) {
     ok(sh.includes(label), `verify-setup.sh is missing the check labelled "${label}"`);
     ok(ps.includes(label), `windows/verify.ps1 is missing the check labelled "${label}" — the two must stay in step or a Windows attendee cannot compare notes with the room`);
   }
+  // The counter in every row is "[n/TOTAL]", so a label added to one script without
+  // bumping its total prints a checklist that counts past its own length.
+  // Read the declared total rather than matching against a literal: the assertion is
+  // that the two scripts agree with each other AND with this list, so the list stays
+  // the single place a sixth check has to be registered.
+  const shTotal = sh.match(/^TOTAL=(\d+)/m);
+  const psTotal = ps.match(/^\$Total\s*=\s*(\d+)/m);
+  ok(shTotal && Number(shTotal[1]) === labels.length, `verify-setup.sh sets TOTAL=${shTotal ? shTotal[1] : "?"}, expected ${labels.length}`);
+  ok(psTotal && Number(psTotal[1]) === labels.length, `windows/verify.ps1 sets $Total = ${psTotal ? psTotal[1] : "?"}, expected ${labels.length}`);
+  // Every check but the first is skipped on an earlier failure, and the skipped rows
+  // are printed from a hard-coded map. If that map is short, the checklist silently
+  // loses its fixed length — which is the one property the whole design rests on.
+  // Plain substring matches, deliberately: these needles contain regex metacharacters.
+  for (let n = 2; n <= labels.length; n++) {
+    ok(sh.includes(`${n}) start_check "${labels[n - 1]}"`), `verify-setup.sh's skipped-row map is missing ${n}) ${labels[n - 1]}`);
+    ok(ps.includes(`${n} = '${labels[n - 1]}'`), `windows/verify.ps1's $remaining map is missing ${n} = ${labels[n - 1]}`);
+  }
 });
 
-test("each entry point redirects to the other on the wrong daemon mode", "WIN-001", () => {
-  ok(/OSType/.test(codeOf("verify-setup.sh")), "verify-setup.sh must detect Windows-container mode rather than failing at check 2 blaming the network");
-  ok(/OSType/.test(codeOf("windows/verify.ps1")), "windows/verify.ps1 must detect Linux-container mode");
+// ------------------------------------------------------------- the app clone
+
+test("app/ is gitignored, so the two histories stay independent", null, () => {
+  const ignored = read(".gitignore").split(/\r?\n/).map((l) => l.trim());
+  ok(
+    ignored.includes("app/") || ignored.includes("/app/"),
+    "app/ must be gitignored. It is a clone of the application repo, and the whole point of the two-repo split is that this tree records NO pointer to the app's history — that is what a submodule would have done and what was deliberately rejected."
+  );
+  ok(
+    spawnSync("git", ["-C", ROOT, "ls-files", "--error-unmatch", "app"], { encoding: "utf8" }).status !== 0,
+    "app/ is tracked in git — it must not be, or an infra commit starts carrying app state again"
+  );
 });
 
+test("checkpoint.sh drives the APP repo, never this one", null, () => {
+  const code = codeOf("checkpoint.sh");
+  // The whole design rests on this. A bare `git` here asks workshop-example about
+  // tags it does not have, and — worse — a bare `git checkout` would move the
+  // INFRASTRUCTURE repo to a checkpoint, which is exactly the rewind the separate
+  // app repo exists to prevent.
+  const bare = code.split(/\r?\n/).filter((l) => /^\s*git\s/.test(l) || /\$\(\s*git\s/.test(l));
+  ok(
+    bare.length === 0,
+    `every git command in checkpoint.sh must go through app_git (or be an explicit git -C): ${bare.map((l) => l.trim()).join(" | ")}`
+  );
+  // And the helper must actually target app/, not just exist.
+  ok(
+    /app_git\(\)\s*\{\s*git -C "\$APP_DIR"/.test(code),
+    "app_git must be defined as `git -C \"$APP_DIR\"`"
+  );
+  // Line continuations are folded first: the wip commit is written as
+  //   app_git -c user.name=... \
+  //     commit -q -m "..."
+  // so the verb is not on the same source line as app_git.
+  const flat = code.replace(/\\\r?\n\s*/g, " ");
+  for (const op of ["checkout", "status", "add", "commit", "describe", "for-each-ref", "fetch", "rev-parse"]) {
+    ok(
+      flat.split(/\r?\n/).some((l) => l.includes("app_git") && l.includes(` ${op}`)),
+      `checkpoint.sh should still perform "git ${op}" — via app_git — and it no longer appears at all`
+    );
+  }
+});
+
+test("whether app/ is a clone is decided by .git, not by rev-parse", null, () => {
+  // A bug that actually happened here. `git -C app rev-parse --git-dir` WALKS UP the
+  // directory tree, so run inside a plain unzipped folder sitting in this repo it
+  // finds workshop-example's OWN .git and reports success. The attendee is then told
+  // their ZIP is "a clone of the wrong repo" and sent to fix the wrong thing.
+  ok(
+    /\[ ! -e "\$APP_DIR\/\.git" \]/.test(codeOf("verify-setup.sh")),
+    "verify-setup.sh must test for $APP_DIR/.git to decide whether app/ is a clone"
+  );
+  ok(
+    /Test-Path -LiteralPath \(Join-Path \$AppDir '\.git'\)/.test(read("windows/verify.ps1")),
+    "windows/verify.ps1 must test for app\.git to decide whether app/ is a clone"
+  );
+  ok(
+    /\[ ! -e "\$APP_DIR\/\.git" \]/.test(codeOf("checkpoint.sh")),
+    "checkpoint.sh's guard must test for $APP_DIR/.git for the same reason"
+  );
+});
+
+test("the workshop stack mounts the same app/ the check clones", null, () => {
+  const yml = read("docker-compose.workshop.yml");
+  ok(/\.\/app:/.test(yml), "docker-compose.workshop.yml must bind-mount ./app");
+  ok(
+    /context:\s*\.\/app\/autonomous\b/.test(yml),
+    "the claude-container service builds from ./app/autonomous — if that moves, verify-setup.sh's 'is this the right repo' probe must move with it"
+  );
+  ok(
+    /autonomous\/Dockerfile/.test(codeOf("verify-setup.sh")),
+    "verify-setup.sh must probe for the file the compose build needs (app/autonomous/Dockerfile), or a wrong-repo clone fails minutes later as an opaque build error"
+  );
+});
 // ------------------------------------------------------- context integrity
 
 test("finding ids are unique and every referenced id exists", null, () => {

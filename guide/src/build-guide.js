@@ -626,7 +626,7 @@ ${platformSwitcher()}
   other, so a wrong guess costs you one command. But it is faster to just ask.</p>
 
   <div class="success">Whichever pathway you take, you are looking for the same last
-  line: <strong>ALL 5 CHECKS PASSED</strong>.</div>
+  line: <strong>ALL 6 CHECKS PASSED</strong>.</div>
 
   <nav class="pager">
     <a href="../start-here.html">&larr; All activities</a>

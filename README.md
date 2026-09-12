@@ -1,6 +1,6 @@
 # OrchLab Workshop — Example Container
 
-The single repository you need for the whole workshop. One container, one
+The repository you start from for the whole workshop. One container, one
 codebase, built up level by level across the day.
 
 **Do this before you arrive.** It takes about five minutes, most of it waiting
@@ -17,6 +17,12 @@ cp .env.example .env      # then paste your token in — see below
 ./verify-setup.sh
 ```
 
+That is the whole setup. The check's first step clones the application you will
+work on into `app/` for you, so there is no second repository to fetch by hand —
+and it is the app's own git tags that `./checkpoint.sh` moves you between. `app/`
+is gitignored here on purpose; see [`checkpoints/README.md`](checkpoints/README.md)
+for why the two repositories are kept apart.
+
 ### On Windows with Docker Desktop in *Windows-container* mode
 
 Check which mode you are in:
@@ -28,7 +34,7 @@ docker info --format '{{.OSType}}'
 If that prints `linux`, carry on above — nothing changes for you. If it prints
 `windows`, the command above cannot work: every image this check uses is a Linux
 image, and one Docker daemon serves one mode. Run the Windows check instead, which
-proves the same five things and needs no daemon switch:
+proves the same six things and needs no daemon switch:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1
@@ -57,13 +63,14 @@ API key from [console.anthropic.com](https://console.anthropic.com) instead, set
    ORCHLAB WORKSHOP - ENVIRONMENT CHECK
 ============================================================
 
-   [1/5]  Docker daemon reachable ..................  PASS   27.3.1
-   [2/5]  Workshop image builds ....................  PASS   58s
-   [3/5]  Claude Code CLI + auth ...................  PASS   claude 2.0.14, credential present
-   [4/5]  Workshop site responds ...................  PASS   HTTP 200 on :8080, 4s
-   [5/5]  Playwright screenshot captured ...........  PASS   verify.png, 184 KB
+   [1/6]  Workshop app cloned ......................  PASS   mars-mission-fund, cloned in 12s, 1 checkpoint
+   [2/6]  Docker daemon reachable ..................  PASS   27.3.1
+   [3/6]  Workshop image builds ....................  PASS   58s
+   [4/6]  Claude Code CLI + auth ...................  PASS   claude 2.0.14, credential present
+   [5/6]  Workshop site responds ...................  PASS   HTTP 200 on :8080, 4s
+   [6/6]  Playwright screenshot captured ...........  PASS   verify.png, 184 KB
 
-   ALL 5 CHECKS PASSED
+   ALL 6 CHECKS PASSED
 
    Your environment is ready. There is nothing else to do.
    Open screenshots/verify.png to see the proof - it should read
@@ -72,7 +79,7 @@ API key from [console.anthropic.com](https://console.anthropic.com) instead, set
 ============================================================
 ```
 
-If you see `ALL 5 CHECKS PASSED`, **you are done.** There is no second step, no
+If you see `ALL 6 CHECKS PASSED`, **you are done.** There is no second step, no
 extra setup, and nothing to prepare. Close the terminal.
 
 Open `screenshots/verify.png` if you want to see it for yourself — a real
@@ -102,7 +109,7 @@ before that* (needs a new login).
 The run stops at the first failed check and tells you exactly what to do:
 
 ```
-   [3/5]  Claude Code CLI + auth ...................  FAIL
+   [4/6]  Claude Code CLI + auth ...................  FAIL
 
    1 CHECK FAILED - this is fixable, and you are not behind.
 
@@ -129,18 +136,18 @@ A plain-text copy lands in `verify-report.txt`. Paste that when you ask for help
 Detailed output from every step is kept in `.verify-logs/` — you should not need
 it, but it is there when a check fails.
 
-### Check 2 takes the longest, and it tells you why
+### Check 3 takes the longest, and it tells you why
 
-The first run has to download the Playwright base image — roughly 2 GB — so check 2
+The first run has to download the Playwright base image — roughly 2 GB — so check 3
 can sit there for several minutes. It is not stuck. While it works, that row shows
 what Docker is doing and how long it has been at it:
 
 ```
-   [2/5]  Workshop image builds ... pulling 742.8MB / 1.9GB 96s
+   [3/6]  Workshop image builds ... pulling 742.8MB / 1.9GB 96s
 ```
 
 The finished `PASS` line replaces it. Later runs reuse the downloaded image and
-check 2 takes a second or two. Nothing is animated under `--quiet`, when output is
+check 3 takes a second or two. Nothing is animated under `--quiet`, when output is
 redirected to a file, or in CI, so a pasted report is the same fixed-length
 checklist it always was.
 
@@ -153,11 +160,16 @@ rather than decorative.
 
 | # | Check | Why the workshop needs it |
 |---|---|---|
-| 1 | Docker daemon reachable | Docker is the safety boundary for every autonomous exercise |
-| 2 | Workshop image builds | You can build locally — no network surprise mid-exercise |
-| 3 | Claude Code CLI + auth | The agent runs *inside* the container, not on your laptop |
-| 4 | Workshop site responds | The app under test is reachable from your machine |
-| 5 | Playwright screenshot | Your agent can *see* — the basis of self-verification in Part 3 |
+| 1 | Workshop app cloned | The app you work on all day is present, and `./checkpoint.sh` has a ladder to move you along |
+| 2 | Docker daemon reachable | Docker is the safety boundary for every autonomous exercise |
+| 3 | Workshop image builds | You can build locally — no network surprise mid-exercise |
+| 4 | Claude Code CLI + auth | The agent runs *inside* the container, not on your laptop |
+| 5 | Workshop site responds | The app under test is reachable from your machine |
+| 6 | Playwright screenshot | Your agent can *see* — the basis of self-verification in Part 3 |
+
+Check 1 earns its place: the workshop stack bind-mounts `app/`, and an *empty*
+directory bind-mounts perfectly happily — the container would start, report no
+error, and simply have no app inside it.
 
 The check container is built to the same shape as the real workshop container
 (Playwright base image, Claude Code CLI, non-root user), so a pass here predicts
@@ -175,6 +187,8 @@ verify/
   Dockerfile                 # Playwright base + Claude Code CLI
   screenshot.mjs             # Check 5 — drives the browser, captures proof
   site/index.html            # The "ENVIRONMENT OK" page
+app/                         # The application, cloned by check 1. Gitignored —
+                             # it is a separate repository and carries the cp-* tags
 checkpoints/
   manifest.txt               # The ladder — single source of truth
   README.md                  # How checkpoints work; publishing guide
@@ -293,6 +307,10 @@ you are never locked out of the next one.
 Jumping commits your in-progress work to a `wip/` branch first and lands you on
 a `work/cp-NN` branch you can commit to. **Nothing is ever discarded** — see
 [`checkpoints/README.md`](checkpoints/README.md) for the full model.
+
+All of that happens inside `app/`, the application clone. This repository never
+moves, which is the point: improving the guide or the environment check cannot
+invalidate a checkpoint.
 
 | Tag | State |
 |---|---|

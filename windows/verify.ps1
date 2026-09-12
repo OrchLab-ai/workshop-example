@@ -50,8 +50,13 @@ Exit code is 0 only when all checks pass.
 
 # ---------------------------------------------------------------- configuration
 
-$Total        = 5
+$Total        = 6
 $RepoRoot     = Split-Path -Parent $PSScriptRoot
+# The application attendees work on. It lives in its own repository so that its
+# history (the cp-* ladder) moves independently of this one - see
+# checkpoints\README.md. Kept byte-identical in meaning to verify-setup.sh.
+$AppDir       = if ($env:WORKSHOP_APP_DIR) { Join-Path $RepoRoot $env:WORKSHOP_APP_DIR } else { Join-Path $RepoRoot 'app' }
+$AppRepo      = if ($env:WORKSHOP_APP_REPO) { $env:WORKSHOP_APP_REPO } else { 'https://github.com/OrchLab-ai/mars-mission-fund.git' }
 $ComposeFile  = Join-Path $PSScriptRoot 'docker-compose.windows.yml'
 # An explicit project name. Without it compose derives one from this folder
 # ("windows"), which is both meaningless in `docker ps` and a collision risk
@@ -157,6 +162,11 @@ function Get-ProgressNote([string[]]$Paths) {
     }
     if ($tail.Count -eq 0) { return 'starting' }
     $text = $tail -join "`n"
+    # git clone, not docker. Check 1 clones the app repo through this same helper,
+    # and git's own progress line is the only thing on screen that moves during a
+    # slow clone. Read before the BuildKit patterns because it is unambiguous.
+    $objects = [regex]::Matches($text, '(?i)(Receiving|Resolving|Counting|Compressing) objects: +\d+%')
+    if ($objects.Count -gt 0) { return $objects[$objects.Count - 1].Value.ToLower() }
     # Extraction is checked first: the download's byte counters stay in the log after
     # the pull has finished, and would otherwise keep winning once it is over.
     if ($text -match '(?i)extracting') { return 'extracting layers' }
@@ -199,7 +209,7 @@ function Format-NativeArgs([string[]]$Arguments) {
 
 # Run a command, send every stream to a log file, return the exit code. Keeping
 # this in one place is what keeps the checklist the only thing on screen.
-function Invoke-Logged([string]$LogName, [string[]]$Arguments) {
+function Invoke-Logged([string]$LogName, [string[]]$Arguments, [string]$Exe = 'docker') {
     $log = Join-Path $LogDir $LogName
     # $ErrorActionPreference MUST be relaxed around a native command.
     #
@@ -209,13 +219,13 @@ function Invoke-Logged([string]$LogName, [string[]]$Arguments) {
     # a PowerShell stack trace across the checklist, which is precisely the wall of
     # output this script exists to suppress. Judge the command by its EXIT CODE, which
     # is what the callers do.
-    if ($script:Progress) { return Invoke-LoggedWithProgress $log $Arguments }
+    if ($script:Progress) { return Invoke-LoggedWithProgress $log $Arguments $Exe }
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     try {
         # 5.1 has no clean way to redirect a native command's streams to a file
         # without a subshell, so call the exe directly and capture every stream.
-        & docker @Arguments *>&1 | Out-File -LiteralPath $log -Encoding UTF8
+        & $Exe @Arguments *>&1 | Out-File -LiteralPath $log -Encoding UTF8
         return $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previous
@@ -225,14 +235,14 @@ function Invoke-Logged([string]$LogName, [string[]]$Arguments) {
 # The same job as Invoke-Logged, run as a separate process so that this script can
 # read the log while docker is still writing it. Start-Process cannot send both
 # streams to one file, so they land in two and are merged once it exits.
-function Invoke-LoggedWithProgress([string]$Log, [string[]]$Arguments) {
+function Invoke-LoggedWithProgress([string]$Log, [string[]]$Arguments, [string]$Exe = 'docker') {
     $outFile = "$Log.out"
     $errFile = "$Log.err"
     foreach ($stale in @($outFile, $errFile)) {
         if (Test-Path -LiteralPath $stale) { Remove-Item -LiteralPath $stale -Force }
     }
 
-    $proc = Start-Process -FilePath 'docker' -ArgumentList (Format-NativeArgs $Arguments) `
+    $proc = Start-Process -FilePath $Exe -ArgumentList (Format-NativeArgs $Arguments) `
         -NoNewWindow -PassThru `
         -RedirectStandardOutput $outFile -RedirectStandardError $errFile
 
@@ -361,56 +371,150 @@ if (-not $Quiet) {
 
 try {
 
-# ------------------------------------------------------------ 1: Docker up
+# ------------------------------------------------------------ 1: App cloned
+#
+# The twin of check 1 in verify-setup.sh, and there for the same reason. The app
+# is a SEPARATE repository, cloned into app\ and gitignored here, so that an
+# infrastructure change cannot invalidate the cp-* ladder (checkpoints\README.md).
+# The one cost of that split is that app\ can simply be absent - and absent does
+# not announce itself, because a compose bind-mount of an EMPTY DIRECTORY
+# SUCCEEDS. The container starts, reports no error, and has no app inside it.
+#
+# Cheap, needs no Docker, and the repo is public, so it clones rather than
+# printing a command for somebody to copy at 09:05.
 
-Write-CheckStart 'Docker daemon reachable'
-$dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
-if (-not $dockerCmd) {
-    Write-CheckFail 'the docker command was not found on your PATH' @'
+Write-CheckStart 'Workshop app cloned'
+# The folder is configurable, so every message below names the folder the attendee
+# actually has. Split-Path -Leaf, not $AppDir: that is an absolute path, and a
+# 60-character path wrapped across a fix-it line is worse than useless.
+$appLeaf = Split-Path -Leaf $AppDir
+$gitCmd = Get-Command git -ErrorAction SilentlyContinue
+$appHasFiles = (Test-Path -LiteralPath $AppDir) -and
+    ((Get-ChildItem -LiteralPath $AppDir -Force -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0)
+if (-not $gitCmd) {
+    Write-CheckFail 'the git command was not found on your PATH' @'
+git is one of the three things this workshop needs on your own machine
+                        (the other two are Docker and Claude Code)
+                        install it from https://git-scm.com/downloads
+                        then re-run  .\verify.ps1
+'@
+} elseif ($appHasFiles -and -not (Test-Path -LiteralPath (Join-Path $AppDir '.git'))) {
+    # Tested by the presence of app.git, NOT by `git -C app rev-parse`.
+    # rev-parse WALKS UP the directory tree, so inside an unzipped folder sitting
+    # in this repo it finds workshop-example's OWN .git and cheerfully reports
+    # success - and the attendee is told their ZIP is a clone of the wrong repo.
+    # Deliberately NOT auto-fixed. Creating app\ unasked is safe; deleting a
+    # directory somebody already has files in is not, and a downloaded ZIP is the
+    # likely cause.
+    Write-CheckFail "$appLeaf\ exists but is not a git clone" @"
+the checkpoint ladder is git tags, so a copy of the files is not enough
+                        move that folder aside:  Rename-Item $appLeaf ${appLeaf}-old
+                        then re-run  .\verify.ps1  and it will clone it properly
+"@
+} else {
+    $appAction = 'already cloned'
+    if (-not $appHasFiles) {
+        # An empty app\ left by an interrupted clone would make git refuse.
+        if (Test-Path -LiteralPath $AppDir) {
+            Remove-Item -LiteralPath $AppDir -Force -Recurse -ErrorAction SilentlyContinue
+        }
+        $cloneStart = Get-Date
+        # --progress, not --quiet: Get-ProgressNote reads this log to keep the
+        # checklist row moving, and without it a slow clone looks like a hang.
+        if ((Invoke-Logged '01-clone.log' @('clone', '--progress', $AppRepo, $AppDir) 'git') -eq 0) {
+            $appAction = 'cloned in {0}s' -f [int]((Get-Date) - $cloneStart).TotalSeconds
+        } else {
+            Write-CheckFail "could not clone the workshop app from $AppRepo" @'
+this is almost always a network problem - check your connection,
+                        then re-run  .\verify.ps1
+                        the full git output is in .verify-logs\01-clone.log
+'@
+        }
+    } else {
+        # Best effort, and deliberately not fatal: a tag published since this clone
+        # was made should be visible, but being offline must not fail a check that
+        # has everything it needs on disk. checkpoint.sh retries a fetch of its own.
+        $null = Invoke-Logged '01-clone.log' @('-C', $AppDir, 'fetch', '--tags', '--quiet') 'git'
+    }
+
+    if (-not $script:Failed) {
+        # Prove it is the RIGHT repository, not merely a repository. The workshop
+        # stack builds app/autonomous/Dockerfile; missing, it surfaces minutes later
+        # as a build error about a missing context.
+        if (-not (Test-Path -LiteralPath (Join-Path $AppDir 'autonomous\Dockerfile'))) {
+            Write-CheckFail "$appLeaf\ is a git clone, but it is not the workshop app" @"
+expected to find $appLeaf\autonomous\Dockerfile and it is not there
+                        if you pointed WORKSHOP_APP_REPO somewhere else, unset it
+                        otherwise move the folder aside and re-run  .\verify.ps1
+"@
+        } else {
+            $cpTags = @(& git -C $AppDir tag --list 'cp-*' 2>$null)
+            if ($cpTags.Count -gt 0) {
+                if ($cpTags.Count -eq 1) { $appDetail = '1 checkpoint' } else { $appDetail = '{0} checkpoints' -f $cpTags.Count }
+            } else {
+                # Not a failure. The ladder is published rung by rung, and
+                # checkpoint.sh already reports an unbuilt rung as "not published".
+                $appDetail = 'no checkpoints published yet'
+            }
+            $appName = [System.IO.Path]::GetFileNameWithoutExtension($AppRepo)
+            Write-CheckPass "$appName, $appAction, $appDetail"
+        }
+    }
+}
+
+# ------------------------------------------------------------ 2: Docker up
+
+# Guarded like every check after it. Check 1 can now fail, and an unguarded
+# check here would run anyway and overwrite the failure being reported.
+if (-not $script:Failed) {
+    Write-CheckStart 'Docker daemon reachable'
+    $dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+    if (-not $dockerCmd) {
+        Write-CheckFail 'the docker command was not found on your PATH' @'
 install Docker Desktop from https://docker.com/products/docker-desktop
                         then re-run  .\verify.ps1
 '@
-} elseif ((Invoke-Logged '01-docker.log' @('info')) -ne 0) {
-    # `docker info` failing has two very different causes that look identical from
-    # here, and guessing wrong is expensive. Without membership of docker-users the
-    # daemon is running perfectly and simply will not talk to you — so the old
-    # message ("the daemon is not running / start Docker Desktop") sent that person
-    # into a restart loop they could never win. Same failure shape as the
-    # wrong-container-mode bug: a true symptom attached to the wrong cause.
-    switch (Get-DockerGroupStatus) {
-        'not-member' {
-            Write-CheckFail 'you are not in the docker-users group, so Docker will not talk to you' @'
+    } elseif ((Invoke-Logged '02-docker.log' @('info')) -ne 0) {
+        # `docker info` failing has two very different causes that look identical from
+        # here, and guessing wrong is expensive. Without membership of docker-users the
+        # daemon is running perfectly and simply will not talk to you — so the old
+        # message ("the daemon is not running / start Docker Desktop") sent that person
+        # into a restart loop they could never win. Same failure shape as the
+        # wrong-container-mode bug: a true symptom attached to the wrong cause.
+        switch (Get-DockerGroupStatus) {
+            'not-member' {
+                Write-CheckFail 'you are not in the docker-users group, so Docker will not talk to you' @'
 this needs an administrator, once:
                           Add-LocalGroupMember -Group "docker-users" -Member "<your-username>"
                         run that from an ELEVATED PowerShell, then SIGN OUT and back
                         in - Windows only grants group rights at logon.
                         Docker Desktop itself is almost certainly running fine.
 '@
-        }
-        'stale-token' {
-            Write-CheckFail 'you are in the docker-users group, but this logon session predates that' @'
+            }
+            'stale-token' {
+                Write-CheckFail 'you are in the docker-users group, but this logon session predates that' @'
 sign out of Windows and sign back in, then re-run  .\verify.ps1
 
                         Windows grants group rights at logon, so being added to a
                         group does nothing until you start a new session. A reboot
                         works too; restarting Docker Desktop does not.
 '@
-        }
-        default {
-            Write-CheckFail 'Docker is installed but the daemon is not answering' @'
+            }
+            default {
+                Write-CheckFail 'Docker is installed but the daemon is not answering' @'
 start Docker Desktop and wait for the whale icon to stop animating
                         then re-run  .\verify.ps1
-                        the full error is in .verify-logs\01-docker.log
+                        the full error is in .verify-logs\02-docker.log
 '@
+            }
         }
-    }
-} else {
-    # THE check that distinguishes this script from verify-setup.sh. A daemon in
-    # Linux-container mode cannot run these Windows images, and the failure would
-    # otherwise land three checks later as an unexplained build error.
-    $osType = (& docker info --format '{{.OSType}}' 2>$null | Out-String).Trim()
-    if ($osType -ne 'windows') {
-        Write-CheckFail "Docker is in LINUX-container mode (OSType=$osType), but this is the Windows check" @'
+    } else {
+        # THE check that distinguishes this script from verify-setup.sh. A daemon in
+        # Linux-container mode cannot run these Windows images, and the failure would
+        # otherwise land three checks later as an unexplained build error.
+        $osType = (& docker info --format '{{.OSType}}' 2>$null | Out-String).Trim()
+        if ($osType -ne 'windows') {
+            Write-CheckFail "Docker is in LINUX-container mode (OSType=$osType), but this is the Windows check" @'
 you have two options, and the Linux one is the better-tested path:
 
                         A) use the Linux stack instead - from the repo root:
@@ -421,41 +525,43 @@ you have two options, and the Linux one is the better-tested path:
                            then re-run  .\verify.ps1
                            NOTE: this stops any running Linux containers.
 '@
-    } else {
-        $serverVersion = (& docker version --format '{{.Server.Version}}' 2>$null | Out-String).Trim()
-        if (-not $serverVersion) { $serverVersion = 'unknown' }
-        $build = 0
-        try {
-            $build = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuildNumber
-        } catch { }
-        $isolation = if ($env:WINDOWS_ISOLATION) { $env:WINDOWS_ISOLATION } else { 'hyperv' }
-        # An ltsc2022 base needs host build 20348+ for PROCESS isolation. Hyper-V
-        # isolation gives the container its own kernel and lifts that constraint,
-        # which is why it is the default - so this is only fatal for process mode.
-        if ($build -gt 0 -and $build -lt 20348 -and $isolation -eq 'process') {
-            Write-CheckFail "host build $build is older than 20348, which the ltsc2022 base image needs for process isolation" @'
+        } else {
+            $serverVersion = (& docker version --format '{{.Server.Version}}' 2>$null | Out-String).Trim()
+            if (-not $serverVersion) { $serverVersion = 'unknown' }
+            $build = 0
+            try {
+                $build = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuildNumber
+            } catch { }
+            $isolation = if ($env:WINDOWS_ISOLATION) { $env:WINDOWS_ISOLATION } else { 'hyperv' }
+            # An ltsc2022 base needs host build 20348+ for PROCESS isolation. Hyper-V
+            # isolation gives the container its own kernel and lifts that constraint,
+            # which is why it is the default - so this is only fatal for process mode.
+            if ($build -gt 0 -and $build -lt 20348 -and $isolation -eq 'process') {
+                Write-CheckFail "host build $build is older than 20348, which the ltsc2022 base image needs for process isolation" @'
 use Hyper-V isolation instead (it gives the container its own kernel):
                           Remove  WINDOWS_ISOLATION=process  from your environment
                         then re-run  .\verify.ps1
 '@
-        } else {
-            Write-CheckPass "$serverVersion, windows containers, $isolation isolation, host build $build"
+            } else {
+                Write-CheckPass "$serverVersion, windows containers, $isolation isolation, host build $build"
+            }
         }
     }
+
 }
 
-# --------------------------------------------------------------- 2: Build
+# --------------------------------------------------------------- 3: Build
 
 if (-not $script:Failed) {
     Write-CheckStart 'Workshop image builds'
     $buildStart = Get-Date
-    if ((Invoke-Compose '02-build.log' @('build', 'verify-agent')) -eq 0) {
+    if ((Invoke-Compose '03-build.log' @('build', 'verify-agent')) -eq 0) {
         Write-CheckPass ("{0}s" -f [int]((Get-Date) - $buildStart).TotalSeconds)
     } else {
         Write-CheckFail 'the container image failed to build' @'
 first build pulls a ~2 GB Windows base image and takes a while -
                         check your connection, then re-run  .\verify.ps1
-                        full build output is in .verify-logs\02-build.log
+                        full build output is in .verify-logs\03-build.log
 
                         if it says "no matching manifest for windows",
                         Docker is pulling a Linux-only image - tell a facilitator.
@@ -463,7 +569,7 @@ first build pulls a ~2 GB Windows base image and takes a while -
     }
 }
 
-# ----------------------------------------------------- 3: Claude Code auth
+# ----------------------------------------------------- 4: Claude Code auth
 
 if (-not $script:Failed) {
     Write-CheckStart 'Claude Code CLI + auth'
@@ -480,16 +586,16 @@ run  claude setup-token
         # and claude.ps1 shims, NOT claude.exe, and a Windows container's exec form
         # only runs real executables. Calling `claude` directly fails with a
         # file-not-found that looks like a broken install.
-        $code = Invoke-Compose '03-claude.log' @('run', '--rm', '--no-deps', 'verify-agent', 'cmd', '/c', 'claude --version')
+        $code = Invoke-Compose '04-claude.log' @('run', '--rm', '--no-deps', 'verify-agent', 'cmd', '/c', 'claude --version')
         if ($code -ne 0) {
             Write-CheckFail 'the Claude Code CLI did not start inside the container' @'
-check .verify-logs\03-claude.log for the error
+check .verify-logs\04-claude.log for the error
                         if it mentions authentication, re-run  claude setup-token
                         and refresh the value in .env
 '@
         } else {
             $claudeVersion = ''
-            $logPath = Join-Path $LogDir '03-claude.log'
+            $logPath = Join-Path $LogDir '04-claude.log'
             if (Test-Path -LiteralPath $logPath) {
                 $match = Get-Content -LiteralPath $logPath |
                          Where-Object { $_ -match '\d+\.\d+\.\d+' } |
@@ -504,11 +610,11 @@ check .verify-logs\03-claude.log for the error
     }
 }
 
-# ------------------------------------------------------- 4: Site reachable
+# ------------------------------------------------------- 5: Site reachable
 
 if (-not $script:Failed) {
     Write-CheckStart 'Workshop site responds'
-    if ((Invoke-Compose '04-web.log' @('up', '-d', 'verify-web')) -ne 0) {
+    if ((Invoke-Compose '05-web.log' @('up', '-d', 'verify-web')) -ne 0) {
         Write-CheckFail "the web container would not start" @"
 port $Port is probably already in use on your machine
                         re-run with a different port:
@@ -541,21 +647,21 @@ port $Port is probably already in use on your machine
 another program may be holding port $Port
                         re-run with a different port:
                           `$env:VERIFY_PORT=8081; .\verify.ps1
-                        container output is in .verify-logs\04-web.log
+                        container output is in .verify-logs\05-web.log
 "@
         }
     }
 }
 
-# ---------------------------------------------------------- 5: Screenshot
+# ---------------------------------------------------------- 6: Screenshot
 
 if (-not $script:Failed) {
     Write-CheckStart 'Playwright screenshot captured'
     if (Test-Path -LiteralPath $Screenshot) { Remove-Item -LiteralPath $Screenshot -Force }
-    $code = Invoke-Compose '05-screenshot.log' @('run', '--rm', 'verify-agent', 'node', 'C:/app/screenshot.mjs')
+    $code = Invoke-Compose '06-screenshot.log' @('run', '--rm', 'verify-agent', 'node', 'C:/app/screenshot.mjs')
     if ($code -ne 0) {
         Write-CheckFail 'the headless browser could not render and capture the page' @'
-check .verify-logs\05-screenshot.log for the error
+check .verify-logs\06-screenshot.log for the error
                         then re-run  .\verify.ps1
 '@
     } elseif (-not (Test-Path -LiteralPath $Screenshot) -or (Get-Item -LiteralPath $Screenshot).Length -eq 0) {
@@ -575,8 +681,8 @@ this is usually a Docker file-sharing permission problem
 
 # A failure stops the run, but the checklist should still show its full length -
 # otherwise it reads as "the script crashed" rather than "check 3 failed".
-$remaining = @{ 2 = 'Workshop image builds'; 3 = 'Claude Code CLI + auth';
-                4 = 'Workshop site responds'; 5 = 'Playwright screenshot captured' }
+$remaining = @{ 2 = 'Docker daemon reachable'; 3 = 'Workshop image builds'; 4 = 'Claude Code CLI + auth';
+                5 = 'Workshop site responds'; 6 = 'Playwright screenshot captured' }
 while ($script:Idx -lt $Total) {
     Write-CheckStart $remaining[$script:Idx + 1]
     Say "$($script:CurrentLine)${DIM}----${RESET}   ${DIM}not reached${RESET}"
