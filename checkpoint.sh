@@ -11,9 +11,16 @@
 # branch before anything moves, so nothing you have written is ever discarded —
 # even if you have not committed it yourself.
 #
+# EVERY git operation here runs against app/, not against this repository. The
+# ladder lives in the app repo and this one stays at HEAD, so that improving the
+# guide, the environment check or this very script cannot invalidate a
+# checkpoint. The manifest is the exception: it is guide content, not app state,
+# so it stays here. See checkpoints/README.md.
+#
 set -uo pipefail
 
 MANIFEST="checkpoints/manifest.txt"
+APP_DIR="${WORKSHOP_APP_DIR:-app}"
 FRESH=0
 
 cd "$(dirname "$0")" || exit 1
@@ -50,9 +57,11 @@ Usage: ./checkpoint.sh [N | cp-NN] [--fresh]
   --status    Show where you currently are.
   --parked    List work parked by earlier jumps, and how to get it back.
   --help      This message.
+
+All of this operates on the app clone in ./app, never on this repository:
+the ladder is the app repo's tags, and this repo always stays at HEAD.
 USAGE
 }
-
 # ------------------------------------------------------------------- manifest
 
 [ -f "$MANIFEST" ] || die "Cannot find $MANIFEST — are you in the workshop-example repo?"
@@ -77,22 +86,22 @@ index_of() {
   return 1
 }
 
-tag_exists() { git rev-parse -q --verify "refs/tags/$1" >/dev/null 2>&1; }
+# Every git command below goes through here. The ladder is the app repo's, so a
+# bare `git` in this script would ask THIS repository about tags it does not have.
+app_git() { git -C "$APP_DIR" "$@"; }
+
+tag_exists() { app_git rev-parse -q --verify "refs/tags/$1" >/dev/null 2>&1; }
 
 # Where are we? Prefer the work/ branch name — it is what the attendee chose —
 # and fall back to the nearest tag behind HEAD.
 current_checkpoint() {
   local branch
-  branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+  branch=$(app_git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
   case "$branch" in
     work/cp-*) printf '%s' "${branch#work/}"; return 0 ;;
   esac
-  git describe --tags --abbrev=0 --match 'cp-*' 2>/dev/null || true
+  app_git describe --tags --abbrev=0 --match 'cp-*' 2>/dev/null || true
 }
-
-# ---------------------------------------------------------------------- guards
-
-git rev-parse --git-dir >/dev/null 2>&1 || die "This is not a git repository."
 
 # --------------------------------------------------------------------- parsing
 
@@ -113,6 +122,32 @@ for arg in "$@"; do
 done
 MODE="${MODE:-${TARGET:+jump}}"
 MODE="${MODE:-status}"
+
+# ---------------------------------------------------------------------- guards
+
+# Placed AFTER parsing so that --help still works on a machine where the app
+# has not been cloned yet — which is exactly the machine whose owner needs it.
+# The app is cloned, not submoduled, so it can simply be absent — and an absent
+# app/ is the one failure this design introduces. Diagnose it by name. Saying
+# "this is not a git repository" would send someone to check the wrong repo.
+if [ ! -d "$APP_DIR" ] || [ -z "$(ls -A "$APP_DIR" 2>/dev/null)" ]; then
+  printf '\n   %s\n' "${AMBER}${BOLD}The app is not cloned yet.${RESET}"
+  printf '   %s\n' "The checkpoints live in the application repository, and ${BOLD}${APP_DIR}/${RESET} is"
+  printf '   %s\n\n' "$([ -d "$APP_DIR" ] && printf 'empty.' || printf 'not there.')"
+  printf '   %s\n' "Run the environment check — it clones the app for you:"
+  printf '   %s\n\n' "${BOLD}./verify-setup.sh${RESET}"
+  exit 1
+fi
+# Presence of app/.git, not `git -C app rev-parse` — rev-parse WALKS UP the
+# directory tree and would find THIS repo's .git, calling a bare unzipped
+# folder a valid clone.
+if [ ! -e "$APP_DIR/.git" ] || ! app_git rev-parse --git-dir >/dev/null 2>&1; then
+  printf '\n   %s\n' "${RED}${BOLD}${APP_DIR}/ exists but is not a git repository.${RESET}"
+  printf '   %s\n' "The checkpoint ladder is git tags, so there is nothing here to jump between."
+  printf '   %s\n' "If you downloaded a ZIP rather than cloning, move that folder aside and run:"
+  printf '   %s\n\n' "${BOLD}./verify-setup.sh${RESET}"
+  exit 1
+fi
 
 # ----------------------------------------------------------------------- list
 
@@ -146,13 +181,13 @@ if [ "$MODE" = "parked" ]; then
   while IFS= read -r branch; do
     [ -n "$branch" ] || continue
     found=1
-    when=$(git log -1 --format='%ar' "$branch" 2>/dev/null)
-    what=$(git log -1 --format='%s' "$branch" 2>/dev/null)
+    when=$(app_git log -1 --format='%ar' "$branch" 2>/dev/null)
+    what=$(app_git log -1 --format='%s' "$branch" 2>/dev/null)
     printf '\n   %s   %s\n' "${BOLD}${branch}${RESET}" "${DIM}${when}${RESET}"
     printf '      %s\n' "${DIM}${what}${RESET}"
-    printf '      %s\n' "look at it:  git show ${branch}"
-    printf '      %s\n' "go back to it:  git checkout ${branch}"
-  done < <(git for-each-ref --format='%(refname:short)' --sort=-committerdate 'refs/heads/wip/*')
+    printf '      %s\n' "look at it:     git -C ${APP_DIR} show ${branch}"
+    printf '      %s\n' "go back to it:  git -C ${APP_DIR} checkout ${branch}"
+  done < <(app_git for-each-ref --format='%(refname:short)' --sort=-committerdate 'refs/heads/wip/*')
   if [ "$found" -eq 0 ]; then
     printf '\n   %s\n' "Nothing parked — you have not lost anything."
   fi
@@ -177,7 +212,7 @@ if [ "$MODE" = "status" ]; then
   else
     printf '   %s\n' "${BOLD}${CURRENT}${RESET}"
   fi
-  if [ -n "$(git status --porcelain)" ]; then
+  if [ -n "$(app_git status --porcelain)" ]; then
     printf '   %s\n' "${AMBER}You have uncommitted work — it will be parked safely if you jump.${RESET}"
   fi
   printf '\n'
@@ -191,37 +226,46 @@ idx=$(index_of "$TARGET") || die "No checkpoint called \"$TARGET\". Try  ./check
 if ! tag_exists "$TARGET"; then
   # It may simply not have been fetched yet — try once before giving up, so an
   # attendee with a stale clone is not told a real checkpoint doesn't exist.
-  git fetch --tags --quiet >/dev/null 2>&1
+  app_git fetch --tags --quiet >/dev/null 2>&1
 fi
 if ! tag_exists "$TARGET"; then
   printf '\n   %s\n' "${AMBER}${BOLD}${TARGET} has not been published yet.${RESET}"
-  printf '   %s\n' "It is on the ladder, but the tag does not exist in this repo."
+  printf '   %s\n' "It is on the ladder, but the tag does not exist in the app repo yet."
   printf '   %s\n\n' "${DIM}Run  ./checkpoint.sh --list  to see what is available.${RESET}"
   exit 1
 fi
 
 PARKED=""
-if [ -n "$(git status --porcelain)" ]; then
+if [ -n "$(app_git status --porcelain)" ]; then
   PARKED="wip/$(date +%Y%m%d-%H%M%S)"
-  git checkout -q -b "$PARKED" 2>/dev/null || die "Could not create the wip branch — resolve your git state first."
-  git add -A
-  git commit -q -m "wip: parked before jumping to $TARGET" || PARKED=""
+  app_git checkout -q -b "$PARKED" 2>/dev/null || die "Could not create the wip branch — resolve your git state first."
+  # Silenced: on Windows `git add` warns "LF will be replaced by CRLF" once per
+  # file, and a jump that parks a dozen files scrolls that wall past an attendee
+  # who has just been told nothing is wrong. If the add genuinely fails, the
+  # commit below fails too and PARKED is cleared — which is the signal that matters.
+  app_git add -A >/dev/null 2>&1
+  # -c user.*, rather than relying on the attendee's global git identity. A laptop
+  # set up this morning often has neither user.name nor user.email, and a commit
+  # that fails here loses the very work this branch exists to protect. The values
+  # are only ever used on wip/ commits in the app clone.
+  app_git -c user.name='Workshop Attendee' -c user.email='attendee@workshop.local' \
+    commit -q -m "wip: parked before jumping to $TARGET" || PARKED=""
 fi
 
 WORK="work/$TARGET"
 ACTION="started"
-if git rev-parse -q --verify "refs/heads/$WORK" >/dev/null 2>&1; then
+if app_git rev-parse -q --verify "refs/heads/$WORK" >/dev/null 2>&1; then
   if [ "$FRESH" -eq 1 ]; then
-    git checkout -q "$TARGET" || die "Could not check out $TARGET."
-    git branch -q -D "$WORK"
-    git checkout -q -b "$WORK" "$TARGET" || die "Could not recreate $WORK."
+    app_git checkout -q "$TARGET" || die "Could not check out $TARGET."
+    app_git branch -q -D "$WORK"
+    app_git checkout -q -b "$WORK" "$TARGET" || die "Could not recreate $WORK."
     ACTION="restarted from the tag"
   else
-    git checkout -q "$WORK" || die "Could not switch to $WORK."
+    app_git checkout -q "$WORK" || die "Could not switch to $WORK."
     ACTION="resumed (your earlier commits are still here)"
   fi
 else
-  git checkout -q -b "$WORK" "$TARGET" || die "Could not create $WORK from $TARGET."
+  app_git checkout -q -b "$WORK" "$TARGET" || die "Could not create $WORK from $TARGET."
 fi
 
 printf '\n   %s  %s\n' "${GREEN}${BOLD}${TARGET}${RESET}" "${TITLES[$idx]}"

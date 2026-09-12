@@ -318,7 +318,7 @@ nav.pager a:hover { background: var(--surface); }
   <span class="actnum">ACTIVITY 01</span>
   <p class="eyebrow">Before we start</p>
   <h1>Environment Check</h1>
-  <p class="lede">One command that checks five things and gives you a straight answer. Run it before the workshop, not on the day.</p>
+  <p class="lede">One command that checks six things and gives you a straight answer. Run it before the workshop, not on the day.</p>
 
   <div class="cp">
     <span>start of the day</span>
@@ -433,7 +433,7 @@ cd workshop-example</pre>
     </div>
     <div class="pathway" data-pathway="windows-windows">
       <h3>Windows containers &middot; Windows</h3>
-      <p class="confirm">Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same five things.</p>
+      <p class="confirm">Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same six things.</p>
       <div class="shellreq"><span class="where">Where</span>Run these in <strong>PowerShell</strong>. Start from wherever you keep projects — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.</div>
   <div class="copyblock">
     <div class="cb-head"><span>1. Clone and enter the repo</span><button type="button">Copy</button></div>
@@ -462,9 +462,10 @@ cd workshop-example</pre>
       <div class="note">If Docker says <strong>access is denied</strong>, or the check reports you are not in <code>docker-users</code>: an administrator needs to run <code>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</code> once — and then you must <strong>sign out of Windows and back in</strong>. Group rights are granted at logon, so nothing changes until a new session. Restarting Docker Desktop will not help.</div>
       <div class="note">If <strong>Switch to Windows containers</strong> appears to do nothing, the <code>Containers</code> optional feature is off. It is separate from Hyper-V. Enable it from an elevated PowerShell and <strong>reboot</strong>: <code>Enable-WindowsOptionalFeature -Online -FeatureName Containers -All -NoRestart</code></div>
     </div>
+  <div class="note"><strong>The first check clones the app for you.</strong> The application you spend the day on lives in its own repository, and check 1 clones it into <code>app/</code> — so there is no second <code>git clone</code> to remember. That folder is where all your work happens, and it is what <code>./checkpoint.sh</code> moves between checkpoints. If you see <code>no checkpoints published yet</code> beside that check, nothing is wrong: the ladder is published one rung at a time.</div>
 
   <h2>You are done when</h2>
-  <div class="success">The last line reads <strong>ALL 5 CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof.</div>
+  <div class="success">The last line reads <strong>ALL 6 CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof.</div>
 
   <details class="cheat">
     <summary>Stuck? Open this</summary>

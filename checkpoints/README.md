@@ -6,6 +6,26 @@ exercise never locks you out of the next one.**
 
 If an exercise doesn't land, you are one command from the front of the room.
 
+## Two repositories, and why
+
+The tags are **not** in this repository. They are in the application repository,
+which `./verify-setup.sh` clones into `app/` (gitignored here).
+
+The split is on rate of change. This repo — the environment check, the guide,
+`checkpoint.sh` itself — changes whenever anything about delivery improves. The
+app's nine states change only when the exercises do. A jump is a whole-tree
+checkout, so if both lived here, landing on `cp-03` would rewind the guide and
+this very script along with the app, and *every* infrastructure commit would
+quietly invalidate *all nine* tags.
+
+Keeping them apart means `app/` moves and this repo never does. `manifest.txt`
+stays here because rung titles are guide content, not app state; a rung listed
+here that has no tag yet is reported as *not published* rather than as an error.
+
+It is a clone rather than a submodule deliberately: a submodule records a pointer
+to one exact app commit in this tree, and moving the app independently of that
+pointer is precisely what the ladder is for.
+
 ## The commands
 
 ```bash
@@ -16,6 +36,9 @@ If an exercise doesn't land, you are one command from the front of the room.
 ```
 
 ## What a jump actually does
+
+All of it happens inside `app/`. Nothing `checkpoint.sh` does touches this
+repository, so your branch here stays wherever you left it.
 
 1. **Parks your work.** If you have uncommitted changes, they are committed to a
    `wip/<timestamp>` branch *before* anything moves. You do not need to have
@@ -68,11 +91,12 @@ reads it, so edit there rather than here.
 A tag on the ladder that doesn't exist yet is reported as *not published*
 rather than as an error, so a partially-built ladder stays usable.
 
-To publish one, get the repo into the state that checkpoint describes, then:
+Tags are published **in the application repository**, not in this one. From a
+clone of it (`app/` here is one):
 
 ```bash
-git tag -a cp-04 -m "Spec written: mission-updates.spec.md"
-git push origin cp-04
+git -C app tag -a cp-04 -m "Spec written: mission-updates.spec.md"
+git -C app push origin cp-04
 ```
 
 Two things to hold to:

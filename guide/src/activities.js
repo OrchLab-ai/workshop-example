@@ -99,7 +99,7 @@ const PLATFORMS = [
     label: "Windows containers",
     detectValue: "windows",
     confirm:
-      "Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same five things.",
+      "Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same six things.",
     shell: "PowerShell",
     cwd: CWD_CLONE,
     commands: [
@@ -167,7 +167,7 @@ const activities = [
     from: null,
     to: "cp-00",
     summary:
-      "One command that checks five things and gives you a straight answer. Run it before the workshop, not on the day.",
+      "One command that checks six things and gives you a straight answer. Run it before the workshop, not on the day.",
     // Renders the platform switcher in place of a fixed `commands` list. The exact
     // commands differ by operating system AND, on Windows, by which container mode
     // Docker is in — so they come from PLATFORMS above rather than being repeated
@@ -181,7 +181,9 @@ const activities = [
       "Run the check for your platform.",
     ],
     success:
-      "The last line reads <strong>ALL 5 CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof.",
+      "The last line reads <strong>ALL 6 CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof.",
+    note:
+      "<strong>The first check clones the app for you.</strong> The application you spend the day on lives in its own repository, and check 1 clones it into <code>app/</code> — so there is no second <code>git clone</code> to remember. That folder is where all your work happens, and it is what <code>./checkpoint.sh</code> moves between checkpoints. If you see <code>no checkpoints published yet</code> beside that check, nothing is wrong: the ladder is published one rung at a time.",
     cheat: [
       "There is no shortcut past this one, and you do not want one — every later activity assumes it passed.",
       "If a check fails, the script names the cause and the fix and writes <code>verify-report.txt</code>. Paste that file when you ask for help rather than describing the problem.",

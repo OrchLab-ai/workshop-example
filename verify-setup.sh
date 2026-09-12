@@ -12,8 +12,13 @@
 #
 set -uo pipefail
 
-TOTAL=5
+TOTAL=6
 COMPOSE_FILE="docker-compose.verify.yml"
+# The application attendees work on. It lives in its own repository so that its
+# history (the cp-* ladder) moves independently of this one — see
+# checkpoints/README.md. Overridable so a fork or a mirror can be pointed at.
+APP_DIR="${WORKSHOP_APP_DIR:-app}"
+APP_REPO="${WORKSHOP_APP_REPO:-https://github.com/OrchLab-ai/mars-mission-fund.git}"
 LOG_DIR=".verify-logs"
 REPORT="verify-report.txt"
 SCREENSHOT="screenshots/verify.png"
@@ -143,6 +148,16 @@ term_cols() {
 progress_note() {
   local log="$1" sizes line
   [ -s "$log" ] || { printf 'starting'; return; }
+  # git clone, not docker. Check 1 clones the app repo through this same helper,
+  # and git's own progress line is the only thing on screen that moves during a
+  # slow clone. Read before the BuildKit patterns because it is unambiguous.
+  line=$(tr '\r' '\n' < "$log" 2>/dev/null |
+    grep -oE '(Receiving|Resolving|Counting|Compressing) objects: +[0-9]+%' | tail -1)
+  if [ -n "$line" ]; then
+    printf '%s' "$(printf '%s' "$line" | tr 'A-Z' 'a-z')"
+    return
+  fi
+
   # BuildKit's plain output carries the layer counter: "120.4MB / 1.9GB". Showing it
   # verbatim is the single most reassuring thing on screen during a first run, because
   # it is the one part that visibly moves.
@@ -261,7 +276,7 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
    This is not your fault and nothing is broken. Pick one:
 
    A) Run the Windows-container check instead. No daemon switch, and it
-      proves the same five things:
+      proves the same six things:
 
           powershell -ExecutionPolicy Bypass -File windows\verify.ps1
 
@@ -288,70 +303,157 @@ if [ "$QUIET" -eq 0 ]; then
   say ""
 fi
 
-# ---------------------------------------------------------------- 1: Docker up
+# ------------------------------------------------------------ 1: App cloned
+#
+# The app is a SEPARATE repository, cloned into app/ and gitignored here. That
+# split is what stops an infrastructure change invalidating the checkpoint
+# ladder (see checkpoints/README.md), and it costs exactly one thing: app/ can
+# be absent.
+#
+# Absent is the failure mode a submodule would have had too, and it is a nasty
+# one, because it does not announce itself. docker-compose.workshop.yml
+# bind-mounts ./app, and an EMPTY DIRECTORY BIND-MOUNTS SUCCESSFULLY — the
+# container starts, reports no error, and simply has no app inside it. So this
+# is caught here, first, before anything slow runs.
+#
+# It is cheap (no Docker, no network unless it actually has to clone) and the
+# repo is public, so the check just does the clone rather than printing a
+# command for someone to copy at 09:05.
 
-start_check "Docker daemon reachable"
-if ! command -v docker >/dev/null 2>&1; then
-  fail_check "the 'docker' command was not found on your PATH" \
+start_check "Workshop app cloned"
+if ! command -v git >/dev/null 2>&1; then
+  fail_check "the 'git' command was not found on your PATH" \
+"git is one of the three things this workshop needs on your own machine
+                        (the other two are Docker and Claude Code)
+                        install it from https://git-scm.com/downloads
+                        then re-run  ./verify-setup.sh"
+elif [ -d "$APP_DIR" ] && [ -n "$(ls -A "$APP_DIR" 2>/dev/null)" ] && [ ! -e "$APP_DIR/.git" ]; then
+  # Tested by the presence of $APP_DIR/.git, NOT by `git -C $APP_DIR rev-parse`.
+  # rev-parse WALKS UP the directory tree, so inside an unzipped folder sitting
+  # in this repo it finds workshop-example's OWN .git and cheerfully reports
+  # success - and the attendee is told their ZIP is a clone of the wrong repo.
+  # Deliberately NOT auto-fixed. Everything else in this check is safe to do
+  # unasked because it only ever creates app/; deleting a directory somebody
+  # already has files in is not, and a downloaded ZIP is the likely cause.
+  fail_check "$APP_DIR/ exists but is not a git clone" \
+"the checkpoint ladder is git tags, so a copy of the files is not enough
+                        move that folder aside:  mv $APP_DIR ${APP_DIR}-old
+                        then re-run  ./verify-setup.sh  and it will clone it properly"
+else
+  APP_ACTION="already cloned"
+  if [ ! -d "$APP_DIR" ] || [ -z "$(ls -A "$APP_DIR" 2>/dev/null)" ]; then
+    # An empty app/ left behind by an interrupted clone would make git refuse.
+    rmdir "$APP_DIR" 2>/dev/null || true
+    CLONE_START=$(date +%s)
+    # --progress, not --quiet: run_logged reads this log to keep the checklist
+    # line moving, and without it a slow clone looks exactly like a hang.
+    if run_logged "$LOG_DIR/01-clone.log" git clone --progress "$APP_REPO" "$APP_DIR"; then
+      APP_ACTION="cloned in $(( $(date +%s) - CLONE_START ))s"
+    else
+      fail_check "could not clone the workshop app from $APP_REPO" \
+"this is almost always a network problem - check your connection,
+                        then re-run  ./verify-setup.sh
+                        the full git output is in $LOG_DIR/01-clone.log"
+    fi
+  else
+    # Best effort, and deliberately not fatal: a tag published since this clone
+    # was made should be visible, but being offline must not fail a check that
+    # has everything it needs on disk. checkpoint.sh retries a fetch of its own
+    # when a tag it wants is missing.
+    run_logged "$LOG_DIR/01-clone.log" git -C "$APP_DIR" fetch --tags --quiet || true
+  fi
+
+  if [ "$FAILED" -eq 0 ]; then
+    # Prove it is the right repository, not merely a repository. The workshop
+    # stack builds app/autonomous/Dockerfile; if that is missing, the failure
+    # surfaces several minutes later as a build error about a missing context.
+    if [ ! -f "$APP_DIR/autonomous/Dockerfile" ]; then
+      fail_check "$APP_DIR/ is a git clone, but it is not the workshop app" \
+"expected to find $APP_DIR/autonomous/Dockerfile and it is not there
+                        if you pointed WORKSHOP_APP_REPO somewhere else, unset it
+                        otherwise move the folder aside and re-run  ./verify-setup.sh"
+    else
+      CP_COUNT=$(git -C "$APP_DIR" tag --list 'cp-*' 2>/dev/null | grep -c . || true)
+      if [ "${CP_COUNT:-0}" -gt 0 ]; then
+        if [ "$CP_COUNT" -eq 1 ]; then APP_DETAIL="1 checkpoint"; else APP_DETAIL="$CP_COUNT checkpoints"; fi
+      else
+        # Not a failure. The ladder is published rung by rung, and checkpoint.sh
+        # already reports an unbuilt rung as "not published" rather than erroring.
+        APP_DETAIL="no checkpoints published yet"
+      fi
+      pass_check "$(basename "$APP_REPO" .git), $APP_ACTION, $APP_DETAIL"
+    fi
+  fi
+fi
+
+# ------------------------------------------------------------ 2: Docker up
+
+# Guarded like every check after it. Check 1 can now fail, and an unguarded
+# check here would run anyway and overwrite the failure being reported.
+if [ "$FAILED" -eq 0 ]; then
+  start_check "Docker daemon reachable"
+  if ! command -v docker >/dev/null 2>&1; then
+    fail_check "the 'docker' command was not found on your PATH" \
 "install Docker Desktop from https://docker.com/products/docker-desktop
                         then re-run  ./verify-setup.sh"
-elif ! docker info >"$LOG_DIR/01-docker.log" 2>&1; then
-  # `docker info` failing has two very different causes that look identical from
-  # here. If you lack permission to reach the socket or pipe, the daemon is running
-  # perfectly and simply will not talk to you — and "start Docker Desktop" sends
-  # that person into a restart loop they can never win. Judge by the error text.
-  if grep -qiE 'permission denied|access is denied|denied while trying to connect|dial unix.*permission' \
-       "$LOG_DIR/01-docker.log"; then
-    case "$(uname -s)" in
-      MINGW*|MSYS*|CYGWIN*)
-        fail_check "you do not have permission to reach Docker - you are probably not in the docker-users group" \
+  elif ! docker info >"$LOG_DIR/02-docker.log" 2>&1; then
+    # `docker info` failing has two very different causes that look identical from
+    # here. If you lack permission to reach the socket or pipe, the daemon is running
+    # perfectly and simply will not talk to you — and "start Docker Desktop" sends
+    # that person into a restart loop they can never win. Judge by the error text.
+    if grep -qiE 'permission denied|access is denied|denied while trying to connect|dial unix.*permission' \
+         "$LOG_DIR/02-docker.log"; then
+      case "$(uname -s)" in
+        MINGW*|MSYS*|CYGWIN*)
+          fail_check "you do not have permission to reach Docker - you are probably not in the docker-users group" \
 "this needs an administrator, once. In an ELEVATED PowerShell:
                           Add-LocalGroupMember -Group docker-users -Member <your-username>
                         then SIGN OUT of Windows and back in - group rights are
                         granted at logon, so nothing changes until a new session.
                         Docker Desktop itself is almost certainly running fine."
-        ;;
-      Linux)
-        fail_check "you do not have permission to reach the Docker socket" \
+          ;;
+        Linux)
+          fail_check "you do not have permission to reach the Docker socket" \
 "add yourself to the docker group, once:
                           sudo usermod -aG docker \$USER
                         then LOG OUT and back in - group membership is applied at
                         login, so nothing changes until a new session.
                         The daemon itself is almost certainly running fine."
-        ;;
-      *)
-        fail_check "you do not have permission to reach the Docker socket" \
+          ;;
+        *)
+          fail_check "you do not have permission to reach the Docker socket" \
 "the daemon is running but will not talk to you - this is a permissions
-                        problem, not a startup one. See $LOG_DIR/01-docker.log"
-        ;;
-    esac
-  else
-    fail_check "Docker is installed but the daemon is not answering" \
+                        problem, not a startup one. See $LOG_DIR/02-docker.log"
+          ;;
+      esac
+    else
+      fail_check "Docker is installed but the daemon is not answering" \
 "start Docker Desktop and wait for the whale icon to stop animating
                         then re-run  ./verify-setup.sh
-                        the full error is in $LOG_DIR/01-docker.log"
+                        the full error is in $LOG_DIR/02-docker.log"
+    fi
+  else
+    DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || echo "unknown")
+    pass_check "$DOCKER_VERSION"
   fi
-else
-  DOCKER_VERSION=$(docker version --format '{{.Server.Version}}' 2>/dev/null || echo "unknown")
-  pass_check "$DOCKER_VERSION"
 fi
 
-# ------------------------------------------------------------------- 2: Build
+# ------------------------------------------------------------------- 3: Build
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop image builds"
   BUILD_START=$(date +%s)
-  if run_logged "$LOG_DIR/02-build.log" compose build verify-agent; then
+  if run_logged "$LOG_DIR/03-build.log" compose build verify-agent; then
     pass_check "$(( $(date +%s) - BUILD_START ))s"
   else
     fail_check "the container image failed to build" \
 "this is almost always a network problem - check your connection,
                         then re-run  ./verify-setup.sh
-                        full build output is in $LOG_DIR/02-build.log"
+                        full build output is in $LOG_DIR/03-build.log"
   fi
 fi
 
-# --------------------------------------------------------- 3: Claude Code auth
+# --------------------------------------------------------- 4: Claude Code auth
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Claude Code CLI + auth"
@@ -362,24 +464,24 @@ if [ "$FAILED" -eq 0 ]; then
                         run  cp .env.example .env   (if you have not already)
                         paste the value into .env as CLAUDE_CODE_OAUTH_TOKEN
                         re-run  ./verify-setup.sh"
-  elif ! run_logged "$LOG_DIR/03-claude.log" \
+  elif ! run_logged "$LOG_DIR/04-claude.log" \
         compose run --rm --no-deps verify-agent claude --version; then
     fail_check "the Claude Code CLI did not start inside the container" \
-"check $LOG_DIR/03-claude.log for the error
+"check $LOG_DIR/04-claude.log for the error
                         if it mentions authentication, re-run  claude setup-token
                         and refresh the value in .env"
   else
-    CLAUDE_VERSION=$(tr -d '\r' < "$LOG_DIR/03-claude.log" | tail -1 | awk '{print $1}')
+    CLAUDE_VERSION=$(tr -d '\r' < "$LOG_DIR/04-claude.log" | tail -1 | awk '{print $1}')
     pass_check "claude ${CLAUDE_VERSION:-ok}, credential present"
   fi
 fi
 
-# ------------------------------------------------------------ 4: Site reachable
+# ------------------------------------------------------------ 5: Site reachable
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop site responds"
   PORT="${VERIFY_PORT:-8080}"
-  if ! run_logged "$LOG_DIR/04-web.log" compose up -d verify-web; then
+  if ! run_logged "$LOG_DIR/05-web.log" compose up -d verify-web; then
     fail_check "the web container would not start" \
 "port $PORT is probably already in use on your machine
                         re-run with a different port:  VERIFY_PORT=8081 ./verify-setup.sh"
@@ -389,7 +491,7 @@ if [ "$FAILED" -eq 0 ]; then
     # Poll rather than sleep-and-hope, so a slow machine passes and a genuinely
     # broken one fails fast enough to keep the room moving.
     for _ in $(seq 1 30); do
-      if curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>>"$LOG_DIR/04-web.log"; then
+      if curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>>"$LOG_DIR/05-web.log"; then
         SITE_OK=1
         break
       fi
@@ -408,15 +510,15 @@ if [ "$FAILED" -eq 0 ]; then
   fi
 fi
 
-# --------------------------------------------------------------- 5: Screenshot
+# --------------------------------------------------------------- 6: Screenshot
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Playwright screenshot captured"
   rm -f "$SCREENSHOT"
-  if ! run_logged "$LOG_DIR/05-screenshot.log" \
+  if ! run_logged "$LOG_DIR/06-screenshot.log" \
        compose run --rm verify-agent node /work/screenshot.mjs; then
     fail_check "the headless browser could not render and capture the page" \
-"check $LOG_DIR/05-screenshot.log for the error
+"check $LOG_DIR/06-screenshot.log for the error
                         then re-run  ./verify-setup.sh"
   elif [ ! -s "$SCREENSHOT" ]; then
     fail_check "Playwright reported success but $SCREENSHOT was not written" \
@@ -435,10 +537,11 @@ fi
 # otherwise it reads as "the script crashed" rather than "check 3 failed".
 while [ "$IDX" -lt "$TOTAL" ]; do
   case $((IDX + 1)) in
-    2) start_check "Workshop image builds" ;;
-    3) start_check "Claude Code CLI + auth" ;;
-    4) start_check "Workshop site responds" ;;
-    5) start_check "Playwright screenshot captured" ;;
+    2) start_check "Docker daemon reachable" ;;
+    3) start_check "Workshop image builds" ;;
+    4) start_check "Claude Code CLI + auth" ;;
+    5) start_check "Workshop site responds" ;;
+    6) start_check "Playwright screenshot captured" ;;
   esac
   say "${CURRENT_LINE}${DIM}----${RESET}   ${DIM}not reached${RESET}"
 done

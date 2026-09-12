@@ -4,3 +4,10 @@ verify-report.txt
 screenshots/*.png
 node_modules/
 .DS_Store
+
+# The application attendees work on, cloned from its own repository by
+# ./verify-setup.sh. It is deliberately NOT tracked here and deliberately not a
+# submodule: the whole point of the two-repo split is that the app's history
+# moves independently of this one, so there must be no recorded commit pointer
+# in this tree. See checkpoints/README.md.
+app/
