@@ -451,6 +451,39 @@ findings:
 
   # --- Found while building and running the Windows image, 2026-09-12 ----------
 
+  - id: WIN-027
+    title: The static server passed request-derived data into a path expression
+    area: security
+    severity: high
+    verified: here
+    status: FIXED
+    symptom: >-
+      CodeQL js/path-injection, severity error / security-severity high, at
+      windows/src/serve.mjs - "This path depends on a user-provided value." It also
+      blocked every merge, because the repo ruleset requires code-scanning results at
+      or below an errors threshold.
+    cause: >-
+      The handler normalised the request path, joined it onto ROOT, resolved it, and
+      then checked the result was still inside ROOT. That check is correct as written,
+      but the safety of the whole thing rested on it being exhaustive.
+    fix: >-
+      An allowlist instead of a sanitiser. buildIndex walks ROOT once and maps URL key
+      to absolute path; the request is used ONLY as a key, and every path handed to
+      readFile comes from readdir. A traversal attempt simply fails to match a key and
+      404s like any other miss.
+    lesson: >-
+      Removing the bug class beats defending against it. "My check is correct" is a
+      worse position than "the data never reaches the sink" - the first depends on
+      staying correct through every future edit, the second does not.
+    also_fixed: >-
+      actions/missing-workflow-permissions - tests.yml now declares
+      permissions: contents: read. Without an explicit block the repository default
+      applies, which for orgs created before Feb 2023 is read-write.
+    note: >-
+      Found only because enabling CodeQL was the honest way to satisfy the ruleset
+      rather than bypassing it. The alert was pre-existing and real.
+    files: [windows/src/serve.mjs, .github/workflows/tests.yml]
+
   - id: WIN-026
     title: Without docker-users membership the check blamed a stopped daemon
     area: verify

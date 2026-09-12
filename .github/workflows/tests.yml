@@ -18,6 +18,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least privilege for GITHUB_TOKEN. Without an explicit block the repository default
+# applies, which for older orgs is read-write — far more than a test run needs. Stated
+# explicitly so it stays restricted if that default ever changes, or if this file is
+# copied into another repo. (Flagged by CodeQL as actions/missing-workflow-permissions.)
+permissions:
+  contents: read
+
 jobs:
   invariants:
     runs-on: ubuntu-latest

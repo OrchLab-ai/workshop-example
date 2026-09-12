@@ -334,6 +334,34 @@ test("the permission fix tells the user to sign out, not just to re-run", "WIN-0
   ok(/SIGN OUT|LOG OUT|sign out|log out/i.test(sh), "verify.sh's permission advice must say to log out and back in");
 });
 
+test("the static server never builds a path from the request", "WIN-027", () => {
+  // CodeQL flagged the previous version as js/path-injection (high). The fix was not
+  // a better sanitiser but an allowlist: the request is used only as a KEY, and every
+  // path handed to readFile comes from readdir. This guards that property, because
+  // the obvious "improvement" is to go back to joining ROOT with the request.
+  const src = read("windows/src/serve.mjs");
+  const body = src.split(/\r?\n/).filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+  ok(/buildIndex/.test(body), "serve.mjs must build an allowlist of servable files");
+  ok(
+    !/readFile\(\s*(target|join\(|resolve\()/.test(body),
+    "readFile must be handed a path from the allowlist, never one constructed from the request"
+  );
+  ok(
+    !/join\(\s*ROOT\s*,\s*(rel|key|urlPath)/.test(body),
+    "do not rejoin ROOT with request-derived data — that is the path-injection shape CodeQL caught"
+  );
+});
+
+test("workflows declare least-privilege permissions", "WIN-027", () => {
+  for (const f of readdirSync(join(ROOT, ".github/workflows"))) {
+    const wf = read(`.github/workflows/${f}`);
+    ok(
+      /^permissions:/m.test(wf) || /^\s{4}permissions:/m.test(wf),
+      `${f} must declare an explicit permissions block; without one the repository default applies, which for older orgs is read-write`
+    );
+  }
+});
+
 // ------------------------------------------------------------------ guide
 
 // Every .html under guide/, with its path relative to the repo root.
