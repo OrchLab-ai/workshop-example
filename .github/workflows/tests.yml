@@ -1,0 +1,54 @@
+# Repo invariant tests.
+#
+# Runs on ubuntu-latest at 1x billing and finishes in well under a minute, because
+# the suite needs neither Docker nor Windows. That is a deliberate design property of
+# tests/run-tests.mjs, not a coincidence — see the header of that file.
+#
+# WHAT THIS DOES NOT PROVE, and must not be described as proving:
+#   * that either container image builds
+#   * that a browser renders anything
+# Those need a Docker daemon in the right mode, and a Windows host for the Windows
+# image. They are what verify.sh and windows\verify.ps1 are for. A green tick here
+# means the invariants hold, not that the workshop works.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # The suite uses only the standard library plus global fetch, so any
+          # maintained Node will do. Pinned to an LTS so a runner-image change cannot
+          # move it underneath us.
+          node-version: '22'
+
+      - name: Run repo invariant tests
+        run: node tests/run-tests.mjs
+
+      - name: Check shell scripts
+        # shellcheck ships on GitHub's Ubuntu runners. Advisory rather than blocking:
+        # verify.sh is deliberately written for readability by workshop attendees, and
+        # a style opinion should not fail a PR that fixes a real bug.
+        continue-on-error: true
+        run: shellcheck verify.sh checkpoint.sh || true
+
+      - name: Check PowerShell
+        # PSScriptAnalyzer at Error severity only. Same reasoning as above, plus the
+        # analyzer is not installed by default, so this must not be load-bearing.
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          if (Get-Module -ListAvailable PSScriptAnalyzer) {
+            Invoke-ScriptAnalyzer -Path windows/verify.ps1 -Severity Error
+          } else {
+            Write-Host 'PSScriptAnalyzer not installed on this runner; skipped.'
+          }

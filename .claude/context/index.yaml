@@ -1,0 +1,117 @@
+#
+# .claude/context index
+#
+# Purpose: let the next agent (or person) find what was already learned about this
+# repo without re-running the expensive experiments. Everything here was produced by
+# running things on a real host, not by reading docs.
+#
+# Read this file first. It is an INDEX: it says which document answers which
+# question, so you can load one file instead of four.
+#
+version: 1
+updated: 2026-09-12
+repo: workshop-example
+summary: >-
+  The workshop ships a Linux-container environment check (verify.sh). A Windows host
+  whose Docker Desktop is in Windows-container mode cannot run it at all, so this
+  repo also carries a Windows-container support layer under windows/. The context
+  documents below record what was measured while building that layer.
+  Both stacks now pass 5 of 5, verified on real runs - but the LINUX one only started
+  passing after this work found two blocking bugs in it (WIN-012, WIN-025), one of
+  which broke check 5 on every platform. Porting to a hostile environment is what
+  surfaced them.
+
+documents:
+  - path: .claude/context/findings.yaml
+    title: Findings register
+    format: yaml
+    read_when:
+      - You hit an error on Windows and want to know if it is already known
+      - Before debugging a browser, a bind mount, an ACL or a quoting problem
+      - Before changing anything under windows/
+    contains: >-
+      Every discrete finding as a structured record: symptom, root cause, fix, how it
+      was verified, and whether it was proven HERE or inherited from prior art.
+    index_keys: [id, severity, area, verified]
+
+  - path: .claude/context/environment-baseline.yaml
+    title: Measured host + container baseline
+    format: yaml
+    read_when:
+      - You need real version numbers, sizes or timings rather than estimates
+      - You are about to quote a build time or a disk requirement to anyone
+      - You want to know what was actually proven to work on this machine
+    contains: >-
+      The host's measured configuration, the container facts established by probe,
+      and the commands used to establish each one so they can be re-run.
+    index_keys: [host, daemon, container_runtime, proven]
+
+  - path: .claude/context/windows-containers.md
+    title: Windows containers - the narrative
+    format: markdown
+    read_when:
+      - You are new to this and want the why, not just the what
+      - You are deciding whether to extend the Windows layer or drop it
+      - You need the honest security delta versus the Linux sandbox
+    contains: >-
+      The reasoning: why a separate package rather than a patch, why Firefox rather
+      than Chromium, what is genuinely weaker on Windows, and what is still untested.
+
+# Quick answers, so a lookup does not always need a file open.
+fast_facts:
+  chromium_on_windows_containers: >-
+    Does not work and will not. Starts, answers --version, then dies on any render
+    (0xC00000FD STATUS_STACK_OVERFLOW). Fonts, memory, flags and DLLs were all ruled
+    out by measurement. Use Firefox. Treat Chromium as unsupported, not untested.
+  linux_stack_on_windows_daemon: >-
+    Impossible. One daemon cannot serve both modes. verify.sh now detects this and
+    exits 2 pointing at windows/verify.ps1 instead of blaming the network.
+  esm_and_node_path: >-
+    NODE_PATH applies to CommonJS require() ONLY, never to ESM import. A globally
+    installed playwright is not importable from an .mjs file. This was not a
+    theoretical concern - it meant check 5 of the LINUX stack could never pass, on any
+    platform, until it was fixed (WIN-012). Install locally, or symlink the global
+    tree onto the resolution path.
+  git_bash_container_paths: >-
+    Git Bash / MSYS rewrites POSIX-looking ARGUMENTS into Windows paths before the
+    program sees them, so a CONTAINER path like /work/screenshot.mjs arrives as
+    C:/Program Files/Git/work/... Export MSYS_NO_PATHCONV=1 and MSYS2_ARG_CONV_EXCL='*'
+    in any shell script that passes container paths to docker (WIN-025).
+  windows_acl_rule: >-
+    Never grant by the name ContainerUser - grant the SID *S-1-5-93-2-2. The name
+    resolves to a different principal than the one the process runs as, so granting
+    the name looks applied and does nothing.
+  dockerfile_quoting_rule: >-
+    Never use a double quote inside a shell-form RUN in a Windows Dockerfile. Docker
+    wraps the RUN in double quotes, so yours terminates that quoting and is stripped.
+  bind_mount_rules: >-
+    Windows containers cannot bind-mount a single FILE, only directories. And the
+    bind SOURCE must already exist - Windows Docker refuses to start without it,
+    where the Linux daemon silently creates it.
+
+# Traps that cost time in THIS session specifically, worth reading before you start.
+tooling_traps:
+  - >-
+    The Bash tool's heredocs collapse backslashes here. A literal windows\verify.ps1
+    written through `cat <<'EOF'` arrived in the file as a vertical tab, printing as
+    "windowserify.ps1". Use the Write/Edit tools for any content containing
+    backslashes or nested quotes.
+  - >-
+    printf treats its FIRST argument as a format string, so backslash-bearing Windows
+    paths must be passed as arguments - printf '%s\n' "$path" - or emitted from a
+    quoted heredoc, which needs no escaping at all.
+  - >-
+    git core.autocrlf=true is set on this machine, so every checked-out file is CRLF.
+    See finding WIN-011 for what that breaks and the .gitattributes that fixes it.
+  - >-
+    Keep ": " out of unquoted YAML scalars in these very files - it parses as a
+    mapping key. Use a >- block scalar for any sentence containing a colon.
+
+sources:
+  prior_art: >-
+    ../ai-codebase-accelerator carries a production Windows-container image and a
+    measured pilot record. The richest files are
+    plans/windows-testing/Windows-pilot-run.md (section 7 gate 5 is the Chromium
+    post-mortem), container/windows/Dockerfile, and docs/WINDOWS-CONTAINERS.md.
+    Most of the inherited findings below are sourced from there; where that corpus
+    disagrees with itself, Windows-pilot-run.md sections 7 and 8 win.

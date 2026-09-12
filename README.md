@@ -17,6 +17,26 @@ cp .env.example .env      # then paste your token in — see below
 ./verify.sh
 ```
 
+### On Windows with Docker Desktop in *Windows-container* mode
+
+Check which mode you are in:
+
+```bash
+docker info --format '{{.OSType}}'
+```
+
+If that prints `linux`, carry on above — nothing changes for you. If it prints
+`windows`, the command above cannot work: every image this check uses is a Linux
+image, and one Docker daemon serves one mode. Run the Windows check instead, which
+proves the same five things and needs no daemon switch:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File windows\verify.ps1
+```
+
+`./verify.sh` will tell you this too rather than failing confusingly. See
+[`windows/README.md`](windows/README.md) for the detail.
+
 ### Getting your token
 
 If you have a Claude subscription, run this **on your own machine** (not in the
@@ -151,6 +171,24 @@ Regenerate it after editing `guide/activities.js`:
 ```bash
 node guide/build-guide.js
 ```
+
+---
+
+## Tests
+
+```bash
+node tests/run-tests.mjs
+```
+
+No dependencies, no Docker, no Windows required — it runs anywhere Node does, in a
+second or two. Most of the checks are **regression guards** for bugs that actually
+happened, and each names the finding in
+[`.claude/context/findings.yaml`](.claude/context/findings.yaml) that records it.
+
+It does **not** prove that either image builds or that a browser renders — those need
+a Docker daemon in the right mode, and they are exactly what `verify.sh` and
+`windows\verify.ps1` are for. A green run here means the invariants hold, not that
+the workshop works.
 
 ---
 

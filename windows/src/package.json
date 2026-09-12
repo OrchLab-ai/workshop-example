@@ -1,0 +1,10 @@
+{
+  "name": "orchlab-workshop-verify-windows",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Environment-check scripts for the Windows-container workshop image. Playwright is a LOCAL dependency on purpose — see screenshot.mjs for why NODE_PATH cannot be used.",
+  "dependencies": {
+    "playwright": "1.49.1"
+  }
+}

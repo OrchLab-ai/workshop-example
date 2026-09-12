@@ -1,0 +1,427 @@
+﻿<#
+    OrchLab Workshop - Environment Check (WINDOWS CONTAINERS edition)
+
+    The Windows-container twin of ../verify.sh. Run this instead of verify.sh when
+    your Docker Desktop is in Windows-container mode.
+
+    Design note, inherited deliberately from verify.sh: every intermediate command
+    is silenced and logged to .verify-logs\. The problem this script exists to solve
+    is not that checks fail - it is that a wall of streamed container output makes
+    SUCCESS indistinguishable from FAILURE. So the only thing on screen is a
+    fixed-length checklist and one unambiguous verdict.
+
+    Targets Windows PowerShell 5.1, because that is what is on a stock Windows host.
+    No pwsh-only syntax (no ternary, no ??, no && chaining).
+
+    This file is saved WITH a UTF-8 BOM on purpose: powershell.exe 5.1 decodes a
+    BOM-less file as Windows-1252, which would mojibake any non-ASCII character.
+    The output strings are kept ASCII-only as a second line of defence.
+#>
+[CmdletBinding()]
+param(
+    # Suppress the banner; print only the final verdict line. For facilitators
+    # sweeping a room.
+    [switch]$Quiet,
+    # Leave the check containers running afterwards.
+    [switch]$Keep,
+    [switch]$Help
+)
+
+$ErrorActionPreference = 'Stop'
+
+if ($Help) {
+    @'
+Usage: .\verify.ps1 [options]
+
+  -Quiet    Suppress the banner; print only the final verdict line.
+            Intended for facilitators sweeping a room.
+  -Keep     Leave the check containers running afterwards.
+  -Help     Show this message.
+
+Environment:
+  VERIFY_PORT         Host port for the site check (default 8080)
+  WINDOWS_ISOLATION   hyperv (default) or process
+  WINDOWS_MEMORY      Memory limit for the agent container (default 4g)
+
+Exit code is 0 only when all checks pass.
+'@ | Write-Host
+    exit 0
+}
+
+# ---------------------------------------------------------------- configuration
+
+$Total        = 5
+$RepoRoot     = Split-Path -Parent $PSScriptRoot
+$ComposeFile  = Join-Path $PSScriptRoot 'docker-compose.windows.yml'
+# An explicit project name. Without it compose derives one from this folder
+# ("windows"), which is both meaningless in `docker ps` and a collision risk
+# against any other checkout on the same host.
+$Project      = 'orchlab-workshop-win'
+$LogDir       = Join-Path $RepoRoot '.verify-logs'
+$Report       = Join-Path $RepoRoot 'verify-report.txt'
+$ShotRelative = 'screenshots\verify.png'
+$Screenshot   = Join-Path $RepoRoot $ShotRelative
+$Rule         = '============================================================'
+
+# ----------------------------------------------------------------- presentation
+
+# Colour only when we are on a real console and not in quiet mode. 5.1 has no
+# $PSStyle, so use raw ANSI - every supported Windows 10+ console handles it.
+$useColour = (-not $Quiet) -and (-not $env:NO_COLOR) -and ($Host.UI.RawUI -ne $null)
+if ($useColour) {
+    $e = [char]27
+    $BOLD = "$e[1m"; $DIM = "$e[2m"; $GREEN = "$e[32m"; $RED = "$e[31m"; $RESET = "$e[0m"
+} else {
+    $BOLD = ''; $DIM = ''; $GREEN = ''; $RED = ''; $RESET = ''
+}
+
+# Say: to screen (unless -Quiet) and always to the report file, with colour
+# stripped from the file so it can be pasted into chat.
+function Say([string]$Text) {
+    if (-not $Quiet) { Write-Host $Text }
+    $plain = $Text -replace "$([char]27)\[[0-9;]*m", ''
+    Add-Content -LiteralPath $Report -Value $plain -Encoding UTF8
+}
+
+# ------------------------------------------------------------------- machinery
+
+$script:Idx          = 0
+$script:Failed       = $false
+$script:FailLabel    = ''
+$script:FailCause    = ''
+$script:FailFix      = ''
+$script:CurrentLabel = ''
+$script:CurrentLine  = ''
+# Default to a non-zero exit. If anything prevents the verdict being reached, the
+# script must NOT report success by omission.
+$script:ExitCode     = 1
+
+function Write-CheckStart([string]$Label) {
+    $script:Idx++
+    $padded = "$Label "
+    while ($padded.Length -lt 42) { $padded += '.' }
+    $script:CurrentLabel = $Label
+    $script:CurrentLine  = "   [$($script:Idx)/$Total]  $padded  "
+}
+
+function Write-CheckPass([string]$Detail = '') {
+    Say "$($script:CurrentLine)${GREEN}PASS${RESET}   ${DIM}${Detail}${RESET}"
+}
+
+function Write-CheckFail([string]$Cause, [string]$Fix) {
+    Say "$($script:CurrentLine)${RED}FAIL${RESET}"
+    $script:Failed    = $true
+    $script:FailLabel = $script:CurrentLabel
+    $script:FailCause = $Cause
+    $script:FailFix   = $Fix
+}
+
+# Run a command, send every stream to a log file, return the exit code. Keeping
+# this in one place is what keeps the checklist the only thing on screen.
+function Invoke-Logged([string]$LogName, [string[]]$Arguments) {
+    $log = Join-Path $LogDir $LogName
+    # $ErrorActionPreference MUST be relaxed around a native command.
+    #
+    # With it set to 'Stop', PowerShell promotes ANY bytes a native command writes to
+    # stderr into a terminating NativeCommandError - and docker writes ordinary
+    # progress ("Image ... Building") to stderr. So a perfectly healthy build threw
+    # a PowerShell stack trace across the checklist, which is precisely the wall of
+    # output this script exists to suppress. Judge the command by its EXIT CODE, which
+    # is what the callers do.
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        # 5.1 has no clean way to redirect a native command's streams to a file
+        # without a subshell, so call the exe directly and capture every stream.
+        & docker @Arguments *>&1 | Out-File -LiteralPath $log -Encoding UTF8
+        return $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+}
+
+function Invoke-Compose([string]$LogName, [string[]]$Arguments) {
+    $base = @('compose', '-f', $ComposeFile, '-p', $Project)
+    return Invoke-Logged $LogName ($base + $Arguments)
+}
+
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+# The screenshots folder must exist BEFORE compose runs: Windows Docker refuses to
+# start a container on a missing bind source, where the Linux daemon silently
+# creates it. This one line is the difference between a pass and an opaque
+# "invalid mount config" for every attendee.
+New-Item -ItemType Directory -Force -Path (Join-Path $RepoRoot 'screenshots') | Out-Null
+Set-Content -LiteralPath $Report -Value '' -Encoding UTF8
+
+# Load .env so the credential checks see the same values the containers will.
+#
+# Parsed by hand rather than sourced, and $value is CR-stripped, because a .env
+# written on Windows is CRLF: a naive read puts a trailing carriage return inside
+# the token, which then fails authentication with no visible cause. (The bash
+# version sources the file, so it inherits this bug on a CRLF checkout.)
+$envFile = Join-Path $RepoRoot '.env'
+if (Test-Path -LiteralPath $envFile) {
+    foreach ($line in (Get-Content -LiteralPath $envFile)) {
+        $trimmed = $line.Trim()
+        if ($trimmed -eq '' -or $trimmed.StartsWith('#')) { continue }
+        $split = $trimmed.IndexOf('=')
+        if ($split -lt 1) { continue }
+        $key   = $trimmed.Substring(0, $split).Trim()
+        $value = $trimmed.Substring($split + 1).Trim().Trim('"').Trim("'")
+        $value = $value -replace "`r", ''
+        if ($key -ne '') { Set-Item -Path "Env:$key" -Value $value }
+    }
+}
+
+$Port = if ($env:VERIFY_PORT) { $env:VERIFY_PORT } else { '8080' }
+
+# ---------------------------------------------------------------------- banner
+
+if (-not $Quiet) {
+    Say ''
+    Say "${BOLD}${Rule}${RESET}"
+    Say "${BOLD}   ORCHLAB WORKSHOP - ENVIRONMENT CHECK (WINDOWS CONTAINERS)${RESET}"
+    Say "${BOLD}${Rule}${RESET}"
+    Say ''
+}
+
+try {
+
+# ------------------------------------------------------------ 1: Docker up
+
+Write-CheckStart 'Docker daemon reachable'
+$dockerCmd = Get-Command docker -ErrorAction SilentlyContinue
+if (-not $dockerCmd) {
+    Write-CheckFail 'the docker command was not found on your PATH' @'
+install Docker Desktop from https://docker.com/products/docker-desktop
+                        then re-run  .\verify.ps1
+'@
+} elseif ((Invoke-Logged '01-docker.log' @('info')) -ne 0) {
+    Write-CheckFail 'Docker is installed but the daemon is not running' @'
+start Docker Desktop and wait for the whale icon to stop animating
+                        then re-run  .\verify.ps1
+'@
+} else {
+    # THE check that distinguishes this script from verify.sh. A daemon in
+    # Linux-container mode cannot run these Windows images, and the failure would
+    # otherwise land three checks later as an unexplained build error.
+    $osType = (& docker info --format '{{.OSType}}' 2>$null | Out-String).Trim()
+    if ($osType -ne 'windows') {
+        Write-CheckFail "Docker is in LINUX-container mode (OSType=$osType), but this is the Windows check" @'
+you have two options, and the Linux one is the better-tested path:
+
+                        A) use the Linux stack instead - from the repo root:
+                             bash ./verify.sh
+
+                        B) switch Docker Desktop to Windows containers:
+                             & "$Env:ProgramFiles\Docker\Docker\DockerCli.exe" -SwitchDaemon
+                           then re-run  .\verify.ps1
+                           NOTE: this stops any running Linux containers.
+'@
+    } else {
+        $serverVersion = (& docker version --format '{{.Server.Version}}' 2>$null | Out-String).Trim()
+        if (-not $serverVersion) { $serverVersion = 'unknown' }
+        $build = 0
+        try {
+            $build = [int](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion').CurrentBuildNumber
+        } catch { }
+        $isolation = if ($env:WINDOWS_ISOLATION) { $env:WINDOWS_ISOLATION } else { 'hyperv' }
+        # An ltsc2022 base needs host build 20348+ for PROCESS isolation. Hyper-V
+        # isolation gives the container its own kernel and lifts that constraint,
+        # which is why it is the default - so this is only fatal for process mode.
+        if ($build -gt 0 -and $build -lt 20348 -and $isolation -eq 'process') {
+            Write-CheckFail "host build $build is older than 20348, which the ltsc2022 base image needs for process isolation" @'
+use Hyper-V isolation instead (it gives the container its own kernel):
+                          Remove  WINDOWS_ISOLATION=process  from your environment
+                        then re-run  .\verify.ps1
+'@
+        } else {
+            Write-CheckPass "$serverVersion, windows containers, $isolation isolation, host build $build"
+        }
+    }
+}
+
+# --------------------------------------------------------------- 2: Build
+
+if (-not $script:Failed) {
+    Write-CheckStart 'Workshop image builds'
+    $buildStart = Get-Date
+    if ((Invoke-Compose '02-build.log' @('build', 'verify-agent')) -eq 0) {
+        Write-CheckPass ("{0}s" -f [int]((Get-Date) - $buildStart).TotalSeconds)
+    } else {
+        Write-CheckFail 'the container image failed to build' @'
+first build pulls a ~2 GB Windows base image and takes a while -
+                        check your connection, then re-run  .\verify.ps1
+                        full build output is in .verify-logs\02-build.log
+
+                        if it says "no matching manifest for windows",
+                        Docker is pulling a Linux-only image - tell a facilitator.
+'@
+    }
+}
+
+# ----------------------------------------------------- 3: Claude Code auth
+
+if (-not $script:Failed) {
+    Write-CheckStart 'Claude Code CLI + auth'
+    if ((-not $env:CLAUDE_CODE_OAUTH_TOKEN) -and (-not $env:ANTHROPIC_API_KEY)) {
+        Write-CheckFail 'no credential found - .env has neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY' @'
+run  claude setup-token
+                        copy the value it prints
+                        run  copy .env.example .env   (if you have not already)
+                        paste the value into .env as CLAUDE_CODE_OAUTH_TOKEN
+                        re-run  .\verify.ps1
+'@
+    } else {
+        # `cmd /c` is required, not decoration: npm installs the CLI as claude.cmd
+        # and claude.ps1 shims, NOT claude.exe, and a Windows container's exec form
+        # only runs real executables. Calling `claude` directly fails with a
+        # file-not-found that looks like a broken install.
+        $code = Invoke-Compose '03-claude.log' @('run', '--rm', '--no-deps', 'verify-agent', 'cmd', '/c', 'claude --version')
+        if ($code -ne 0) {
+            Write-CheckFail 'the Claude Code CLI did not start inside the container' @'
+check .verify-logs\03-claude.log for the error
+                        if it mentions authentication, re-run  claude setup-token
+                        and refresh the value in .env
+'@
+        } else {
+            $claudeVersion = ''
+            $logPath = Join-Path $LogDir '03-claude.log'
+            if (Test-Path -LiteralPath $logPath) {
+                $match = Get-Content -LiteralPath $logPath |
+                         Where-Object { $_ -match '\d+\.\d+\.\d+' } |
+                         Select-Object -Last 1
+                if ($match) { $claudeVersion = ($match -replace '\s.*$', '').Trim() }
+            }
+            if (-not $claudeVersion) { $claudeVersion = 'ok' }
+            # Honest wording: this proves the CLI RUNS and a credential is PRESENT.
+            # It does not call the API, so it cannot prove the credential is valid.
+            Write-CheckPass "claude $claudeVersion, credential present (not validated)"
+        }
+    }
+}
+
+# ------------------------------------------------------- 4: Site reachable
+
+if (-not $script:Failed) {
+    Write-CheckStart 'Workshop site responds'
+    if ((Invoke-Compose '04-web.log' @('up', '-d', 'verify-web')) -ne 0) {
+        Write-CheckFail "the web container would not start" @"
+port $Port is probably already in use on your machine
+                        re-run with a different port:
+                          `$env:VERIFY_PORT=8081; .\verify.ps1
+"@
+    } else {
+        $siteStart = Get-Date
+        $siteOk = $false
+        # Poll rather than sleep-and-hope, so a slow machine passes and a genuinely
+        # broken one fails fast enough to keep the room moving. Windows containers
+        # start slower than Linux ones, hence 60 tries rather than 30.
+        for ($i = 1; $i -le 60; $i++) {
+            try {
+                Invoke-WebRequest "http://localhost:$Port/" -UseBasicParsing -TimeoutSec 3 | Out-Null
+                $siteOk = $true
+                break
+            } catch {
+                Start-Sleep -Seconds 1
+            }
+        }
+        if ($siteOk) {
+            Write-CheckPass ("HTTP 200 on :{0}, {1}s" -f $Port, [int]((Get-Date) - $siteStart).TotalSeconds)
+        } else {
+            Write-CheckFail "nothing answered on http://localhost:$Port/ after 60s" @"
+another program may be holding port $Port
+                        re-run with a different port:
+                          `$env:VERIFY_PORT=8081; .\verify.ps1
+                        container output is in .verify-logs\04-web.log
+"@
+        }
+    }
+}
+
+# ---------------------------------------------------------- 5: Screenshot
+
+if (-not $script:Failed) {
+    Write-CheckStart 'Playwright screenshot captured'
+    if (Test-Path -LiteralPath $Screenshot) { Remove-Item -LiteralPath $Screenshot -Force }
+    $code = Invoke-Compose '05-screenshot.log' @('run', '--rm', 'verify-agent', 'node', 'C:/app/screenshot.mjs')
+    if ($code -ne 0) {
+        Write-CheckFail 'the headless browser could not render and capture the page' @'
+check .verify-logs\05-screenshot.log for the error
+                        then re-run  .\verify.ps1
+'@
+    } elseif (-not (Test-Path -LiteralPath $Screenshot) -or (Get-Item -LiteralPath $Screenshot).Length -eq 0) {
+        Write-CheckFail "Playwright reported success but $ShotRelative was not written" @'
+this is usually a Docker file-sharing permission problem
+                        check that this folder is shared with Docker Desktop
+                        (Settings > Resources > File Sharing)
+'@
+    } else {
+        $sizeKb = [int]((Get-Item -LiteralPath $Screenshot).Length / 1024)
+        $engine = if ($env:PW_BROWSER) { $env:PW_BROWSER } else { 'firefox' }
+        Write-CheckPass "verify.png, $sizeKb KB, $engine"
+    }
+}
+
+# ------------------------------------------------------------ Skipped rows
+
+# A failure stops the run, but the checklist should still show its full length -
+# otherwise it reads as "the script crashed" rather than "check 3 failed".
+$remaining = @{ 2 = 'Workshop image builds'; 3 = 'Claude Code CLI + auth';
+                4 = 'Workshop site responds'; 5 = 'Playwright screenshot captured' }
+while ($script:Idx -lt $Total) {
+    Write-CheckStart $remaining[$script:Idx + 1]
+    Say "$($script:CurrentLine)${DIM}----${RESET}   ${DIM}not reached${RESET}"
+}
+
+# ---------------------------------------------------------------- Verdict
+
+Say ''
+if (-not $script:Failed) {
+    Say "   ${GREEN}${BOLD}ALL $Total CHECKS PASSED${RESET}"
+    Say ''
+    Say "   Your environment is ready. ${BOLD}There is nothing else to do.${RESET}"
+    Say "   Open ${BOLD}$ShotRelative${RESET} to see the proof - it should read"
+    Say '   "ENVIRONMENT OK" with your container name and the time.'
+    Say ''
+    Say "   ${BOLD}${Rule}${RESET}"
+    if ($Quiet) { Write-Host "PASS  all $Total checks (windows containers)" }
+    $script:ExitCode = 0
+} else {
+    Say "   ${RED}${BOLD}1 CHECK FAILED${RESET} - this is fixable, and you are not behind."
+    Say ''
+    Say "       Failed check:    ${BOLD}$($script:FailLabel)${RESET}"
+    Say "       What went wrong: $($script:FailCause)"
+    Say "       Fix it:          $($script:FailFix)"
+    Say '       Still stuck?     raise your hand - do not keep retrying.'
+    Say ''
+    Say "   A copy of this report is in ${BOLD}verify-report.txt${RESET} - paste it if you ask for help."
+    Say "   ${BOLD}${Rule}${RESET}"
+    if ($Quiet) { Write-Host "FAIL  $($script:FailLabel) (windows containers)" }
+    $script:ExitCode = 1
+}
+
+} catch {
+    # An unexpected error must still read as a failed CHECK, not as a crash. A
+    # PowerShell stack trace across the checklist makes a fixable problem look like
+    # broken tooling, and is the exact failure mode this script exists to prevent.
+    Say ''
+    Say "   ${RED}${BOLD}THE CHECK ITSELF HIT AN UNEXPECTED ERROR${RESET}"
+    Say ''
+    Say "       $($_.Exception.Message)"
+    Say ''
+    Say '       This is a bug in verify.ps1, not a problem with your machine.'
+    Say '       Please show this to a facilitator.'
+    Say ''
+    Say "   ${BOLD}${Rule}${RESET}"
+    if ($Quiet) { Write-Host 'FAIL  verify.ps1 itself errored' }
+    $script:ExitCode = 3
+} finally {
+    # Teardown runs even on Ctrl-C or an unexpected error, so a half-finished run
+    # never leaves a container holding port 8080 and breaking the next attempt.
+    if (-not $Keep) {
+        Invoke-Compose 'teardown.log' @('down', '--remove-orphans') | Out-Null
+    }
+}
+
+exit $script:ExitCode
