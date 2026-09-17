@@ -50,6 +50,15 @@ step() { printf '\n=== %s\n' "$1"; }
 # folder is trusted, and the answer cannot be anything but yes - the container exists
 # to hold this one repo, and the container IS the isolation boundary.
 #
+# bypassPermissionsModeAccepted is the third of the same kind. The Claude terminal
+# opens with --dangerously-skip-permissions, and the CLI shows a one-time disclaimer
+# before honouring it - without this the flag is silently DOWNGRADED ("permission mode
+# downgraded to default - bypass requires accepting the disclaimer interactively
+# first") and a room of attendees is back to approving every edit without being told
+# why. The disclaimer is answered here because the guide answers it properly: the
+# Claude terminal on start-your-day.html carries the full explanation, and the deck
+# spends a slide on it.
+#
 # Only ever written when absent. Claude keeps real state in this file (history,
 # per-project settings), and clobbering it on every restart would throw that away.
 step "Claude Code"
@@ -59,6 +68,7 @@ if [ -f "$CLAUDE_CONFIG" ]; then
 elif cat > "$CLAUDE_CONFIG" <<JSON
 {
   "hasCompletedOnboarding": true,
+  "bypassPermissionsModeAccepted": true,
   "projects": {
     "$REPO": { "hasTrustDialogAccepted": true }
   }

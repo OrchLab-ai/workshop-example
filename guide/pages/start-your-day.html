@@ -615,8 +615,9 @@ nav.pager a:hover { background: var(--surface); }
       <p>Open a third <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> window and run this — it drops you straight into Claude, inside the container. Also a container shell, but it gets its own badge and its own window for one reason: <strong>keep it separate.</strong> Claude holds its conversation in that session — exiting it to run one command throws the context away, and that context is most of what you are paying for.</p>
   <div class="copyblock">
     <div class="cb-head"><span>Open a third window and start Claude in it</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
-    <pre>docker compose -f docker-compose.workshop.yml exec claude-container claude</pre>
+    <pre>docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</pre>
   </div>
+      <div class="note"><strong>About that flag.</strong> <code>--dangerously-skip-permissions</code> turns off every approval prompt — the deck calls it YOLO mode, and on its own it is exactly as reckless as it sounds. What makes it reasonable <em>here</em> is the layer underneath it: this window is a shell inside the container, with its own filesystem and its own network, and nothing Claude does in it can reach the rest of your machine. That is the isolation the <em>Levels of Safety</em> slide puts first, and it is the only reason the speed is worth having. <strong>Do not take the flag home</strong>, where nothing is containing it.</div>
     </div>
   </div>
       <div data-only="windows-windows">

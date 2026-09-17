@@ -586,25 +586,25 @@ nav.pager a:hover { background: var(--surface); }
   <div class="cp">
     <span>start from <b>cp-06</b></span>
     <span>produces <b>cp-07</b></span>
-    <span>behind? <code>./checkpoint.sh 6</code></span>
   </div>
 
 
   <div data-needs-pathway>
-  <h2>What to do</h2>
-  <ol>
-    <li>Read <code>app/autonomous-demo/README.md</code> on your own machine before starting anything — the loop is far easier to watch if you know what it intends to do.</li>
-    <li>Read the guardrails in <code>docker-compose.workshop.yml</code>: <code>MAX_ITERATIONS</code>, <code>COOLDOWN_SECONDS</code>, <code>TIMEOUT_SECONDS</code>, and the memory and CPU ceiling. These are the lesson, not the feature it builds.</li>
-    <li>Start it with the <code>l4</code> profile and follow the log. <strong>You are not driving this one</strong> — there is no prompt to answer.</li>
-    <li>Watch where it gets stuck as closely as where it succeeds, and stop it once you have seen enough.</li>
-  </ol>
-
-  <h2>Commands</h2>
-      <div class="shellreq"><span class="where">Where</span>Run these in <strong>two places — your machine, and the container</strong>. Every command block is badged with the window it belongs in. <strong>Host terminal</strong> is <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span>, from the root of your <code>workshop-example</code> clone; <strong>work terminal</strong> and <strong>Claude terminal</strong> are both shells inside the container — see <a href="start-your-day.html">Start your day</a>.</div>
+  <details class="trouble compact">
+  <summary>Didn't finish the last activity?
+    <span class="cta">Click here to catch up</span>
+  </summary>
+  <div class="tr-body">
+    <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
   <div class="copyblock">
-    <div class="cb-head"><span>Jump to the starting checkpoint</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
     <pre>./checkpoint.sh 6</pre>
   </div>
+  </div>
+</details>
+
+  <h2>Commands</h2>
+      <div class="shellreq"><span class="where">Where</span>Each block is badged with the window it belongs in, and the host terminal is <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> in your <code>workshop-example</code> folder. Not set up yet? <a href="start-your-day.html">Start your day</a>.</div>
   <div class="copyblock">
     <div class="cb-head"><span>Read what it is about to do</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
     <pre>cat app/autonomous-demo/README.md</pre>

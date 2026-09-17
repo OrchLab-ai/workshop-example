@@ -586,36 +586,25 @@ nav.pager a:hover { background: var(--surface); }
   <div class="cp">
     <span>start from <b>cp-04</b></span>
     <span>produces <b>cp-05</b></span>
-    <span>behind? <code>./checkpoint.sh 4</code></span>
   </div>
 
 
   <div data-needs-pathway>
-  <h2>What to do</h2>
-  <ol>
-    <li>Start Claude Code in the container and let it interview you: who is this for, what should they feel, what are you not willing to look like.</li>
-    <li>Save the result as <code>specs/standards/brand.md</code>. There is a brand file there already — read it first to see the shape expected, then replace it with yours.</li>
-    <li>Ask the agent to regenerate <code>packages/client/src/tokens.css</code> from your brand, and to change nothing else.</li>
-    <li>Ask it to screenshot the result with Playwright. The image lands in <code>screenshots/</code> on your own machine; the live page is at <code>http://localhost:5173</code>.</li>
-  </ol>
-
-  <h2>Commands</h2>
-      <div class="shellreq"><span class="where">Where</span>Run these in <strong>two places — your machine, and the container</strong>. Every command block is badged with the window it belongs in. <strong>Host terminal</strong> is <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span>, from the root of your <code>workshop-example</code> clone; <strong>work terminal</strong> and <strong>Claude terminal</strong> are both shells inside the container — see <a href="start-your-day.html">Start your day</a>.</div>
+  <details class="trouble compact">
+  <summary>Didn't finish the last activity?
+    <span class="cta">Click here to catch up</span>
+  </summary>
+  <div class="tr-body">
+    <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
   <div class="copyblock">
-    <div class="cb-head"><span>Jump to the starting checkpoint</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
     <pre>./checkpoint.sh 4</pre>
   </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Start Claude Code</span><span class="loc claude">claude terminal</span><button type="button">Copy</button></div>
-    <pre>claude</pre>
   </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Your brand, and the tokens generated from it</span><span class="loc container">work terminal</span><button type="button">Copy</button></div>
-    <pre>specs/standards/brand.md
-packages/client/src/tokens.css</pre>
-  </div>
+</details>
 
   <h2>Prompts — copy, don't retype</h2>
+      <div class="shellreq"><span class="where">Where</span>Inside the <strong>Claude terminal</strong> — the third window, with Claude already running in it.</div>
   <div class="copyblock is-prompt">
     <div class="cb-head"><span>1. Let it interview you</span><button type="button">Copy</button></div>
     <pre>Interview me to produce brand guidelines for this product. Ask me about the audience, what I want them to feel, the voice and tone, and what I am not willing to look like. Ask one question at a time and push back if my answers are vague. When we're done, write the result to specs/standards/brand.md.</pre>
@@ -623,6 +612,14 @@ packages/client/src/tokens.css</pre>
   <div class="copyblock is-prompt">
     <div class="cb-head"><span>2. Make the app wear it</span><button type="button">Copy</button></div>
     <pre>Read specs/standards/brand.md and regenerate packages/client/src/tokens.css from it. Change only the Tier 1 identity tokens — the semantic tokens and the components must not be edited. Then use Playwright to screenshot the campaign page so I can see the result.</pre>
+  </div>
+
+  <h2>Check your work</h2>
+      <div class="shellreq"><span class="where">Where</span>Each block is badged with the window it belongs in, and the host terminal is <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> in your <code>workshop-example</code> folder. Not set up yet? <a href="start-your-day.html">Start your day</a>.</div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Your brand, and the tokens generated from it</span><span class="loc container">work terminal</span><button type="button">Copy</button></div>
+    <pre>specs/standards/brand.md
+packages/client/src/tokens.css</pre>
   </div>
 
   <h2>You are done when</h2>

@@ -12,7 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { activities, LINKS, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER } = require("./activities");
+const { activities, LINKS, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER, CATCH_UP } = require("./activities");
 
 // This file lives in guide/src/. The guide itself is one directory up, and is laid
 // out so that opening the guide folder presents exactly ONE thing to double-click:
@@ -912,9 +912,13 @@ const pathwayFor = id => PLATFORMS.find(p => p.id === id);
 // shellCallout — "run these HERE, from THIS folder". Takes a pathway (which knows
 // its own shell) or any object with the same two fields, so the platform panels and
 // the activity pages cannot disagree about the answer.
-const shellCallout = p => `      <div class="shellreq"><span class="where">Where</span>Run these in ${
-  p.shell ? `<strong>${esc(p.shell)}</strong>` : "your terminal"
-}${p.shellNote ? `, ${p.shellNote}` : "."}${p.cwd ? ` ${p.cwd.replace("{shell}", shellName())}` : ""}</div>`;
+const shellCallout = p => `      <div class="shellreq"><span class="where">Where</span>${
+  p.shell
+    ? `Run these in <strong>${esc(p.shell)}</strong>${p.shellNote ? `, ${p.shellNote}` : "."}${
+        p.cwd ? ` ${p.cwd.replace("{shell}", shellName())}` : ""
+      }`
+    : p.cwd.replace("{shell}", shellName())
+}</div>`;
 
 // Wrap a block so it is shown only on the given pathways. No `only` means always.
 // data-only goes on a WRAPPER rather than on the block itself, so the gating stays
@@ -1221,7 +1225,12 @@ ${TERMINALS.list
     <div>
       <b>${esc(t.title)}</b> <span class="loc ${LOCATIONS[t.where].cls} tm-loc">${LOCATIONS[t.where].text}</span>
       <p>${t.body.replace("{shell}", shellName())}</p>
-${(t.commands || []).map(c => onlyWrap(c.only, copyBlock(c.label, c.code, false, c.where))).join("\n")}
+${(t.commands || []).map(c => onlyWrap(c.only, copyBlock(c.label, c.code, false, c.where))).join("\n")}${
+  // Terminal 3 carries the flag, so terminal 3 carries the explanation. Attached to
+  // the terminal rather than dropped at the end of the list, so the command and the
+  // reason for it are never separated by two other windows.
+  t.where === "claude" ? `\n      <div class="note">${TERMINALS.flagNote}</div>` : ""
+}
     </div>
   </div>`
 )
@@ -1235,6 +1244,25 @@ ${copyBlock(TERMINALS.after.command.label, TERMINALS.after.command.code, false, 
     </div>
   </div>
 </div>`;
+
+// cp-04 -> `./checkpoint.sh 4`. Derived rather than written down a second time: the
+// activity already declares which checkpoint it starts from, and a hand-written
+// command beside it is a second copy waiting to drift.
+const catchUpBlock = a => {
+  if (!a.from) return "";
+  const rung = Number(a.from.replace("cp-", ""));
+  if (!Number.isInteger(rung)) throw new Error(`${a.slug}: cannot read a rung out of from: "${a.from}"`);
+  return `  <details class="trouble compact">
+  <summary>${esc(CATCH_UP.summary)}
+    <span class="cta">${esc(CATCH_UP.cta)}</span>
+  </summary>
+  <div class="tr-body">
+    <p>${CATCH_UP.body}</p>
+${copyBlock(CATCH_UP.label, `./checkpoint.sh ${rung}`, false, CATCH_UP.where)}
+  </div>
+</details>
+`;
+};
 
 const recoverBlock = () => `  <details class="trouble compact">
   <summary>${esc(RECOVER.summary)}
@@ -1343,8 +1371,9 @@ activities.forEach((a, i) => {
   const cp = [
     a.from ? `<span>start from <b>${esc(a.from)}</b></span>` : `<span>start of the day</span>`,
     a.to ? `<span>produces <b>${esc(a.to)}</b></span>` : `<span>final activity</span>`,
-    // Number(...) rather than stripping "cp-0", so this keeps working past cp-09.
-    a.from ? `<span>behind? <code>./checkpoint.sh ${Number(a.from.slice(3))}</code></span>` : "",
+    // The catch-up command is NOT repeated here. This strip is read by everybody, and
+    // running it is right for one person in the room - see catchUpBlock, immediately
+    // below, which says so in the one place the reader it is for will look.
   ]
     .filter(Boolean)
     .join("\n    ");
@@ -1356,6 +1385,8 @@ activities.forEach((a, i) => {
   // them under a "Start your day" heading; it now lives once, on its own page, and
   // the header links there from every page in the guide. The assertion is the guard:
   // a `daily` command reaching an activity page means the splice came back.
+  // Two groups, not one: what you run BEFORE pasting a prompt, and what you run to
+  // check what the prompt did. `after: true` on a command puts it in the second.
   const commandBlocks = a => {
     const all = a.commands || [];
     const stray = all.find(c => c.daily);
@@ -1365,11 +1396,23 @@ activities.forEach((a, i) => {
           `start-your-day.html only — see the note above DAILY_START in activities.js.`
       );
     }
-    return [...(a.where ? [shellCallout(a.where)] : []), ...all.map(c => copyBlock(c.label, c.code, false, c.where))];
+    const render = c => copyBlock(c.label, c.code, false, c.where);
+    const before = all.filter(c => !c.after).map(render);
+    const after = all.filter(c => c.after).map(render);
+    // The "what the badges mean" line goes on whichever group appears first. Most
+    // activities are now ALL after-commands — there is nothing to run before the
+    // prompt — so pinning it to `before` would put it on a section that is not there.
+    const callout = a.where ? [shellCallout(a.where)] : [];
+    return before.length
+      ? { before: [...callout, ...before], after }
+      : { before: [], after: after.length ? [...callout, ...after] : [] };
   };
 
+  const cmds = commandBlocks(a);
+
+  // The bar is filled in at the end, once there is a page to ask about - see below.
   const body = `${siteHeader("← ALL ACTIVITIES", FROM_PAGES)}
-${a.platformSetup ? "" : platformStrip()}
+${a.platformSetup ? "" : "<!--PATHBAR-->"}
   <span class="actnum">ACTIVITY ${actNum(i)}</span>
   <p class="eyebrow">${esc(a.part)}</p>
   <h1>${esc(a.title)}</h1>
@@ -1382,17 +1425,14 @@ ${a.platformSetup ? "" : platformStrip()}
 ${a.platformSetup ? setupAsk() : ""}
 ${a.platformSetup ? "" : '  <div data-needs-pathway>'}
 ${
-  // Absent on the setup page, where the four "Step N" headings below ARE the list.
-  // Having both meant reading the sequence, scrolling past it, and then reading it
-  // again as headings — and the numbered version at the top could only ever restate
-  // what the sections underneath already said, in less detail and with no commands.
-  a.steps
-    ? `  <h2>What to do</h2>
-  <ol>
-${a.steps.map(x => `    <li>${x}</li>`).join("\n")}
-  </ol>
-`
-    : ""
+  // WHAT TO DO IS NOT HERE, on purpose. Every page used to open with a numbered
+  // summary of the activity, and it was noise twice over: the instructions are given
+  // from the front of the room, and a reader who has worked through the activities in
+  // order does not need to be told again what the sections below already say. What is
+  // left is the one thing a numbered list was genuinely carrying - how somebody who
+  // fell behind gets back to the same code as everybody else - and that is collapsed,
+  // because it is for one reader and not for the room.
+  a.platformSetup ? "" : catchUpBlock(a)
 }${a.platformSetup ? `
   <div class="stepblock" data-pick-highlight data-setup="fresh">
   <h2>Step 1 &middot; Pick your machine</h2>
@@ -1431,11 +1471,16 @@ ${
       )
     : ""
 }
-` : ""}${section("Commands", commandBlocks(a))}${a.note ? `  <div class="note">${a.note}</div>
+` : ""}${section("Commands", cmds.before)}${a.note ? `  <div class="note">${a.note}</div>
 ` : ""}${section(
     "Prompts — copy, don't retype",
-    (a.prompts || []).map(p => copyBlock(p.label, p.text, true))
-  )}${section("Links", (a.links || []).map(l => copyBlock(l.label, l.url, false)))}
+    (a.prompts || []).length
+      ? [
+          `      <div class="shellreq"><span class="where">Where</span>Inside the <strong>Claude terminal</strong> — the third window, with Claude already running in it.</div>`,
+          ...a.prompts.map(p => copyBlock(p.label, p.text, true)),
+        ]
+      : []
+  )}${section("Check your work", cmds.after)}${section("Links", (a.links || []).map(l => copyBlock(l.label, l.url, false)))}
   <h2>You are done when</h2>
   <div class="success">${a.success}</div>
 ${a.troubleshooting ? `
@@ -1468,7 +1513,16 @@ ${a.cheat.map(c => `      <p>${c}</p>`).join("\n")}
     }
   </nav>`;
 
-  fs.writeFileSync(path.join(PAGES, fileFor(a, i)), page({ title: a.title, body }));
+  // A pathway bar on a page with nothing pathway-dependent asks a question the page
+  // never uses - and now that the terminal-opening commands have left the activities,
+  // some pages are prompts and nothing else. Derived from the rendered page rather
+  // than from a property, so an activity that grows its first platform-specific
+  // command gets the bar without anybody remembering to add it.
+  const gated = /data-only="|data-pathway="/.test(body);
+  fs.writeFileSync(
+    path.join(PAGES, fileFor(a, i)),
+    page({ title: a.title, body: body.replace("<!--PATHBAR-->", gated ? platformStrip() : "") })
+  );
 });
 
 console.log(

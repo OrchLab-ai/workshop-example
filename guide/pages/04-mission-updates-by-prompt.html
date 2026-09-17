@@ -586,36 +586,25 @@ nav.pager a:hover { background: var(--surface); }
   <div class="cp">
     <span>start from <b>cp-02</b></span>
     <span>produces <b>cp-03</b></span>
-    <span>behind? <code>./checkpoint.sh 2</code></span>
   </div>
 
 
   <div data-needs-pathway>
-  <h2>What to do</h2>
-  <ol>
-    <li>Start Claude Code <strong>in the container</strong> — <code>claude</code>, from the shell you opened, not from your own machine.</li>
-    <li>Paste the micro-prompt. Keep whatever you get and do not fix it: this attempt is the baseline, and its weaknesses are the whole point.</li>
-    <li>Look at what it built in your own browser at <code>http://localhost:5173</code>. Vite reloads as the agent edits files, so there is nothing to restart.</li>
-    <li>Exit Claude Code and start it again before the mega-prompt, so the second attempt begins with no memory of the first.</li>
-    <li>Compare the two, and note what each prompt left the agent to guess at.</li>
-  </ol>
-
-  <h2>Commands</h2>
-      <div class="shellreq"><span class="where">Where</span>Run these in <strong>two places — your machine, and the container</strong>. Every command block is badged with the window it belongs in. <strong>Host terminal</strong> is <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span>, from the root of your <code>workshop-example</code> clone; <strong>work terminal</strong> and <strong>Claude terminal</strong> are both shells inside the container — see <a href="start-your-day.html">Start your day</a>.</div>
+  <details class="trouble compact">
+  <summary>Didn't finish the last activity?
+    <span class="cta">Click here to catch up</span>
+  </summary>
+  <div class="tr-body">
+    <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
   <div class="copyblock">
-    <div class="cb-head"><span>Jump to the starting checkpoint</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
     <pre>./checkpoint.sh 2</pre>
   </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Start Claude Code</span><span class="loc claude">claude terminal</span><button type="button">Copy</button></div>
-    <pre>claude</pre>
   </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Look at what it built — the site reloads as files change</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
-    <pre>http://localhost:5173</pre>
-  </div>
+</details>
 
   <h2>Prompts — copy, don't retype</h2>
+      <div class="shellreq"><span class="where">Where</span>Inside the <strong>Claude terminal</strong> — the third window, with Claude already running in it.</div>
   <div class="copyblock is-prompt">
     <div class="cb-head"><span>The micro-prompt — use exactly this, resist improving it</span><button type="button">Copy</button></div>
     <pre>Add Mission Updates to the app.</pre>
@@ -623,6 +612,13 @@ nav.pager a:hover { background: var(--surface); }
   <div class="copyblock is-prompt">
     <div class="cb-head"><span>The mega-prompt — starting point, make it yours</span><button type="button">Copy</button></div>
     <pre>Add a Mission Updates feature to the app. Campaign owners should be able to post updates to their campaign, and backers should be able to read them on the campaign page. Updates need a title, a body, and a timestamp. Only the campaign owner can post. Show the most recent updates first. Add API endpoints for creating and listing updates, a database migration, React components for the campaign page, and tests for all of it. Follow the existing patterns in the campaigns feature folder.</pre>
+  </div>
+
+  <h2>Check your work</h2>
+      <div class="shellreq"><span class="where">Where</span>Each block is badged with the window it belongs in, and the host terminal is <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> in your <code>workshop-example</code> folder. Not set up yet? <a href="start-your-day.html">Start your day</a>.</div>
+  <div class="copyblock">
+    <div class="cb-head"><span>Look at what it built — the site reloads as files change</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <pre>http://localhost:5173</pre>
   </div>
 
   <h2>You are done when</h2>

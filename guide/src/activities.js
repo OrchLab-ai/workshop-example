@@ -436,17 +436,22 @@ const HELP = {
 const FIRST_RUN_NOTE =
   "<strong>The first start of the day takes a few minutes, and only the first.</strong> The container installs the app's dependencies before it can serve anything. <code>./workshop/up.sh</code> is the reason step 1 is not a plain <code>docker compose up -d</code>: compose would report the <em>container</em> started — true within seconds — and hand you back a prompt while the app was still minutes away, so opening the URL then looks broken when it is merely early. The script waits, prints each phase as it happens, and tells you <strong>READY</strong> when the site actually answers. If it fails it says so, and names the log to read.";
 
+// The one line above an activity page's commands.
+//
+// NO `shell` KEY, on purpose. This used to open "Run these in two places - your
+// machine, and the container", which described the day's setup rather than the page's
+// commands, and stopped being true the moment the terminal-opening commands left
+// these pages: activity 02 now has exactly one command, in one window. By the time
+// anybody reads an activity page the three windows are open and every block is badged
+// with the one it belongs in, so this only has to say what a badge means.
 const WHERE = {
-  shell: "two places — your machine, and the container",
   // {shell} is replaced with the terminal application for the chosen pathway, from
   // PLATFORMS. It used to read "Git Bash (Windows) or Terminal (macOS)", which names
   // both and is therefore wrong for whoever is reading it - the leak that the
   // platform-visibility test now catches.
   cwd:
-    'Every command block is badged with the window it belongs in. ' +
-    '<strong>Host terminal</strong> is {shell}, from the root of your ' +
-    '<code>workshop-example</code> clone; <strong>work terminal</strong> and ' +
-    '<strong>Claude terminal</strong> are both shells inside the container — see ' +
+    'Each block is badged with the window it belongs in, and the host terminal is ' +
+    '{shell} in your <code>workshop-example</code> folder. Not set up yet? ' +
     '<a href="start-your-day.html">Start your day</a>.',
 }
 
@@ -525,8 +530,15 @@ const TERMINALS = {
           // is consumed by whatever is reading it at that instant rather than run in
           // the new shell. `claude` is a global npm binary in the image, so exec can
           // launch it directly and there is no second line to lose.
+          //
+          // THE FLAG IS ON FROM THE MORNING, not from activity 09. It used to be
+          // introduced two-thirds of the way through the day, which meant everybody
+          // spent Part 1 approving edits one at a time inside a container built to
+          // make that unnecessary - the twenty-minute challenge budget going on
+          // keystrokes that protect nothing. The isolation argument does not get
+          // stronger at 3pm; it is true from the moment this window opens.
           label: "Open a third window and start Claude in it",
-          code: "docker compose -f docker-compose.workshop.yml exec claude-container claude",
+          code: "docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions",
           where: "host",
         },
       ],
@@ -543,6 +555,11 @@ const TERMINALS = {
       where: "host",
     },
   },
+  // The flag on terminal 3's command, explained where the reader first meets it.
+  // It used to live on activities 09 and 10, in two identical copies, beside a
+  // command that no longer exists on either page.
+  flagNote:
+    "<strong>About that flag.</strong> <code>--dangerously-skip-permissions</code> turns off every approval prompt — the deck calls it YOLO mode, and on its own it is exactly as reckless as it sounds. What makes it reasonable <em>here</em> is the layer underneath it: this window is a shell inside the container, with its own filesystem and its own network, and nothing Claude does in it can reach the rest of your machine. That is the isolation the <em>Levels of Safety</em> slide puts first, and it is the only reason the speed is worth having. <strong>Do not take the flag home</strong>, where nothing is containing it.",
   // Windows-container mode runs the environment CHECK, not the workshop. Everything
   // the day itself uses is a Linux image, and one Docker daemon cannot serve both
   // modes at once.
@@ -563,6 +580,27 @@ const RECOVER = {
     code: "start-app.sh --restart",
     where: "container",
   },
+}
+
+// For the one person in the room who did not finish the last activity - and nobody
+// else. It replaces the numbered "What to do" list that used to open every page: the
+// instructions come from the front of the room now, and a reader working through the
+// activities in order already knows what this is.
+//
+// COLLAPSED, and phrased as a question, because that is the only reader it is for.
+// Open by default it would be the first thing everybody reads, which is how the old
+// list earned its "this is noise" verdict.
+//
+// The command is NOT in the activity's Commands list. The checkpoint jump is what you
+// run INSTEAD of the previous activity, not a step of this one, and every page was
+// opening with a command that most of the room must not run.
+const CATCH_UP = {
+  summary: "Didn't finish the last activity?",
+  cta: "Click here to catch up",
+  body:
+    "Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.",
+  label: "Catch up to the start of this activity",
+  where: "host",
 }
 
 const activities = [
@@ -626,19 +664,14 @@ const activities = [
     summary:
       "Pick one of three changes that would take half a day by hand. Twenty minutes with an agent that can see the whole repo.",
     where: WHERE,
+    // `after: true` puts a command BELOW the prompts rather than above them, under
+    // its own heading. The order on the page is then the order of the activity: here
+    // is the window, here is what to paste, here is how you check it. Before this,
+    // every page listed "run the CI gates" before the prompt whose work it checks.
     commands: [
       {
-        label: "Jump to the starting checkpoint — parks any work you have, then moves you",
-        code: "./checkpoint.sh 0",
-        where: "host",
-      },
-      {
-        label: "Start Claude Code. It runs in here, not on your machine",
-        code: "claude",
-        where: "claude",
-      },
-      {
         label: "Run the same gates CI runs, when you think you are done",
+        after: true,
         code: "./scripts/ci-check.sh",
         where: "container",
       },
@@ -656,15 +689,6 @@ const activities = [
         label: "Challenge 3 — New Feature",
         text: "Add a 'Trending Missions' section to the Explore page: the three most popular live campaigns by contributor count, shown above the main grid. Match the existing page's styling and add tests.",
       },
-    ],
-    steps: [
-      "Jump to the starting checkpoint, so everyone begins the challenge from the same code.",
-      "Get a shell in the container and start Claude Code there. It runs inside the container all day — that is what keeps it away from the rest of your machine.",
-      "Pick <strong>one</strong> challenge and paste its prompt.",
-      "Let the agent find the files itself. You do not need to know the layout, and you should not " +
-        "go hunting for the right folder first — the point of the exercise is that the agent has the " +
-        "whole repo in context and you do not.",
-      "Run <code>./scripts/ci-check.sh</code> in the container when you think you are done, and read what the agent changed before you believe it.",
     ],
     success:
       "The change is applied across every file it touches — including the ones you would have forgotten — and the tests still pass.",
@@ -686,22 +710,13 @@ const activities = [
     where: WHERE,
     commands: [
       {
-        label: "Jump to the starting checkpoint",
-        code: "./checkpoint.sh 1",
-        where: "host",
-      },
-      {
         label: "Confirm the agent has a browser to drive",
         code: "claude mcp list",
         where: "container",
       },
       {
-        label: "Start Claude Code, then ask it to look at the page itself",
-        code: "claude",
-        where: "claude",
-      },
-      {
         label: "Screenshots it takes land here, on your machine",
+        after: true,
         code: "screenshots/",
         where: "host",
       },
@@ -719,12 +734,6 @@ const activities = [
         label: "Ask it to check itself",
         text: "Use Playwright to verify the change actually works in the browser: click through the flow a user would take, and report anything that errors or looks wrong. Fix what you find, then screenshot the result.",
       },
-    ],
-    steps: [
-      "Start Claude Code in the container — Playwright and its MCP server are already installed, so there is nothing to wire up.",
-      "Paste one of the prompts. The words that matter are <strong>use Playwright</strong>: without them the agent will reason about the code instead of looking at the page.",
-      "Read what it reports back against what you can see yourself at <code>http://localhost:5173</code>.",
-      "Check the screenshots it wrote — they land in <code>screenshots/</code> on your own machine.",
     ],
     success:
       "You have two screenshots on disk that the agent captured itself, without you driving a browser.",
@@ -746,17 +755,8 @@ const activities = [
     where: WHERE,
     commands: [
       {
-        label: "Jump to the starting checkpoint",
-        code: "./checkpoint.sh 2",
-        where: "host",
-      },
-      {
-        label: "Start Claude Code",
-        code: "claude",
-        where: "claude",
-      },
-      {
         label: "Look at what it built — the site reloads as files change",
+        after: true,
         code: "http://localhost:5173",
         where: "host",
       },
@@ -770,13 +770,6 @@ const activities = [
         label: "The mega-prompt — starting point, make it yours",
         text: "Add a Mission Updates feature to the app. Campaign owners should be able to post updates to their campaign, and backers should be able to read them on the campaign page. Updates need a title, a body, and a timestamp. Only the campaign owner can post. Show the most recent updates first. Add API endpoints for creating and listing updates, a database migration, React components for the campaign page, and tests for all of it. Follow the existing patterns in the campaigns feature folder.",
       },
-    ],
-    steps: [
-      "Start Claude Code <strong>in the container</strong> — <code>claude</code>, from the shell you opened, not from your own machine.",
-      "Paste the micro-prompt. Keep whatever you get and do not fix it: this attempt is the baseline, and its weaknesses are the whole point.",
-      "Look at what it built in your own browser at <code>http://localhost:5173</code>. Vite reloads as the agent edits files, so there is nothing to restart.",
-      "Exit Claude Code and start it again before the mega-prompt, so the second attempt begins with no memory of the first.",
-      "Compare the two, and note what each prompt left the agent to guess at.",
     ],
     success:
       "Two working-ish attempts and a clear sense of what neither prompt managed to pin down.",
@@ -797,17 +790,8 @@ const activities = [
     where: WHERE,
     commands: [
       {
-        label: "Jump to the starting checkpoint",
-        code: "./checkpoint.sh 3",
-        where: "host",
-      },
-      {
-        label: "Start Claude Code",
-        code: "claude",
-        where: "claude",
-      },
-      {
         label: "The spec you are writing lives here",
+        after: true,
         code: "specs/mission-updates.spec.md",
         where: "container",
       },
@@ -840,12 +824,6 @@ You are a senior full-stack engineer working in this codebase.
       },
       { label: "Then build from it", text: "Read mission-updates.spec.md and implement it exactly. Check your work against the acceptance criteria before you tell me it's done." },
     ],
-    steps: [
-      "Read what is already in <code>specs/</code> first. The app ships standards, domain notes and ADRs — a spec that contradicts them will be argued with.",
-      "Write your spec in the container at <code>specs/mission-updates.spec.md</code>: who the agent is acting as, what context applies, which standards to follow, and how you will know it is done.",
-      "Start a fresh Claude Code session, hand it the spec, and ask for Mission Updates.",
-      "Compare the result against your two prompt attempts at <code>http://localhost:5173</code>. Same feature, same codebase, third try.",
-    ],
     success:
       "The difference between this and the mega-prompt is visible without being told what to look for.",
     cheat: [
@@ -865,17 +843,8 @@ You are a senior full-stack engineer working in this codebase.
     where: WHERE,
     commands: [
       {
-        label: "Jump to the starting checkpoint",
-        code: "./checkpoint.sh 4",
-        where: "host",
-      },
-      {
-        label: "Start Claude Code",
-        code: "claude",
-        where: "claude",
-      },
-      {
         label: "Your brand, and the tokens generated from it",
+        after: true,
         code: "specs/standards/brand.md\npackages/client/src/tokens.css",
         where: "container",
       },
@@ -889,12 +858,6 @@ You are a senior full-stack engineer working in this codebase.
         label: "2. Make the app wear it",
         text: "Read specs/standards/brand.md and regenerate packages/client/src/tokens.css from it. Change only the Tier 1 identity tokens — the semantic tokens and the components must not be edited. Then use Playwright to screenshot the campaign page so I can see the result.",
       },
-    ],
-    steps: [
-      "Start Claude Code in the container and let it interview you: who is this for, what should they feel, what are you not willing to look like.",
-      "Save the result as <code>specs/standards/brand.md</code>. There is a brand file there already — read it first to see the shape expected, then replace it with yours.",
-      "Ask the agent to regenerate <code>packages/client/src/tokens.css</code> from your brand, and to change nothing else.",
-      "Ask it to screenshot the result with Playwright. The image lands in <code>screenshots/</code> on your own machine; the live page is at <code>http://localhost:5173</code>.",
     ],
     success:
       "The whole app is wearing your brand, and no component file was edited to do it.",
@@ -916,17 +879,8 @@ You are a senior full-stack engineer working in this codebase.
     where: WHERE,
     commands: [
       {
-        label: "Jump to the starting checkpoint",
-        code: "./checkpoint.sh 5",
-        where: "host",
-      },
-      {
-        label: "Start Claude Code",
-        code: "claude",
-        where: "claude",
-      },
-      {
         label: "Prove it works before you believe it",
+        after: true,
         code: "./scripts/ci-check.sh",
         where: "container",
       },
@@ -936,13 +890,6 @@ You are a senior full-stack engineer working in this codebase.
         label: "The Socratic build",
         text: "Read mission-updates.spec.md and specs/standards/brand.md. Before writing any code, interview me about what the spec leaves ambiguous — the existing campaign routes, the database schema, API conventions, backward compatibility. Ask one question at a time. Then produce a brief, turn the brief into explicit tasks, and only then write the code. Run the tests when you're done.",
       },
-    ],
-    steps: [
-      "Start a fresh Claude Code session in the container and hand it both your spec and your brand.",
-      "Make it interview you <strong>before</strong> it writes anything. If it starts coding, stop it and ask what it still does not know.",
-      "Watch which questions it asks — routes, schema, API conventions, what happens to existing records. Those are the gaps your spec left.",
-      "Take it through brief, then tasks, then code.",
-      "Run <code>./scripts/ci-check.sh</code> in the container before you believe it, and look at the page yourself.",
     ],
     success: "Mission Updates works, tests pass, and it looks like yours.",
     cheat: [
@@ -964,11 +911,6 @@ You are a senior full-stack engineer working in this codebase.
     where: WHERE,
     commands: [
       {
-        label: "Jump to the starting checkpoint",
-        code: "./checkpoint.sh 6",
-        where: "host",
-      },
-      {
         label: "Read what it is about to do",
         code: "cat app/autonomous-demo/README.md",
         where: "host",
@@ -989,12 +931,6 @@ You are a senior full-stack engineer working in this codebase.
         where: "host",
       },
     ],
-    steps: [
-      "Read <code>app/autonomous-demo/README.md</code> on your own machine before starting anything — the loop is far easier to watch if you know what it intends to do.",
-      "Read the guardrails in <code>docker-compose.workshop.yml</code>: <code>MAX_ITERATIONS</code>, <code>COOLDOWN_SECONDS</code>, <code>TIMEOUT_SECONDS</code>, and the memory and CPU ceiling. These are the lesson, not the feature it builds.",
-      "Start it with the <code>l4</code> profile and follow the log. <strong>You are not driving this one</strong> — there is no prompt to answer.",
-      "Watch where it gets stuck as closely as where it succeeds, and stop it once you have seen enough.",
-    ],
     success:
       "Either it works, or you watch it hit the Loop of Death. Both are the intended outcome.",
     cheat: [
@@ -1006,7 +942,7 @@ You are a senior full-stack engineer working in this codebase.
   {
     slug: "plan-first",
     note:
-      "<strong>About that flag.</strong> <code>--dangerously-skip-permissions</code> turns off every approval prompt — the deck calls it YOLO mode, and on its own it is exactly as reckless as it sounds. What makes it reasonable <em>here</em> is the layer underneath it: Claude has been running inside a container since this morning, with its own filesystem and its own network. That is the isolation the <em>Levels of Safety</em> slide puts first, and it is the only reason the speed is worth having. <strong>Do not take the flag home to your own machine</strong>, where nothing is containing it.",
+      "<strong>Permission prompts are off in here.</strong> Your Claude terminal has been running <code>--dangerously-skip-permissions</code> since this morning — <a href=\"start-your-day.html\">why that is defensible in there, and nowhere else</a>.",
     title: "Plan-First Orchestration",
     intent: "I want one agent to plan and another to execute",
     part: "Part 3 — Orchestration",
@@ -1016,16 +952,6 @@ You are a senior full-stack engineer working in this codebase.
       "Split the work. A planning agent produces the plan; a separate coding agent executes it and nothing else.",
     where: WHERE,
     commands: [
-      {
-        label: "Jump to the starting checkpoint",
-        code: "./checkpoint.sh 7",
-        where: "host",
-      },
-      {
-        label: "Start Claude Code with permission prompts off — see the note below",
-        code: "claude --dangerously-skip-permissions",
-        where: "container",
-      },
     ],
     prompts: [
       {
@@ -1037,13 +963,6 @@ You are a senior full-stack engineer working in this codebase.
         text: "Read plan/ready/mission-updates-plan.md and execute it exactly as written. Do not redesign the approach — if a step looks wrong, stop and tell me rather than improvising. Run the tests named in the plan when you're done.",
       },
     ],
-    steps: [
-      "Start Claude Code in the container with permission prompts off — see the note below — and ask it for a <strong>plan only</strong>: affected files, likely breakages, ordered steps, and the tests that must pass.",
-      "Have it write the plan to a file, so the next session can read it rather than be told about it.",
-      "Exit, and start a <strong>fresh</strong> session. A planning agent that then writes the code itself is not a handoff.",
-      "Give the coding agent the plan as its instruction set and nothing else.",
-      "Compare the result to the autonomous run. The feature is the same; the only thing that changed is the handoff.",
-    ],
     success:
       "The quality gap against the autonomous attempt is obvious — and the only thing that changed was the handoff.",
     cheat: [
@@ -1054,7 +973,7 @@ You are a senior full-stack engineer working in this codebase.
   {
     slug: "automated-review",
     note:
-      "<strong>About that flag.</strong> <code>--dangerously-skip-permissions</code> turns off every approval prompt — the deck calls it YOLO mode, and on its own it is exactly as reckless as it sounds. What makes it reasonable <em>here</em> is the layer underneath it: Claude has been running inside a container since this morning, with its own filesystem and its own network. That is the isolation the <em>Levels of Safety</em> slide puts first, and it is the only reason the speed is worth having. <strong>Do not take the flag home to your own machine</strong>, where nothing is containing it.",
+      "<strong>Permission prompts are off in here.</strong> Your Claude terminal has been running <code>--dangerously-skip-permissions</code> since this morning — <a href=\"start-your-day.html\">why that is defensible in there, and nowhere else</a>.",
     title: "Automated Code Review",
     intent: "I want the agent to review the work and report up",
     part: "Part 3 — Orchestration",
@@ -1065,18 +984,8 @@ You are a senior full-stack engineer working in this codebase.
     where: WHERE,
     commands: [
       {
-        label: "Jump to the starting checkpoint",
-        code: "./checkpoint.sh 8",
-        where: "host",
-      },
-      {
         label: "Collect the diff the reviewer will read",
         code: "git diff main...HEAD > /tmp/review.diff",
-        where: "container",
-      },
-      {
-        label: "Start the reviewing agent",
-        code: "claude --dangerously-skip-permissions",
         where: "container",
       },
     ],
@@ -1090,12 +999,6 @@ You are a senior full-stack engineer working in this codebase.
         text: "Now summarise this for a non-technical stakeholder in three sentences: what changed, what the risk is, and what happens next. No jargon.",
       },
     ],
-    steps: [
-      "In the container, write the diff to a file. The reviewer should read what changed, not the whole repository.",
-      "Start a fresh session as a reviewing agent: risks, regressions, standards violations, and anything the tests do not cover.",
-      "Have it summarise the test results — passed, failed, and missing.",
-      "Ask for three sentences a non-technical stakeholder could act on: what changed, what the risk is, what happens next.",
-    ],
     success:
       "You planned a feature, delegated it, and reviewed it — without writing a line of code yourself.",
     cheat: [
@@ -1105,4 +1008,4 @@ You are a senior full-stack engineer working in this codebase.
   },
 ];
 
-module.exports = { activities, LINKS, REPO_URL, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER };
+module.exports = { activities, LINKS, REPO_URL, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER, CATCH_UP };

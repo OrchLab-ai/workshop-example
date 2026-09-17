@@ -27,6 +27,7 @@
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { join, dirname, resolve, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { spawn, spawnSync } from "node:child_process";
 
 // fileURLToPath, NOT new URL(...).pathname — the latter yields "/C:/..." on Windows
@@ -1196,11 +1197,6 @@ test("the setup page tells its sequence once, at one weight", null, () => {
     !/<h2[^>]*>What to do<\/h2>/.test(html),
     "the setup page must not also carry a What to do list — its Step N headings are the list"
   );
-  // ...and it must still be there on the activity pages, which have no such headings.
-  ok(
-    /<h2>What to do<\/h2>/.test(read("guide/pages/02-coding-challenges.html")),
-    "the activity pages still need their What to do list — they have no numbered sections to replace it"
-  );
 
   // No third telling: a numbered copy-block label is the small-grey-text version of a
   // step, and having both competes with the headings.
@@ -1749,6 +1745,161 @@ test("the workshop container does not stop at Claude's first-run onboarding", nu
       `${f} sets CLAUDE_CODE_SKIP_ONBOARDING, which is not a Claude Code variable - the gate is hasCompletedOnboarding in ~/.claude.json`
     );
   }
+});
+
+// The guide stopped carrying the instructions. They are given from the front of the
+// room, the reader is working through the activities in order, and a numbered summary
+// of the sections underneath was restating them in less detail — noise on every page,
+// and the workshop's teaching material sitting in a public repository besides.
+//
+// What a numbered list WAS carrying, and what had to survive it: how somebody who
+// fell behind gets back onto the same code as the room.
+test("an activity page asks nothing of a reader who is keeping up", null, () => {
+  const pages = readdirSync(join(ROOT, "guide/pages")).filter((f) => /^\d\d-/.test(f));
+  ok(pages.length >= 9, `expected the activity pages, found ${pages.length}`);
+
+  for (const f of pages) {
+    const html = read(`guide/pages/${f}`);
+
+    ok(
+      !/<h2[^>]*>What to do<\/h2>/.test(html),
+      `${f} still carries a What to do list — the instructions come from the room now`
+    );
+
+    // The catch-up, and the two things that make it right: collapsed, so it is not
+    // the first thing the room reads, and phrased as a question, so the one person
+    // it is for recognises themselves in it.
+    const detail = html.match(/<details class="trouble compact"[^>]*>[\s\S]*?<\/details>/);
+    ok(detail, `${f} has no catch-up block — a reader who fell behind has no way back to the room's code`);
+    ok(
+      !/<details class="trouble compact" open/.test(html),
+      `${f} opens its catch-up by default — it is for one reader, not for the room`
+    );
+    ok(
+      /checkpoint\.sh \d/.test(detail[0]),
+      `${f}'s catch-up does not name a checkpoint, which is the only thing it is for`
+    );
+
+    // The checkpoint jump belongs to the catch-up and nowhere else. Every page used
+    // to OPEN with it, so the first command most of the room saw was one they must
+    // not run — it would park the work they had just done.
+    const withoutCatchUp = html.replace(detail[0], "");
+    // The cheat sheet is the other direction - skipping AHEAD past an activity you
+    // ran out of time on - and that is a different command to a different rung.
+    const outsideCheat = withoutCatchUp.replace(/<details class="cheat">[\s\S]*?<\/details>/, "");
+    ok(
+      !/checkpoint\.sh \d/.test(outsideCheat),
+      `${f} offers a checkpoint jump outside the catch-up — most of the room is already on that rung, and running it parks their work`
+    );
+
+    // Three terminals, opened once in the morning. A page that tells you to start
+    // Claude is talking to somebody who is already typing into it.
+    // `claude` and `claude --flag` START a session. `claude mcp list` is a subcommand
+    // and runs in the work terminal, which is a different thing and stays allowed.
+    const bareClaude = [...withoutCatchUp.matchAll(/<pre>([^<]*)<\/pre>/g)]
+      .map((m) => m[1].trim())
+      .filter((c) => /^claude(\s|$)/.test(c) && c.split(/\s+/).slice(1).every((w) => w.startsWith("-")));
+    ok(
+      bareClaude.length === 0,
+      `${f} tells the reader to start Claude Code — that happens once, on start-your-day.html`
+    );
+
+    // And when there ARE prompts, say which window they go in. A prompt pasted into
+    // the host terminal is bash trying to run an English sentence.
+    if (/Prompts &mdash; copy|Prompts — copy/.test(html)) {
+      ok(
+        /Inside the <strong>Claude terminal<\/strong>/.test(html),
+        `${f} offers prompts without saying which window they are pasted into`
+      );
+    }
+  }
+});
+
+// Order is instruction. Every page used to list its commands above the prompts, so
+// "run the same gates CI runs, when you think you are done" was read before the
+// prompt whose work it checks — a page telling you to verify nothing. A command that
+// checks the work belongs below the thing that does it, under its own heading.
+test("a command that checks the work comes after the prompt that does it", null, () => {
+  const { activities } = createRequire(import.meta.url)(join(ROOT, "guide/src/activities.js"));
+  const esc = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // code -> after?, taken from the data rather than from a guess about which
+  // commands look like verification.
+  const flag = new Map();
+  for (const a of activities) for (const c of a.commands || []) flag.set(c.code, !!c.after);
+  ok([...flag.values()].some(Boolean), "no command is flagged `after` — this test would pass on any page");
+
+  let checked = 0;
+  for (const f of readdirSync(join(ROOT, "guide/pages")).filter((x) => /^\d\d-/.test(x))) {
+    const html = read(`guide/pages/${f}`);
+    const prompts = html.indexOf("<h2>Prompts");
+    if (prompts === -1) continue; // an activity with nothing to paste has no ordering to get wrong
+
+    for (const [code, after] of flag) {
+      const at = html.indexOf(`<pre>${esc(code)}</pre>`);
+      if (at === -1) continue;
+      checked++;
+      if (after) {
+        ok(
+          at > prompts,
+          `${f}: "${code.split("\n")[0]}" checks the work but is listed above the prompts — it reads as something to run before there is anything to check`
+        );
+      } else {
+        ok(
+          at < prompts,
+          `${f}: "${code.split("\n")[0]}" has to be run before the prompt is pasted, but is listed below it`
+        );
+      }
+    }
+  }
+  ok(checked >= 6, `expected to place several commands relative to the prompts, placed ${checked}`);
+
+  // The second group needs a heading of its own. Without one it is a bare run of
+  // copy blocks under the prompts, which reads as more prompts.
+  ok(
+    /<h2>Check your work<\/h2>/.test(read("guide/pages/02-coding-challenges.html")),
+    "the after-the-prompt commands must sit under their own heading"
+  );
+});
+
+// The container exists so that permission prompts are not the safety layer - that is
+// what the Levels of Safety slide argues, and it is why the image runs as a non-root
+// user in the first place. Opening the day WITHOUT the flag and introducing it at
+// activity 09 spent Part 1 approving edits one at a time inside the very thing that
+// made approving them unnecessary.
+test("the Claude terminal opens in the mode the day is actually run in", null, () => {
+  const day = read("guide/pages/start-your-day.html");
+
+  const opener = day.match(/<pre>(docker compose[^<]*claude-container claude[^<]*)<\/pre>/);
+  ok(opener, "start-your-day.html no longer carries the command that opens the Claude terminal");
+  ok(
+    /--dangerously-skip-permissions/.test(opener[1]),
+    `the Claude terminal opens without the flag ("${opener[1]}") — the room then approves every edit all morning inside a container built so they would not have to`
+  );
+
+  // A flag called dangerous, unexplained, is worse than no flag. It is explained
+  // where the reader first meets it, and exactly once.
+  ok(
+    /About that flag/.test(day),
+    "the flag appears on start-your-day.html with nothing saying why it is defensible here"
+  );
+  ok(
+    day.indexOf("About that flag") > day.indexOf("--dangerously-skip-permissions"),
+    "the explanation must sit with the command it explains, not above it"
+  );
+  const explained = guidePages().filter((p) => /About that flag/.test(read(p)));
+  ok(
+    explained.length === 1,
+    `the flag is explained on ${explained.length} pages (${explained.join(", ")}) — it was two identical copies before, which is how they drifted out of step with the command`
+  );
+
+  // The CLI shows a one-time disclaimer before honouring the flag, and SILENTLY
+  // DOWNGRADES to default mode without it. A workshop that seeds the flag and not
+  // the answer gets neither the dialog it expected nor the mode it asked for.
+  ok(
+    /bypassPermissionsModeAccepted/.test(codeOf("workshop/start-app.sh")),
+    "the container asks for bypass mode but never answers the disclaimer that gates it — Claude quietly falls back to asking for permission on every edit"
+  );
 });
 
 // The credential was prose with an "or" in it, and that is what produced the swap
