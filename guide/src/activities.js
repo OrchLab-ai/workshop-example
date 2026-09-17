@@ -14,11 +14,14 @@
 const REPO_URL = "https://github.com/OrchLab-ai/workshop-example";
 
 // Links worth having in one place — rendered on the index and on links.html.
+//
+// No support channel belongs in here. Somebody stuck on setup is routed to the
+// workshop team directly (see HELP below), not to a room where they have to wait
+// and chase — so this list stays what it says it is: reference material.
 const LINKS = [
   { label: "The workshop container (this repo)", url: REPO_URL },
   { label: "Starting point — cp-00", url: `${REPO_URL}/tree/cp-00` },
   { label: "Workshop deck", url: "https://orchlab.ai/workshop-deck" },
-  { label: "Discord — questions during and after", url: "https://discord.gg/RJS785wXmv" },
   { label: "Playwright in Docker — reference implementation", url: "https://github.com/OrchLab-ai/playwright-in-docker" },
   { label: "The bug AI found in seconds (HdrHistogram PR)", url: "https://github.com/HdrHistogram/HdrHistogram.NET/pull/130/" },
 ];
@@ -46,13 +49,83 @@ const DOCKER_USERS_NOTE =
 // Where to run things, and what the token step actually involves. Both questions
 // come up on every pathway, so the text lives here once rather than three times.
 const CWD_CLONE =
-  "Start from wherever you keep projects — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.";
+  "Start from wherever you keep your code — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.";
 
-const TOKEN_NOTE =
-  "<strong>About step 3.</strong> <code>claude setup-token</code> is a command of the Claude Code CLI, so it needs Claude Code installed on <strong>your own machine</strong> (<code>npm install -g @anthropic-ai/claude-code</code>) and a Claude subscription. It opens a browser window to sign in to your Claude account, and then prints a long-lived token to the terminal. Copy that value into <code>.env</code> as <code>CLAUDE_CODE_OAUTH_TOKEN</code>. Run it on your host machine, never inside the container.";
+// "Have you already done this?" — asked because this one page serves two people who
+// need almost nothing in common.
+//
+// Setup is done BEFORE the workshop; the environment check is re-run ON the day, and
+// on the day the first three steps are noise: the repo is cloned, .env is filled in,
+// and all anyone wants is the one command that proves it still works. Rendering the
+// whole setup for them made the actual instruction the fourth thing on the page.
+//
+// Two states, remembered like the platform, and reversible from the bar it leaves
+// behind - somebody who answers "yes" and then finds app/ missing needs one click to
+// get the full guide back.
+const SETUP_STATES = {
+  question: "Have you set this machine up already?",
+  detail:
+    "Setup is a one-off you do before the workshop. The check itself you can run as often as you like — including on the morning, to prove nothing has drifted.",
+  options: [
+    {
+      id: "done",
+      label: "Yes — just run the check",
+      sub: "Repo cloned, <code>.env</code> filled in",
+    },
+    {
+      id: "fresh",
+      label: "No — start from the beginning",
+      sub: "Clone, <code>.env</code>, credential, then check",
+    },
+  ],
+  labels: { done: "Running the check only", fresh: "Full setup" },
+};
 
-const TOKEN_ALT_NOTE =
-  "<strong>No subscription, or you would rather use an API key?</strong> Create one at <a href=\"https://console.anthropic.com\">console.anthropic.com</a>, put it in <code>.env</code> as <code>ANTHROPIC_API_KEY</code>, and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> blank. Set <strong>one</strong> of the two, not both. Either way the value is a credential: <code>.env</code> is gitignored, and it should not be pasted into chat along with a report.";
+// The credential, as two exclusive sections rather than a list of options.
+//
+// WHY EXCLUSIVE. Presented as prose with an "or", this produced the single most
+// expensive failure of the setup: an API key pasted into the OAuth line. The two
+// values are near-identical - both sk-ant-, both about 108 characters - so the only
+// thing that prevents the mistake is never showing the reader the line that is not
+// theirs. Opening one closes the other, so at most one set of instructions is on
+// screen at a time and there is nothing to accidentally follow.
+//
+// `open: true` on the subscription section: it is what most of the room has, and an
+// accordion with nothing open reads as a page that has not loaded.
+//
+// Adding a provider later (Cursor CLI, Codex) means adding an entry HERE - a third
+// exclusive section with its own command - not another line of prose about
+// alternatives.
+const CREDENTIALS = {
+  intro:
+    "You need <strong>one</strong> credential in <code>.env</code>. Open whichever of these describes you — and ignore the other one completely.",
+  options: [
+    {
+      id: "subscription",
+      open: true,
+      summary: "I have a Claude subscription",
+      hint: "Most people. Pro, Max or Team.",
+      body:
+        "Run this on <strong>your own machine</strong>, never inside the container. It needs Claude Code installed locally — <code>npm install -g @anthropic-ai/claude-code</code> — and it opens a browser for you to sign in. It then prints a long-lived token.",
+      command: { label: "On your own machine", code: "claude setup-token", where: "host" },
+      after:
+        "The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> and leave <code>ANTHROPIC_API_KEY</code> commented out.",
+    },
+    {
+      id: "apikey",
+      summary: "I have an Anthropic API key",
+      hint: "From console.anthropic.com. Billed per token.",
+      body:
+        'Create one at <a href="https://console.anthropic.com">console.anthropic.com</a> if you do not have it yet. There is nothing to install and nothing to run.',
+      after:
+        "The key starts <code>sk-ant-api03-</code>. Uncomment <code>ANTHROPIC_API_KEY</code> in <code>.env</code>, paste it there, and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> empty.",
+    },
+  ],
+  // Shown under both, because it is the thing neither section can tell you on its
+  // own: that the other one exists and looks the same.
+  warning:
+    "<strong>The two are not interchangeable and they look almost identical</strong> — both start <code>sk-ant-</code>, both run to about 108 characters. Only the prefix tells them apart, and putting one on the other's line fails <em>silently</em>: <code>.env</code> looks right, all six checks pass, and Claude asks you to log in anyway. Check 4 tests the prefix so that it fails loudly instead. Either value is a credential: <code>.env</code> is gitignored, and it must never be pasted into a message or a screenshot.",
+};
 
 const PLATFORMS = [
   {
@@ -63,13 +136,13 @@ const PLATFORMS = [
     confirm: "Docker Desktop on macOS only runs Linux containers — there is nothing to determine.",
     shell: "Terminal",
     cwd: CWD_CLONE,
-    notes: [TOKEN_NOTE, TOKEN_ALT_NOTE],
     commands: [
-      { label: "1. Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
-      { label: "2. Create your .env", code: "cp .env.example .env" },
-      { label: "3. Get your token, then paste it into .env", code: "claude setup-token" },
-      { label: "4. Run the check", code: "./verify-setup.sh" },
-      { label: "If port 8080 is already taken", code: "VERIFY_PORT=8081 ./verify-setup.sh" },
+      { label: "Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
+      { label: "Create your .env", code: "cp .env.example .env" },
+      ],
+    checkCommands: [
+      { label: "Run the check", code: "./verify-setup.sh" },
+      { label: "Only if the check says 5173 is taken", code: "echo WORKSHOP_PORT=5174 >> .env\n./verify-setup.sh" },
     ],
   },
   {
@@ -84,13 +157,14 @@ const PLATFORMS = [
       'the commands below are POSIX shell and will not run there.',
     shell: "Git Bash",
     cwd: CWD_CLONE,
-    notes: [TOKEN_NOTE, TOKEN_ALT_NOTE, DOCKER_USERS_NOTE],
+    notes: [DOCKER_USERS_NOTE],
     commands: [
-      { label: "1. Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
-      { label: "2. Create your .env", code: "cp .env.example .env" },
-      { label: "3. Get your token, then paste it into .env", code: "claude setup-token" },
-      { label: "4. Run the check", code: "./verify-setup.sh" },
-      { label: "If port 8080 is already taken", code: "VERIFY_PORT=8081 ./verify-setup.sh" },
+      { label: "Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
+      { label: "Create your .env", code: "cp .env.example .env" },
+      ],
+    checkCommands: [
+      { label: "Run the check", code: "./verify-setup.sh" },
+      { label: "Only if the check says 5173 is taken", code: "echo WORKSHOP_PORT=5174 >> .env\n./verify-setup.sh" },
     ],
   },
   {
@@ -103,21 +177,251 @@ const PLATFORMS = [
     shell: "PowerShell",
     cwd: CWD_CLONE,
     commands: [
-      { label: "1. Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
-      { label: "2. Create your .env", code: "copy .env.example .env" },
-      { label: "3. Get your token, then paste it into .env", code: "claude setup-token" },
-      { label: "4. Run the check", code: "powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
-      { label: "If port 8080 is already taken", code: "$env:VERIFY_PORT=8081; powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
+      { label: "Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
+      { label: "Create your .env", code: "copy .env.example .env" },
+      ],
+    checkCommands: [
+      { label: "Run the check", code: "powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
+      { label: "Only if the check says 5173 is taken", code: "$env:WORKSHOP_PORT=5174\npowershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
     ],
     notes: [
-      TOKEN_NOTE,
-      TOKEN_ALT_NOTE,
       "The first run pulls a ~2 GB Windows base image, so give it longer than you would expect. Later runs reuse it.",
       DOCKER_USERS_NOTE,
       'If <strong>Switch to Windows containers</strong> appears to do nothing, the <code>Containers</code> optional feature is off. It is separate from Hyper-V. Enable it from an elevated PowerShell and <strong>reboot</strong>: <code>Enable-WindowsOptionalFeature -Online -FeatureName Containers -All -NoRestart</code>',
     ],
   },
 ];
+
+// A sentence that is only true on Windows, inside prose that is shared. The
+// block-level `only:` field gates whole troubleshooting entries; this gates a clause.
+// Same data-only contract, so the one script hides both and nothing new is needed:
+// with no pathway chosen it stays visible, which is the right default for somebody
+// reading the troubleshooting list before they have answered the picker.
+const winOnly = t => `<span data-only="windows-linux windows-windows">${t}</span>`;
+// Narrower still: true on the Git Bash pathway and NOT on the PowerShell one, which
+// is a distinction it is very easy to lose when both are "Windows".
+const gitBashOnly = t => `<span data-only="windows-linux">${t}</span>`;
+
+// What actually goes wrong, and what to do about it.
+//
+// WHY THIS EXISTS: the check already prints a cause and a fix when it fails, but
+// the person reading it is on their own, usually the night before, and the failure
+// they hit is the one thing they cannot search this guide for. So every failure the
+// script can report is written down here in one place, ahead of time.
+//
+// SOURCE OF TRUTH: the `fail_check` calls in verify-setup.sh. Each entry below
+// quotes the cause line the script prints verbatim, so an attendee can match what
+// is on their screen to an entry here without interpreting anything. If a fix
+// changes in the script, change it here in the same commit — a fix that disagrees
+// with the one on screen is worse than no fix at all.
+//
+// `only` narrows an entry — or a single command inside one — to the pathways it
+// actually applies to, using the same ids as PLATFORMS. Omit it and the entry shows
+// on every pathway, which is the right default: most of these failures have nothing
+// to do with the operating system. Use it for the ones that genuinely do, and for
+// commands that are a different language in a different shell.
+//
+// Nothing is hidden until a pathway is chosen. Somebody who scrolls straight to the
+// troubleshooting section without answering the picker sees everything — showing a
+// Windows reader one macOS line costs far less than showing a stuck reader nothing.
+const TROUBLESHOOTING = [
+  {
+    check: "Before check 1",
+    only: ["windows-linux", "windows-windows"],
+    symptom: "Docker is in Windows-container mode — run windows\\verify.ps1 instead",
+    fix:
+      "Not a failure, and nothing is broken. Every image <code>./verify-setup.sh</code> uses is a " +
+      "Linux image, and one Docker daemon serves one mode. You do <strong>not</strong> need to " +
+      "switch modes — there is a Windows-container check that proves the same six things.",
+    commands: [
+      { label: "Run this instead", code: "powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
+    ],
+  },
+  {
+    check: "Check 1",
+    symptom: "the 'git' command was not found on your PATH",
+    fix:
+      "git is one of the three things this workshop needs on your own machine — the other two are " +
+      "Docker and Claude Code. Install it from <a href=\"https://git-scm.com/downloads\">git-scm.com/downloads</a>, " +
+      "then re-run the check. " +
+      gitBashOnly(
+        "Installing Git for Windows is also what gives you <strong>Git Bash</strong>, which is the " +
+          "shell the whole setup expects."
+      ),
+  },
+  {
+    check: "Check 1",
+    symptom: "app/ exists but is not a git clone",
+    fix:
+      "You almost certainly downloaded the app as a ZIP rather than cloning it. A copy of the files " +
+      "is not enough: the checkpoint ladder <em>is</em> the git tags, so <code>./checkpoint.sh</code> " +
+      "has nothing to move you between. The check will not delete that folder for you — you may have " +
+      "put work in it — so move it aside yourself and let the check clone it properly.",
+    // Both halves of this are shell-specific: mv/move, and which check to re-run.
+    // Ungated, it handed a PowerShell attendee two commands neither of which works.
+    commands: [
+      {
+        label: "Move it aside, then re-run",
+        code: "mv app app-old\n./verify-setup.sh",
+        only: ["macos", "windows-linux"],
+      },
+      {
+        label: "Move it aside, then re-run",
+        code: "move app app-old\npowershell -ExecutionPolicy Bypass -File windows\\verify.ps1",
+        only: ["windows-windows"],
+      },
+    ],
+  },
+  {
+    check: "Check 1",
+    symptom: "could not clone the workshop app",
+    fix:
+      "Almost always the network — a VPN or a corporate proxy is the usual culprit, and the " +
+      "repository itself is public. Check your connection and re-run. The full git output is in " +
+      "<code>.verify-logs/01-clone.log</code>, and it names the real cause when it is not the network.",
+  },
+  {
+    check: "Check 2",
+    symptom: "Docker is installed but the daemon is not answering",
+    fix:
+      "Start Docker Desktop and wait for the whale icon to <strong>stop animating</strong> before you " +
+      "re-run — a daemon that is still starting looks exactly like one that is down. If you have " +
+      "restarted it twice and nothing changes, read the next entry: a permissions problem looks " +
+      "identical from here, and no amount of restarting will fix it.",
+  },
+  {
+    check: "Check 2",
+    // Not macOS: Docker Desktop there has no group gating this, which is why the
+    // prerequisites table in the README lists nothing against it.
+    only: ["windows-linux", "windows-windows"],
+    symptom: "you do not have permission to reach Docker / the Docker socket",
+    fix:
+      "<strong>The daemon is running fine.</strong> It simply will not talk to you, and restarting it " +
+      "cannot change that — this is the one failure that sends people into a loop they can never win. " +
+      "It needs an administrator once, and then a <strong>new login session</strong>: group rights are " +
+      "granted at logon, so nothing changes until you sign out and back in.",
+    commands: [
+      { label: "In an ELEVATED PowerShell, then sign out of Windows and back in", code: "Add-LocalGroupMember -Group docker-users -Member <your-username>" },
+      // Shown only to somebody who has not picked a pathway, which is where a Linux
+      // host lands: the picker offers macOS and Windows, and Linux is neither.
+      { label: "On a Linux host instead — then log out and back in", code: "sudo usermod -aG docker $USER", only: [] },
+    ],
+  },
+  {
+    check: "Check 3",
+    symptom: "it has been sitting on check 3 for several minutes",
+    fix:
+      "<strong>Nothing is wrong, and this is the check earning its keep.</strong> The first run " +
+      "downloads the Playwright base image — roughly 2&nbsp;GB — then builds three images on it: the " +
+      "check's own, the workshop container you spend the day inside, and the Part 3 agent. Every byte " +
+      "it fetches now is a byte the workshop would otherwise fetch on the day, while a room waits. The " +
+      "row tells you what Docker is doing and how long it has been at it " +
+      "(<code>pulling 742.8MB / 1.9GB 96s</code>). Later runs reuse it all and check 3 takes seconds. " +
+      "This is the reason to run the check the night before rather than at 09:05.",
+  },
+  {
+    check: "Check 3",
+    symptom: "the container image failed to build",
+    fix:
+      "Almost always the network, for the same reason as above — the build has to pull that base image. " +
+      "Check your connection and re-run; the full build output is in <code>.verify-logs/03-build.log</code>. " +
+      winOnly(
+        "If that log mentions Windows containers rather than a download, you are in the wrong " +
+          "container mode — see the first entry on this list."
+      ),
+  },
+  {
+    check: "Check 4",
+    symptom: "no credential found — .env has neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY",
+    fix:
+      "The most common failure of the six, and it is usually one of two things: <code>.env</code> was " +
+      "never created from <code>.env.example</code>, or the credential was pasted into the example file " +
+      "instead of into <code>.env</code>. Then open <em>Your credential</em> above and follow whichever " +
+      "of the two sections describes you — one of them, not both.",
+    commands: [
+      { label: "Create .env if you have not already", code: "cp .env.example .env", only: ["macos", "windows-linux"] },
+      { label: "Create .env if you have not already", code: "copy .env.example .env", only: ["windows-windows"] },
+    ],
+  },
+  {
+    check: "Check 4",
+    symptom: "CLAUDE_CODE_OAUTH_TOKEN is not a setup-token value / ANTHROPIC_API_KEY is not an API key",
+    fix:
+      "<strong>The credential is on the wrong line.</strong> The two values are near-identical — both " +
+      "start <code>sk-ant-</code>, both around 108 characters — so this is easy to do and impossible to " +
+      "spot. Only the prefix tells them apart: <code>sk-ant-oat01-</code> comes from " +
+      "<code>claude setup-token</code> and belongs on <code>CLAUDE_CODE_OAUTH_TOKEN</code>; " +
+      "<code>sk-ant-api03-</code> is an API key from the Anthropic console and belongs on " +
+      "<code>ANTHROPIC_API_KEY</code>. Move it to the other line, leave the one you vacated empty, and " +
+      "re-run the check. <strong>This check exists because the failure is otherwise silent:</strong> " +
+      "without it the value is accepted, all six checks pass, and Claude asks you to log in later with " +
+      "nothing pointing at the cause.",
+  },
+  {
+    check: "Check 4",
+    symptom: "the Claude Code CLI did not start inside the container",
+    fix:
+      "The credential is present but the container could not use it. Read " +
+      "<code>.verify-logs/04-claude.log</code>: if it mentions authentication, the token has expired or " +
+      "was truncated on the way into <code>.env</code> — re-run <code>claude setup-token</code> and " +
+      "replace the value. Check there is no stray quote or line break around it.",
+  },
+  {
+    check: "Check 5",
+    symptom: "port 5173 is already in use — this is the port the workshop needs",
+    fix:
+      "Check 5 deliberately claims <strong>the port the workshop itself runs on</strong>, not a spare " +
+      "one, so a pass means the day will work rather than merely that some port was free. 5173 is " +
+      "Vite's default, so the usual culprit is another project of yours already running. If you have " +
+      "the workshop stack up from earlier, that is what is holding it: " +
+      "<code>docker compose -f docker-compose.workshop.yml down</code>. Otherwise move the workshop to " +
+      "another port — put it in <code>.env</code> and it is picked up by the check <em>and</em> the " +
+      "stack, so every other command in this guide stays exactly as written.",
+    commands: [
+      { label: "Move the workshop to another port, once", code: "echo WORKSHOP_PORT=5174 >> .env\n./verify-setup.sh", only: ["macos", "windows-linux"] },
+      { label: "Move the workshop to another port, once", code: "$env:WORKSHOP_PORT=5174\npowershell -ExecutionPolicy Bypass -File windows\\verify.ps1", only: ["windows-windows"] },
+    ],
+  },
+  {
+    check: "Check 6",
+    symptom: "Playwright reported success but screenshots/verify.png was not written",
+    fix:
+      "The browser rendered the page; the container then could not write the file back out to your " +
+      "machine. That is a Docker file-sharing permission, not a browser problem. In Docker Desktop, " +
+      "check this folder is shared: <strong>Settings &rarr; Resources &rarr; File Sharing</strong>.",
+  },
+  {
+    check: "Check 6",
+    symptom: "the headless browser could not render and capture the page",
+    fix:
+      "Read <code>.verify-logs/06-screenshot.log</code> and re-run. This one is rare, and on a machine " +
+      "where checks 1–5 passed it is usually transient — the site had not finished starting. If it " +
+      "fails twice with the same error, that is the point to ask rather than keep re-running.",
+  },
+];
+
+// When to stop debugging and ask. Deliberately specific about WHEN, because the
+// failure mode we actually see is somebody quietly re-running the check for forty
+// minutes rather than spending thirty seconds asking.
+//
+// ASK US, not a channel. There is deliberately no community link in this section: a
+// setup failure before the day is ours to fix, and pointing somebody at a chat room
+// turns it into their job to chase an answer. Everything here routes to a human on
+// the workshop team.
+const HELP = {
+  steps: [
+    "<strong>Read the FAIL block first.</strong> The check stops at the first failure and prints the cause and the fix. It is not a stack trace — it is written to be acted on.",
+    "<strong>Re-run once.</strong> A daemon that was still starting, or a download that dropped, passes on the second run. Once.",
+    "<strong>Same failure twice? Stop.</strong> Re-running a third time will not change the answer, and this is the moment people lose an evening. Everything needed to diagnose it is already on disk.",
+    "<strong>Ask us, with the report attached.</strong> Come straight to the workshop team — reply to whoever sent you this guide, and send <code>verify-report.txt</code> with it. That file is written next to the script on every run and says exactly which check failed and why, so attaching it is the difference between an answer in minutes and a conversation over several messages.",
+  ],
+  note:
+    "<strong>Never send us your <code>.env</code>, your token, or your API key</strong> — not in a message, not in a screenshot, not to a facilitator, and we will never ask for them. <code>verify-report.txt</code> is written to be safe to share: it reports whether a credential was <em>found</em>, never what it is. If you have already pasted a token somewhere, run <code>claude setup-token</code> again to replace it.",
+  onTheDay:
+    "<strong>On the day itself, just raise your hand.</strong> One of us will come to you — that is what we are there for, and it is always faster than working at it alone. Do not spend the first exercise fixing your setup — the workshop is built so that falling behind never locks you out: <code>./checkpoint.sh</code> puts you exactly where the room is, and nothing you have written is discarded when it does.",
+  logsNote:
+    "Detailed output from every step is kept in <code>.verify-logs/</code>, one file per check. You should not need it — the FAIL block names the cause — but when a fix below says \"read the log\", that is where it is.",
+};
 
 // Where things run, stated once.
 //
@@ -129,34 +433,137 @@ const PLATFORMS = [
 //
 // Each command block carries its own badge, because by the third command nobody
 // remembers a heading.
+const FIRST_RUN_NOTE =
+  "<strong>The first start of the day takes a few minutes, and only the first.</strong> The container installs the app's dependencies before it can serve anything. <code>./workshop/up.sh</code> is the reason step 1 is not a plain <code>docker compose up -d</code>: compose would report the <em>container</em> started — true within seconds — and hand you back a prompt while the app was still minutes away, so opening the URL then looks broken when it is merely early. The script waits, prints each phase as it happens, and tells you <strong>READY</strong> when the site actually answers. If it fails it says so, and names the log to read.";
+
 const WHERE = {
   shell: "two places — your machine, and the container",
+  // {shell} is replaced with the terminal application for the chosen pathway, from
+  // PLATFORMS. It used to read "Git Bash (Windows) or Terminal (macOS)", which names
+  // both and is therefore wrong for whoever is reading it - the leak that the
+  // platform-visibility test now catches.
   cwd:
-    'Commands marked <strong>your machine</strong> run in Git Bash (Windows) or Terminal ' +
-    '(macOS), from the root of your <code>workshop-example</code> clone. Commands marked ' +
-    '<strong>in the container</strong> run after you are inside it — see ' +
-    '<em>Start your day</em> below.',
+    'Every command block is badged with the window it belongs in. ' +
+    '<strong>Host terminal</strong> is {shell}, from the root of your ' +
+    '<code>workshop-example</code> clone; <strong>work terminal</strong> and ' +
+    '<strong>Claude terminal</strong> are both shells inside the container — see ' +
+    '<a href="start-your-day.html">Start your day</a>.',
 }
 
-// The one-time start, repeated on every activity page because people arrive at the
-// guide mid-morning having closed their terminal.
-const DAILY_START = [
-  {
-    label: "1. Start the stack (once a day — leave it running)",
-    code: "docker compose -f docker-compose.workshop.yml up -d",
-    where: "host",
+// The morning start: three windows, and the command that opens each one. It renders
+// on start-your-day.html and NOWHERE ELSE.
+//
+// COMMANDS LIVE INSIDE THE STEPS. They used to be a separate numbered list below this
+// block, which meant reading the three terminals, scrolling past them, and then
+// matching "2. Get a shell inside the container" back onto "terminal 2" by name. Two
+// numbered lists describing the same three things, and the mapping left to the
+// reader. One list now, and each window carries the command that opens it.
+//
+// It also used to be spliced into every activity's commands, on the reasoning that
+// people arrive at the guide mid-morning having closed their terminal. That reasoning
+// was wrong twice over: it is done once a day, by a room that has just been walked
+// through it on the slides, and repeated above ten activities the block was longer
+// than the activity underneath it. Every page links here from its header.
+//
+// `shell` in each body is rendered per-pathway from PLATFORMS, so the window an
+// attendee is told to open is the same one their setup pathway told them to use.
+const TERMINALS = {
+  intro:
+    "Open <strong>three terminal windows</strong> before you start and keep all three open all day. Almost every confusion about where a command goes is really a confusion about which of these you are in.",
+  list: [
+    {
+      n: "1",
+      where: "host",
+      title: "The host terminal",
+      body:
+        "A {shell} window in your <code>workshop-example</code> folder — the only one of the three that is <em>not</em> inside the container. Only two kinds of command run here: <code>docker</code> and <code>./checkpoint.sh</code>. Nothing you type here touches the app.",
+      commands: [
+        {
+          // Not a bare `docker compose up -d`. That reports the CONTAINER started -
+          // true within seconds - and returns, while the app inside is still minutes
+          // from answering. This waits, narrates what it is waiting for, and says
+          // READY when the site genuinely responds. Raw compose still works; it just
+          // tells you less.
+          //
+          // ONE command, not one per pathway. A PowerShell variant was drafted here
+          // and removed: the windows-windows pathway cannot run this stack at all
+          // (the images are Linux), so offering it a command that "works" would
+          // contradict the note below, which tells that pathway to switch Docker to
+          // Linux containers. Two of the three pathways share this exactly, and the
+          // third is not a shell problem.
+          label: "Start the stack, and wait until the app is really up",
+          code: "./workshop/up.sh",
+          where: "host",
+        },
+      ],
+    },
+    {
+      n: "2",
+      where: "container",
+      title: "The work terminal",
+      body:
+        "Open a second {shell} window and run this. You are then <em>inside</em> the container: this is where you run tests, <code>./scripts/ci-check.sh</code>, git commands against the app, and anything else that needs to see the code. Everything badged <em>work terminal</em> goes here.",
+      commands: [
+        {
+          label: "Get a shell inside the container",
+          code: "docker compose -f docker-compose.workshop.yml exec claude-container bash",
+          where: "host",
+        },
+      ],
+    },
+    {
+      n: "3",
+      where: "claude",
+      title: "The Claude terminal",
+      body:
+        "Open a third {shell} window and run this — it drops you straight into Claude, inside the container. Also a container shell, but it gets its own badge and its own window for one reason: <strong>keep it separate.</strong> Claude holds its conversation in that session — exiting it to run one command throws the context away, and that context is most of what you are paying for.",
+      commands: [
+        {
+          // ONE command, not `exec ... bash` followed by `claude` on a second line.
+          // Those two lines copy as one paste, and the paste does not survive: the
+          // first line starts an interactive bash that takes over stdin, and `claude`
+          // is consumed by whatever is reading it at that instant rather than run in
+          // the new shell. `claude` is a global npm binary in the image, so exec can
+          // launch it directly and there is no second line to lose.
+          label: "Open a third window and start Claude in it",
+          code: "docker compose -f docker-compose.workshop.yml exec claude-container claude",
+          where: "host",
+        },
+      ],
+    },
+  ],
+  // Not a terminal, so it is not a fourth numbered window - but it is the thing that
+  // tells you the three above worked.
+  after: {
+    body:
+      "That is the whole morning. You will know it worked when the app loads:",
+    command: {
+      label: "Check the site is up — open this in your browser",
+      code: "http://localhost:5173",
+      where: "host",
+    },
   },
-  {
-    label: "2. Get a shell inside the container",
-    code: "docker compose -f docker-compose.workshop.yml exec claude-container bash",
-    where: "host",
+  // Windows-container mode runs the environment CHECK, not the workshop. Everything
+  // the day itself uses is a Linux image, and one Docker daemon cannot serve both
+  // modes at once.
+  note: {
+    only: ["windows-windows"],
+    body:
+      "<strong>You are in Windows-container mode.</strong> That is fine for the environment check — there is a Windows-container version of it — but the workshop stack itself is Linux images, and Docker Desktop cannot run both modes at once. Switch Docker Desktop to <strong>Linux containers</strong> before the first activity, and use Git Bash for the commands above. Ask us on the day if you are unsure; do not spend the morning on it.",
   },
-  {
-    label: "3. Check the site is up — open this in your browser",
-    code: "http://localhost:5173",
-    where: "host",
+};
+
+const RECOVER = {
+  summary: "The app stopped working?",
+  cta: "Click here to restart it",
+  body:
+    "Only if <code>http://localhost:5173</code> has stopped answering. This restarts the API and the site <em>inside</em> the running container — you do not lose your shell, your Claude session, or any uncommitted work, and it does not reinstall anything. Give it a few seconds, then reload the page. If it still will not come up, the script prints which log to read.",
+  command: {
+    label: "Restart the app inside the container",
+    code: "start-app.sh --restart",
+    where: "container",
   },
-]
+}
 
 const activities = [
   {
@@ -173,13 +580,32 @@ const activities = [
     // Docker is in — so they come from PLATFORMS above rather than being repeated
     // here, where the two copies would drift.
     platformSetup: true,
-    steps: [
-      "Pick your operating system below. On Windows there is one extra question, and a command that answers it for you.",
-      "Clone the repo and <code>cd</code> into it.",
-      "Copy <code>.env.example</code> to <code>.env</code>.",
-      "Run <code>claude setup-token</code> on your own machine and paste the value into <code>.env</code>.",
-      "Run the check for your platform.",
+    // ONE page, not two. This activity used to render at 01-environment-check.html
+    // while a standalone environment-setup.html rendered the same platformSwitcher()
+    // from the same data with a different half of the surrounding content — the
+    // troubleshooting list on one, the app-clone note and the cheat on the other.
+    // Whichever you were linked to, the other half was missing. This override points
+    // the activity at the filename the header, the index tile and every pre-workshop
+    // link already used, so there is one page and it has everything.
+    page: "environment-setup.html",
+    // Absorbed from that standalone page. It answers "why am I being asked a second
+    // question?" - a question that only ever occurs to Windows attendees, and only
+    // after they have been asked it. Hence `whyOnly`: on the standalone page this
+    // was unconditional prose and a Mac attendee who had already picked macOS was
+    // still being told why Windows is complicated.
+    whyOnly: ["windows-linux", "windows-windows"],
+    whyHeading: "Why Windows gets a second question",
+    why: [
+      'On Windows, "do you have Docker?" is not enough of a question. Docker Desktop runs either Linux containers or Windows containers, and it cannot do both at once. Every image the standard check uses is a Linux image, so running it in Windows-container mode fails at the build step — and it used to blame your network while doing it.',
+      "Both checks now notice when you have run the wrong one and point you at the other, so a wrong guess costs you one command. But it is faster to just ask.",
     ],
+    // The thirteen failure-by-failure fixes, also absorbed. They render after the
+    // success line, which is where somebody whose check just failed is looking.
+    troubleshooting: true,
+    // NO `steps` HERE, on purpose. The four "Step N" headings on this page are the
+    // list: each one names the step AND carries the commands for it. A numbered
+    // summary above them could only restate that in less detail, and the page was
+    // telling its sequence twice over.
     success:
       "The last line reads <strong>ALL 6 CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof.",
     note:
@@ -201,7 +627,6 @@ const activities = [
       "Pick one of three changes that would take half a day by hand. Twenty minutes with an agent that can see the whole repo.",
     where: WHERE,
     commands: [
-      ...DAILY_START,
       {
         label: "Jump to the starting checkpoint — parks any work you have, then moves you",
         code: "./checkpoint.sh 0",
@@ -210,7 +635,7 @@ const activities = [
       {
         label: "Start Claude Code. It runs in here, not on your machine",
         code: "claude",
-        where: "container",
+        where: "claude",
       },
       {
         label: "Run the same gates CI runs, when you think you are done",
@@ -260,7 +685,6 @@ const activities = [
       "Your container already has Playwright. The skill is asking the agent to use it — to open the running app, look at what it changed, and prove it with a screenshot.",
     where: WHERE,
     commands: [
-      ...DAILY_START,
       {
         label: "Jump to the starting checkpoint",
         code: "./checkpoint.sh 1",
@@ -274,7 +698,7 @@ const activities = [
       {
         label: "Start Claude Code, then ask it to look at the page itself",
         code: "claude",
-        where: "container",
+        where: "claude",
       },
       {
         label: "Screenshots it takes land here, on your machine",
@@ -321,7 +745,6 @@ const activities = [
       "Build Mission Updates twice — once from a one-line prompt, once from a long one. This is the baseline everything later is measured against.",
     where: WHERE,
     commands: [
-      ...DAILY_START,
       {
         label: "Jump to the starting checkpoint",
         code: "./checkpoint.sh 2",
@@ -330,7 +753,7 @@ const activities = [
       {
         label: "Start Claude Code",
         code: "claude",
-        where: "container",
+        where: "claude",
       },
       {
         label: "Look at what it built — the site reloads as files change",
@@ -373,7 +796,6 @@ const activities = [
       "Write <code>mission-updates.spec.md</code> — role, context, standards, acceptance criteria — then build from it and compare.",
     where: WHERE,
     commands: [
-      ...DAILY_START,
       {
         label: "Jump to the starting checkpoint",
         code: "./checkpoint.sh 3",
@@ -382,7 +804,7 @@ const activities = [
       {
         label: "Start Claude Code",
         code: "claude",
-        where: "container",
+        where: "claude",
       },
       {
         label: "The spec you are writing lives here",
@@ -442,7 +864,6 @@ You are a senior full-stack engineer working in this codebase.
       "Invent a brand, write it down, and have the agent regenerate the app's design tokens from it. Everyone's screen ends up different.",
     where: WHERE,
     commands: [
-      ...DAILY_START,
       {
         label: "Jump to the starting checkpoint",
         code: "./checkpoint.sh 4",
@@ -451,7 +872,7 @@ You are a senior full-stack engineer working in this codebase.
       {
         label: "Start Claude Code",
         code: "claude",
-        where: "container",
+        where: "claude",
       },
       {
         label: "Your brand, and the tokens generated from it",
@@ -494,7 +915,6 @@ You are a senior full-stack engineer working in this codebase.
       "Spec plus brand, through a Socratic interview, all the way to working code — and it renders in your colours.",
     where: WHERE,
     commands: [
-      ...DAILY_START,
       {
         label: "Jump to the starting checkpoint",
         code: "./checkpoint.sh 5",
@@ -503,7 +923,7 @@ You are a senior full-stack engineer working in this codebase.
       {
         label: "Start Claude Code",
         code: "claude",
-        where: "container",
+        where: "claude",
       },
       {
         label: "Prove it works before you believe it",
@@ -543,7 +963,6 @@ You are a senior full-stack engineer working in this codebase.
       "Hand the same feature to an agent that loops without you. The container is the safety boundary; the guardrails are the actual lesson.",
     where: WHERE,
     commands: [
-      ...DAILY_START,
       {
         label: "Jump to the starting checkpoint",
         code: "./checkpoint.sh 6",
@@ -597,7 +1016,6 @@ You are a senior full-stack engineer working in this codebase.
       "Split the work. A planning agent produces the plan; a separate coding agent executes it and nothing else.",
     where: WHERE,
     commands: [
-      ...DAILY_START,
       {
         label: "Jump to the starting checkpoint",
         code: "./checkpoint.sh 7",
@@ -646,7 +1064,6 @@ You are a senior full-stack engineer working in this codebase.
       "A third specialist reads the diff, summarises the tests, and writes something a non-technical stakeholder could act on.",
     where: WHERE,
     commands: [
-      ...DAILY_START,
       {
         label: "Jump to the starting checkpoint",
         code: "./checkpoint.sh 8",
@@ -688,4 +1105,4 @@ You are a senior full-stack engineer working in this codebase.
   },
 ];
 
-module.exports = { activities, LINKS, REPO_URL, PLATFORMS, DETECT_COMMAND };
+module.exports = { activities, LINKS, REPO_URL, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER };

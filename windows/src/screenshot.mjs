@@ -52,6 +52,12 @@ try {
 
   // The page ships as a static file, so run-specific facts are injected here rather
   // than baked in — the screenshot then proves *this* run, not a stale artefact.
+  // Named, because they are both stamped onto the page AND printed to stdout for
+  // verify.ps1 to echo: the container is destroyed as soon as the check ends, so its
+  // hostname is otherwise unknowable to the person told to check for it.
+  const HOST = hostname();
+  const STAMP = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+
   await page.evaluate(
     ([host, stamp, checkpoint, engineName]) => {
       const set = (id, value) => {
@@ -63,12 +69,7 @@ try {
       set("checkpoint", checkpoint);
       set("engine", engineName);
     },
-    [
-      hostname(),
-      new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC",
-      `${CHECKPOINT} (windows containers)`,
-      BROWSER,
-    ]
+    [HOST, STAMP, `${CHECKPOINT} (windows containers)`, BROWSER]
   );
 
   const heading = await page.textContent("h1");
@@ -77,6 +78,8 @@ try {
   }
 
   await page.screenshot({ path: OUT });
+  console.log(`VERIFY_HOST=${HOST}`);
+  console.log(`VERIFY_STAMP=${STAMP}`);
   console.log(`screenshot written to ${OUT} using ${BROWSER}`);
 } finally {
   // Without this a thrown error leaves the browser process alive and the

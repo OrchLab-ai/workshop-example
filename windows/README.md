@@ -32,7 +32,7 @@ check, and writes the same `screenshots\verify.png` proof and `verify-report.txt
 | Command | What it does |
 |---|---|
 | `.\windows\verify.ps1` | The normal run |
-| `$env:VERIFY_PORT=8081; .\windows\verify.ps1` | Use a different port if 8080 is taken |
+| `$env:WORKSHOP_PORT=5174; .\windows\verify.ps1` | Move the workshop off 5173 if it is taken |
 | `.\windows\verify.ps1 -Quiet` | One-line verdict only (facilitators sweeping a room) |
 | `.\windows\verify.ps1 -Keep` | Leave the containers up afterwards |
 | `.\windows\verify.ps1 -Help` | Options and environment variables |
