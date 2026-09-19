@@ -101,6 +101,21 @@ compose() { docker compose -f "$COMPOSE_FILE" "$@"; }
 # night before are the images `up -d` wants in the morning - see check 3.
 workshop_compose() { docker compose -f "$WORKSHOP_COMPOSE_FILE" "$@"; }
 
+# IS THE WORKSHOP STACK ALREADY UP?
+#
+# Asked once, here, because two later decisions need the answer and the count of
+# checks has to be known before the first one is drawn.
+#
+# On a cold machine there is no app, which is why the two-vantage view check lives in
+# workshop/up.sh rather than here. But somebody re-running this on a working machine
+# HAS an app, and is asking exactly the question that check answers — so when the
+# stack is up, run it, and let the total be seven instead of six.
+WORKSHOP_RUNNING=0
+if workshop_compose ps --status running --services 2>/dev/null | grep -qx 'claude-container'; then
+  WORKSHOP_RUNNING=1
+  TOTAL=7
+fi
+
 # check <label> <log-name> -- runs the remaining args, silencing them.
 # On success the caller sets DETAIL to the short right-hand annotation.
 # On failure the caller has already set FAIL_CAUSE / FAIL_FIX.
@@ -719,7 +734,7 @@ if [ "$FAILED" -eq 0 ]; then
   # is trying to prove. It is that thing, already proven, by the real stack rather
   # than by a stand-in. So say so and move on.
   WORKSHOP_HOLDS_PORT=0
-  if workshop_compose ps --status running --services 2>/dev/null | grep -qx 'claude-container' &&
+  if [ "$WORKSHOP_RUNNING" -eq 1 ] &&
      curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; then
     WORKSHOP_HOLDS_PORT=1
   fi
@@ -811,6 +826,26 @@ if [ "$FAILED" -eq 0 ]; then
   fi
 fi
 
+# ------------------------------------------- 7: Agent sees what you see (if up)
+#
+# Only when the workshop stack is already running — see the detection at the top.
+# This is the check that would have caught both of the faults that cost a real run:
+# an API probe asking for a renamed route, and localhost resolving to IPv6 only
+# inside the container while Vite listened on IPv4. Every other check in this file
+# uses curl, and curl falls back to IPv4 where headless Chromium does not.
+
+if [ "$FAILED" -eq 0 ] && [ "$WORKSHOP_RUNNING" -eq 1 ]; then
+  start_check "Agent sees the same app you do"
+  if ! run_logged "$LOG_DIR/07-views.log" ./workshop/verify-views.sh; then
+    fail_check "the app is up, but the two vantage points do not agree" \
+"see $LOG_DIR/07-views.log - it names which vantage failed and why
+                        the screenshots are in screenshots/verify-outside.png
+                        and screenshots/verify-inside.png, side by side"
+  else
+    pass_check "both vantages agree"
+  fi
+fi
+
 # ---------------------------------------------------------------- Skipped rows
 
 # A failure stops the run, but the checklist should still show its full length -
@@ -822,6 +857,9 @@ while [ "$IDX" -lt "$TOTAL" ]; do
     4) start_check "Claude Code CLI + auth" ;;
     5) start_check "Workshop site responds" ;;
     6) start_check "Playwright screenshot captured" ;;
+    # Only ever reached when TOTAL is 7, i.e. when the workshop stack was already
+    # running at the top of the run. On a cold machine the loop stops at 6.
+    7) start_check "Agent sees the same app you do" ;;
   esac
   say "${CURRENT_LINE}${DIM}----${RESET}   ${DIM}not reached${RESET}"
 done

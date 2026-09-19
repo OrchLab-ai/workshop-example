@@ -645,7 +645,7 @@ const activities = [
     // summary above them could only restate that in less detail, and the page was
     // telling its sequence twice over.
     success:
-      "The last line reads <strong>ALL 6 CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof.",
+      "The last line reads <strong>ALL CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof. Six checks on a cold machine; a seventh appears if the workshop stack is already running, because there is then a real app to point a browser at.",
     note:
       "<strong>The first check clones the app for you.</strong> The application you spend the day on lives in its own repository, and check 1 clones it into <code>app/</code> — so there is no second <code>git clone</code> to remember. That folder is where all your work happens, and it is what <code>./checkpoint.sh</code> moves between checkpoints. If you see <code>no checkpoints published yet</code> beside that check, nothing is wrong: the ladder is published one rung at a time.",
     cheat: [
