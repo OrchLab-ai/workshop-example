@@ -662,7 +662,7 @@ const activities = [
     from: "cp-00",
     to: "cp-01",
     summary:
-      "Pick one of three changes that would take half a day by hand. Twenty minutes with an agent that can see the whole repo.",
+      "Pick one of two cross-cutting changes that would take half a day by hand. Twenty minutes with an agent that can see the whole repo.",
     where: WHERE,
     // `after: true` puts a command BELOW the prompts rather than above them, under
     // its own heading. The order on the page is then the order of the activity: here
@@ -685,10 +685,6 @@ const activities = [
         label: "Challenge 2 — Observability",
         text: "Add structured JSON request logging using the existing pino logger. Each log line should include the method, path, status code, duration in milliseconds, and a correlation ID that follows the request through the system.",
       },
-      {
-        label: "Challenge 3 — New Feature",
-        text: "Add a 'Trending Missions' section to the Explore page: the three most popular live campaigns by contributor count, shown above the main grid. Match the existing page's styling and add tests.",
-      },
     ],
     success:
       "The change is applied across every file it touches — including the ones you would have forgotten — and the tests still pass.",
@@ -706,7 +702,7 @@ const activities = [
     from: "cp-01",
     to: "cp-02",
     summary:
-      "Your container already has Playwright. The skill is asking the agent to use it — to open the running app, look at what it changed, and prove it with a screenshot.",
+      "Your container already has Playwright. The skill is asking the agent to use it — to capture the page <em>before</em> it builds, then prove with a second screenshot that the thing it claims to have built is actually on screen.",
     where: WHERE,
     commands: [
       {
@@ -723,22 +719,23 @@ const activities = [
     ],
     prompts: [
       {
-        label: "Ask it to look",
-        text: "Use Playwright to open http://localhost:5173, navigate to the page I changed in the last exercise, and take a screenshot to /screenshots. Then tell me what you actually see on the page — not what the code says it should do.",
+        label: "1. Baseline — run this before you ask for any code",
+        text: "Use Playwright to open http://localhost:5173, navigate to the Explore Missions page, and save a screenshot to /screenshots/explore-before.png. Do not change any code yet. Tell me what is on the page right now — what you actually see, not what the code says should be there.",
       },
       {
-        label: "Ask it to compare",
-        text: "Use Playwright to screenshot the page before and after your change, save both to /screenshots, and tell me what visibly differs. If the change did not render, say so plainly rather than explaining why it should have worked.",
+        label: "2. Build it",
+        text: "Add a 'Trending Missions' section to the Explore Missions page: the three most popular live missions by contributor count, shown above the main grid. Match the existing page's styling and add tests.",
       },
       {
-        label: "Ask it to check itself",
-        text: "Use Playwright to verify the change actually works in the browser: click through the flow a user would take, and report anything that errors or looks wrong. Fix what you find, then screenshot the result.",
+        label: "3. Prove it",
+        text: "Use Playwright to screenshot the Explore Missions page again to /screenshots/explore-after.png, compare it against explore-before.png, and tell me what visibly differs. Then click through the page as a user would and report anything that errors or looks wrong. If Trending Missions did not render, say so plainly rather than explaining why it should have worked.",
       },
     ],
     success:
-      "You have two screenshots on disk that the agent captured itself, without you driving a browser.",
+      "Two screenshots on disk that the agent captured itself, without you driving a browser — and the only difference between them is the feature you asked for.",
     cheat: [
 "If the agent says it cannot find a browser, check <code>claude mcp list</code> inside the container — the Playwright MCP server should be listed.",
+      "Agent built it before taking the baseline? That is the mistake this activity is about. <code>git stash</code>, screenshot, <code>git stash pop</code> — then make it compare properly.",
       "Want to read a working version instead? The <code>verify/</code> directory drives a real browser in a container and captures a screenshot — it is what your environment check ran this morning.",
       "This matters more than it looks: everything in Part 3 depends on an agent that can check its own work.",
     ],

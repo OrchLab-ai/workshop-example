@@ -581,7 +581,7 @@ nav.pager a:hover { background: var(--surface); }
   <span class="actnum">ACTIVITY 03</span>
   <p class="eyebrow">Part 1 — AI Coding</p>
   <h1>Give Your Agent Sight</h1>
-  <p class="lede">Your container already has Playwright. The skill is asking the agent to use it — to open the running app, look at what it changed, and prove it with a screenshot.</p>
+  <p class="lede">Your container already has Playwright. The skill is asking the agent to use it — to capture the page <em>before</em> it builds, then prove with a second screenshot that the thing it claims to have built is actually on screen.</p>
 
   <div class="cp">
     <span>start from <b>cp-01</b></span>
@@ -613,16 +613,16 @@ nav.pager a:hover { background: var(--surface); }
   <h2>Prompts — copy, don't retype</h2>
       <div class="shellreq"><span class="where">Where</span>Inside the <strong>Claude terminal</strong> — the third window, with Claude already running in it.</div>
   <div class="copyblock is-prompt">
-    <div class="cb-head"><span>Ask it to look</span><button type="button">Copy</button></div>
-    <pre>Use Playwright to open http://localhost:5173, navigate to the page I changed in the last exercise, and take a screenshot to /screenshots. Then tell me what you actually see on the page — not what the code says it should do.</pre>
+    <div class="cb-head"><span>1. Baseline — run this before you ask for any code</span><button type="button">Copy</button></div>
+    <pre>Use Playwright to open http://localhost:5173, navigate to the Explore Missions page, and save a screenshot to /screenshots/explore-before.png. Do not change any code yet. Tell me what is on the page right now — what you actually see, not what the code says should be there.</pre>
   </div>
   <div class="copyblock is-prompt">
-    <div class="cb-head"><span>Ask it to compare</span><button type="button">Copy</button></div>
-    <pre>Use Playwright to screenshot the page before and after your change, save both to /screenshots, and tell me what visibly differs. If the change did not render, say so plainly rather than explaining why it should have worked.</pre>
+    <div class="cb-head"><span>2. Build it</span><button type="button">Copy</button></div>
+    <pre>Add a 'Trending Missions' section to the Explore Missions page: the three most popular live missions by contributor count, shown above the main grid. Match the existing page's styling and add tests.</pre>
   </div>
   <div class="copyblock is-prompt">
-    <div class="cb-head"><span>Ask it to check itself</span><button type="button">Copy</button></div>
-    <pre>Use Playwright to verify the change actually works in the browser: click through the flow a user would take, and report anything that errors or looks wrong. Fix what you find, then screenshot the result.</pre>
+    <div class="cb-head"><span>3. Prove it</span><button type="button">Copy</button></div>
+    <pre>Use Playwright to screenshot the Explore Missions page again to /screenshots/explore-after.png, compare it against explore-before.png, and tell me what visibly differs. Then click through the page as a user would and report anything that errors or looks wrong. If Trending Missions did not render, say so plainly rather than explaining why it should have worked.</pre>
   </div>
 
   <h2>Check your work</h2>
@@ -632,12 +632,13 @@ nav.pager a:hover { background: var(--surface); }
   </div>
 
   <h2>You are done when</h2>
-  <div class="success">You have two screenshots on disk that the agent captured itself, without you driving a browser.</div>
+  <div class="success">Two screenshots on disk that the agent captured itself, without you driving a browser — and the only difference between them is the feature you asked for.</div>
 
   <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
       <p>If the agent says it cannot find a browser, check <code>claude mcp list</code> inside the container — the Playwright MCP server should be listed.</p>
+      <p>Agent built it before taking the baseline? That is the mistake this activity is about. <code>git stash</code>, screenshot, <code>git stash pop</code> — then make it compare properly.</p>
       <p>Want to read a working version instead? The <code>verify/</code> directory drives a real browser in a container and captures a screenshot — it is what your environment check ran this morning.</p>
       <p>This matters more than it looks: everything in Part 3 depends on an agent that can check its own work.</p>
     </div>
