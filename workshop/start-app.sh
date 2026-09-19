@@ -170,7 +170,7 @@ fi
 # it proves the server answered. curl writes 000 when the connection is refused.
 api_listening() {
   [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 \
-        "http://localhost:${API_PORT}/" 2>/dev/null)" != "000" ]
+        "http://127.0.0.1:${API_PORT}/" 2>/dev/null)" != "000" ]
 }
 
 step "API on :${API_PORT}"
@@ -212,6 +212,15 @@ done
 # a container cannot be reached through a published port however the ports are
 # mapped. This is the single line that makes http://localhost:PORT work at all.
 #
+# 0.0.0.0 IS THE IPv4 WILDCARD, AND ONLY THAT. /etc/hosts in this container maps
+# `localhost` to ::1 with no IPv4 entry, so anything in here resolving `localhost`
+# gets IPv6 and a refused connection. curl hides it by falling back to IPv4;
+# headless Chromium does not, so the agent's screenshots came back showing the
+# site offline while the same page loaded fine in the attendee's browser on the
+# host. Every in-container probe and agent-facing URL therefore says 127.0.0.1.
+# The banner below still says localhost: that URL is for the host browser, where
+# it is both correct and the thing people expect to see.
+#
 # --strictPort because the alternative is worse than failing: without it Vite
 # quietly moves to the next free port when PORT is taken INSIDE the container, and
 # the published mapping then points at nothing. A page that will not load is much
@@ -224,7 +233,7 @@ step "Site on :${PORT}"
 
 SITE_UP=0
 for _ in $(seq 1 30); do
-  if curl -sf "http://localhost:${PORT}/" >/dev/null 2>&1; then SITE_UP=1; break; fi
+  if curl -sf "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then SITE_UP=1; break; fi
   sleep 1
 done
 fi   # APP_OK
