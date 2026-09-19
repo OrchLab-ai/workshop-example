@@ -226,7 +226,13 @@ idx=$(index_of "$TARGET") || die "No checkpoint called \"$TARGET\". Try  ./check
 if ! tag_exists "$TARGET"; then
   # It may simply not have been fetched yet — try once before giving up, so an
   # attendee with a stale clone is not told a real checkpoint doesn't exist.
-  app_git fetch --tags --quiet >/dev/null 2>&1
+  # --force because a plain `fetch --tags` REFUSES to update a tag that already
+  # exists locally. Rungs get republished — a checkpoint found to be carrying a
+  # defect is corrected by moving its tag — and without this, the one person who
+  # most needs the correction (somebody who already cloned) is the one person who
+  # silently never receives it, while fresh clones get the fixed rung. The ladder
+  # has to be correctable or it is not a safety net.
+  app_git fetch --tags --force --quiet >/dev/null 2>&1
 fi
 if ! tag_exists "$TARGET"; then
   printf '\n   %s\n' "${AMBER}${BOLD}${TARGET} has not been published yet.${RESET}"

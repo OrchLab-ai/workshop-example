@@ -451,7 +451,9 @@ else
     # was made should be visible, but being offline must not fail a check that
     # has everything it needs on disk. checkpoint.sh retries a fetch of its own
     # when a tag it wants is missing.
-    run_logged "$LOG_DIR/01-clone.log" git -C "$APP_DIR" fetch --tags --quiet || true
+    # --force: a plain fetch will not update a tag that already exists locally, so a
+    # republished rung would never reach a returning attendee. See checkpoint.sh.
+    run_logged "$LOG_DIR/01-clone.log" git -C "$APP_DIR" fetch --tags --force --quiet || true
   fi
 
   if [ "$FAILED" -eq 0 ]; then
