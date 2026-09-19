@@ -51,13 +51,37 @@ fi
 
 # -------------------------------------------------------------------- outside view
 printf '   %sOUTSIDE%s  a sibling container, over the compose network\n' "$BOLD" "$RESET"
-OUT_LOG="$(compose --profile check run --rm -T verify-views 2>&1)"
+
+# BY IP, NOT BY SERVICE NAME.
+#
+# Vite 6 checks the Host header against server.allowedHosts and answers anything it
+# does not recognise with 403 Blocked request. `http://claude-container:5173/` is
+# exactly that case — the browser sends Host: claude-container, which is not in the
+# list, so the check failed against a perfectly healthy app.
+#
+# An IP literal is allowed by default, so resolving the container's address keeps this
+# vantage genuinely OUTSIDE (a different container, over the network) without having
+# to weaken allowedHosts in the app — which lives in app/ and is rewound by
+# ./checkpoint.sh, so it could not carry the setting anyway.
+CID="$(compose ps -q claude-container 2>/dev/null)"
+APP_IP="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CID" 2>/dev/null)"
+if [ -z "${APP_IP:-}" ]; then
+  fail "could not resolve claude-container's address on the compose network"
+  printf '\n   docker inspect returned nothing for container: %s\n\n' "${CID:-<none>}"
+  exit 1
+fi
+
+OUT_LOG="$(compose --profile check run --rm -T \
+  -e VERIFY_URL="http://${APP_IP}:${PORT}/" \
+  verify-views 2>&1)"
 OUT_RC=$?
 if [ "$OUT_RC" -ne 0 ]; then
   fail "outside view failed"
   printf '%s\n' "$OUT_LOG" | sed 's/^/      /'
-  printf '\n   The app is not reachable even from outside. This is the app being down,\n'
-  printf '   not an addressing problem. Check: docker compose -f %s logs claude-container\n\n' "$COMPOSE_FILE"
+  printf '\n   Outside is the vantage least likely to be an addressing fault, so this\n'
+  printf '   usually is the app itself. Unless the error above says 403 — that is\n'
+  printf '   Vite refusing the Host header, and the app is fine.\n\n'
+  printf '   Check: docker compose -f %s logs claude-container\n\n' "$COMPOSE_FILE"
   exit 1
 fi
 OUT_TITLE=$(printf '%s' "$OUT_LOG" | sed -n 's/^VIEW_TITLE=//p' | tail -1)

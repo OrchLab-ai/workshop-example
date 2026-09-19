@@ -198,6 +198,9 @@ services:
       context: .
       dockerfile: verify/Dockerfile
     environment:
+      # Overridden by workshop/verify-views.sh with the container's IP. Vite's
+      # allowedHosts blocks the service name with a 403, so this default exists
+      # only to be replaced — the driver is the supported way to run this.
       VERIFY_URL: 'http://claude-container:${WORKSHOP_PORT:-5173}/'
       VERIFY_OUT: '/screenshots/verify-outside.png'
       VERIFY_LABEL: 'outside'

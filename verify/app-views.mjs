@@ -61,10 +61,19 @@ try {
 }
 
 if (!response || !response.ok()) {
+  const status = response ? response.status() : null;
   await browser.close();
-  console.error(
-    `FAIL ${LABEL}: ${URL} returned ${response ? response.status() : "no response"}`
-  );
+  console.error(`FAIL ${LABEL}: ${URL} returned ${status ?? "no response"}`);
+  // 403 from a dev server that is plainly running is almost never authorisation.
+  // Vite checks the Host header against server.allowedHosts and blocks anything it
+  // does not recognise, so reaching it by service name fails while the identical
+  // app answers on localhost. Say so, rather than leaving the reader to conclude
+  // the app is down — which is the one thing it demonstrably is not.
+  if (status === 403) {
+    console.error("  A 403 here is Vite's allowedHosts check, not the app being down.");
+    console.error("  It rejects Host headers it does not recognise. Reach it by IP");
+    console.error("  or by localhost; a service name will always be blocked.");
+  }
   process.exit(1);
 }
 
