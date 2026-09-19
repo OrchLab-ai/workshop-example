@@ -58,7 +58,29 @@ while :; do
   if curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; then
     printf '\n%s%s  READY  %s  the site is answering on http://localhost:%s%s\n' \
       "$GREEN" "$BOLD" "$RESET" "$PORT" ""
-    printf '   Took %s. Leave the stack running — you only do this once a day.\n\n' "$(hhmmss "$ELAPSED")"
+    printf '   Took %s. Leave the stack running — you only do this once a day.\n' "$(hhmmss "$ELAPSED")"
+
+    # READY ABOVE IS ONE VANTAGE, AND IT IS NOT THE AGENT'S.
+    #
+    # The loop that just exited tests `curl http://localhost:PORT/` from the HOST.
+    # That is precisely the evidence that stayed green while the agent, inside the
+    # container, could not reach the app at all — curl falls back to IPv4 when IPv6
+    # refuses, and headless Chromium does not. Declaring the stack ready on that
+    # alone is the mistake this whole check exists to stop repeating.
+    #
+    # So prove the other vantage before saying you can start working. Skippable,
+    # because a room of thirty should never be held up by a check, and the escape
+    # hatch is better than somebody inventing their own.
+    if [ -z "${WORKSHOP_SKIP_VIEW_CHECK:-}" ] && [ -x ./workshop/verify-views.sh ]; then
+      if ! ./workshop/verify-views.sh; then
+        printf '\n%s%s  NOT READY  %s  the app is up, but the agent cannot see it.\n' \
+          "$RED" "$BOLD" "$RESET"
+        printf '   The output above says which vantage failed and what to do.\n'
+        printf '   To carry on regardless:  WORKSHOP_SKIP_VIEW_CHECK=1 ./workshop/up.sh\n\n'
+        exit 1
+      fi
+    fi
+
     printf '   Next:  %sdocker compose -f %s exec %s bash%s\n\n' "$BOLD" "$COMPOSE_FILE" "$SERVICE" "$RESET"
     exit 0
   fi
