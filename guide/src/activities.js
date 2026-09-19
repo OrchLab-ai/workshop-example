@@ -720,7 +720,7 @@ const activities = [
     prompts: [
       {
         label: "1. Baseline — run this before you ask for any code",
-        text: "Use Playwright to open http://127.0.0.1:5173, navigate to the Explore Missions page, and save a screenshot to /screenshots/explore-before.png. Do not change any code yet. Tell me what is on the page right now — what you actually see, not what the code says should be there.",
+        text: "Use Playwright to open http://localhost:5173, navigate to the Explore Missions page, and save a screenshot to /screenshots/explore-before.png. Do not change any code yet. Tell me what is on the page right now — what you actually see, not what the code says should be there.",
       },
       {
         label: "2. Build it",

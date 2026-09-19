@@ -104,6 +104,8 @@ services:
       - ./screenshots:/screenshots
       # How the app is started. Read-only: it is infrastructure, not an exercise.
       - ./workshop/start-app.sh:/usr/local/bin/start-app.sh:ro
+      # The two-vantage browser check. See workshop/verify-views.sh.
+      - ./verify/app-views.mjs:/usr/local/bin/app-views.mjs:ro
     ports:
       # The app, served from inside the container so it can be viewed in a normal
       # browser on the host. Host and container port are deliberately the SAME value:
@@ -185,6 +187,24 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # The host-side half of the two-vantage check. It reaches the app over the compose
+  # network rather than through localhost, which is the vantage an attendee's browser
+  # has. Compared against the in-container view by workshop/verify-views.sh; the two
+  # disagreeing is the signal, and is exactly what the IPv6 localhost bug looked like.
+  verify-views:
+    profiles: ['check']
+    build:
+      context: .
+      dockerfile: verify/Dockerfile
+    environment:
+      VERIFY_URL: 'http://claude-container:${WORKSHOP_PORT:-5173}/'
+      VERIFY_OUT: '/screenshots/verify-outside.png'
+      VERIFY_LABEL: 'outside'
+    volumes:
+      - ./verify/app-views.mjs:/work/app-views.mjs:ro
+      - ./screenshots:/screenshots
+    command: ['node', '/work/app-views.mjs']
 
 volumes:
   workshop_node_modules:
