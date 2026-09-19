@@ -274,6 +274,20 @@ if app_git rev-parse -q --verify "refs/heads/$WORK" >/dev/null 2>&1; then
   else
     app_git checkout -q "$WORK" || die "Could not switch to $WORK."
     ACTION="resumed (your earlier commits are still here)"
+    # DID THE RUNG MOVE UNDER THIS BRANCH?
+    #
+    # A resumed work branch was created from wherever the tag pointed AT THE TIME.
+    # Republish the rung — which is how a checkpoint carrying a defect gets fixed —
+    # and resuming silently keeps the old content while reporting success. The
+    # attendee is then working on precisely the tree the republish existed to
+    # replace, and nothing says so: "resumed, your earlier commits are still here"
+    # reads as good news.
+    #
+    # If the tag is not an ancestor of this branch, the branch predates the move.
+    if ! app_git merge-base --is-ancestor "$TARGET" "$WORK" 2>/dev/null; then
+      ACTION="resumed — WARNING: $TARGET has moved since this branch was made"
+      STALE_WORK=1
+    fi
   fi
 else
   app_git checkout -q -b "$WORK" "$TARGET" || die "Could not create $WORK from $TARGET."
@@ -303,6 +317,12 @@ if [ -n "$PARKED" ]; then
   printf '   Parked:   %s %s\n' "${BOLD}${PARKED}${RESET}" "${DIM}— your previous work is committed there, nothing lost${RESET}"
 fi
 printf '   Next up:  %s\n' "${BOLD}${NEXTS[$idx]}${RESET}"
+if [ "${STALE_WORK:-0}" -eq 1 ]; then
+  printf '\n   %sThis branch was made from an older %s.%s\n' "$BOLD" "$TARGET" "$RESET"
+  printf '   %s\n' "The checkpoint has been republished since — you are not on the current one."
+  printf '   %s\n' "To take the update (your work is parked first, nothing is lost):"
+  printf '      %s\n' "${BOLD}./checkpoint.sh ${TARGET#cp-} --fresh${RESET}"
+fi
 if [ "$FRESH" -eq 0 ] && [ "$ACTION" = "resumed (your earlier commits are still here)" ]; then
   printf '   %s\n' "${DIM}To start this checkpoint over from scratch:  ./checkpoint.sh ${TARGET} --fresh${RESET}"
 fi
