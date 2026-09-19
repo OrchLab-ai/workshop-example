@@ -274,6 +274,23 @@ else
   app_git checkout -q -b "$WORK" "$TARGET" || die "Could not create $WORK from $TARGET."
 fi
 
+# CLEAR COMPILED OUTPUT. A jump is a whole-tree checkout, but dist/ is gitignored,
+# so git leaves it exactly where it was — full of the PREVIOUS rung's build. tsc -b
+# regenerates what the current source produces and never deletes what it no longer
+# does, so the orphans survive indefinitely.
+#
+# That bites hardest in the direction attendees actually travel. Build at cp-01, jump
+# back to cp-00, and dist/__tests__ still holds the compiled proposals tests, which
+# fail against a tree where Proposal does not exist. The failure names files that are
+# not in the repository, so it reads as a broken checkpoint rather than as stale
+# output — and the ladder exists precisely so that a jump is never the thing that
+# breaks.
+#
+# Only dist. node_modules is expensive and correct across rungs; the lockfile is what
+# governs it, and start-app.sh reinstalls when that changes.
+app_git rev-parse --show-toplevel >/dev/null 2>&1 &&
+  rm -rf "$APP_DIR"/packages/*/dist "$APP_DIR"/dist 2>/dev/null || true
+
 printf '\n   %s  %s\n' "${GREEN}${BOLD}${TARGET}${RESET}" "${TITLES[$idx]}"
 printf '   %s%s%s\n\n' "$DIM" "${STATES[$idx]}" "$RESET"
 printf '   Branch:   %s  %s\n' "${BOLD}${WORK}${RESET}" "${DIM}(${ACTION})${RESET}"
