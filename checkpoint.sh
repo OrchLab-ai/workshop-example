@@ -230,9 +230,14 @@ if ! tag_exists "$TARGET"; then
   # exists locally. Rungs get republished — a checkpoint found to be carrying a
   # defect is corrected by moving its tag — and without this, the one person who
   # most needs the correction (somebody who already cloned) is the one person who
-  # silently never receives it, while fresh clones get the fixed rung. The ladder
-  # has to be correctable or it is not a safety net.
-  app_git fetch --tags --force --quiet >/dev/null 2>&1
+  # silently never receives it, while fresh clones get the fixed rung.
+  #
+  # --prune-tags for the same reason in the other direction: --force updates a tag
+  # that MOVED but keeps one that was DELETED. A retired rung would then read as
+  # published forever to anyone who had already fetched it, and jumping to it would
+  # land them on a checkpoint that no longer exists. Ladders get shortened as well
+  # as corrected, and it has to be both or it is not a safety net.
+  app_git fetch --tags --force --prune --prune-tags --quiet >/dev/null 2>&1
 fi
 if ! tag_exists "$TARGET"; then
   printf '\n   %s\n' "${AMBER}${BOLD}${TARGET} has not been published yet.${RESET}"

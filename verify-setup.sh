@@ -493,8 +493,10 @@ else
     # has everything it needs on disk. checkpoint.sh retries a fetch of its own
     # when a tag it wants is missing.
     # --force: a plain fetch will not update a tag that already exists locally, so a
-    # republished rung would never reach a returning attendee. See checkpoint.sh.
-    run_logged "$LOG_DIR/01-clone.log" git -C "$APP_DIR" fetch --tags --force --quiet || true
+    # republished rung would never reach a returning attendee. --prune-tags: nor will
+    # it remove one that was deleted, so a retired rung would read as published
+    # forever. See checkpoint.sh.
+    run_logged "$LOG_DIR/01-clone.log" git -C "$APP_DIR" fetch --tags --force --prune --prune-tags --quiet || true
   fi
 
   if [ "$FAILED" -eq 0 ]; then
