@@ -89,6 +89,9 @@ cd "$REPO" || { echo "workshop: $REPO is not mounted — check the app/ bind mou
 # and unhelpful when somebody is trying to recover.
 if [ "${1:-}" = "--restart" ]; then
   echo "stopping the running app…"
+  # Clear the sentinel FIRST. The API runs under a restart supervisor (see below), so
+  # killing the server without this just gets it started again two seconds later.
+  rm -f "$LOGS/.api-supervisor" 2>/dev/null || true
   pkill -f 'vite' 2>/dev/null || true
   pkill -f 'dev:server' 2>/dev/null || true
   pkill -f 'packages/server' 2>/dev/null || true
@@ -160,13 +163,46 @@ else
 fi
 
 # -------------------------------------------------------------------- server
+# Is anything listening? NOT "does this route work". This script is deliberately not
+# rewound by ./checkpoint.sh, so it outlives route names — asking for /v1/campaigns
+# here meant that the moment cp-01 renamed it to /v1/proposals, the poll could never
+# succeed and the banner below called a perfectly healthy API dead. A 404 is a pass:
+# it proves the server answered. curl writes 000 when the connection is refused.
+api_listening() {
+  [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 2 \
+        "http://localhost:${API_PORT}/" 2>/dev/null)" != "000" ]
+}
+
 step "API on :${API_PORT}"
-PORT="$API_PORT" npm run dev:server >"$LOGS/server.log" 2>&1 &
+
+# RESTART ON CRASH, not just on file change.
+#
+# `tsx watch` reloads when a file changes and exits when the process dies. A bad edit
+# — the entire point of Part 1 — therefore leaves nothing on the port for the rest of
+# the day, and Vite turns the resulting connection-refused into a 500 in the browser.
+# The attendee sees a broken page and debugs the page. The evidence is in server.log,
+# which nobody has been given a reason to open.
+#
+# The sentinel is how --restart stops this loop: pkill alone would just make the
+# supervisor start a fresh server two seconds later.
+: > "$LOGS/.api-supervisor"
+(
+  while [ -e "$LOGS/.api-supervisor" ]; do
+    PORT="$API_PORT" npm run dev:server
+    status=$?
+    [ -e "$LOGS/.api-supervisor" ] || break
+    echo ""
+    echo "=== API exited (status ${status}) - restarting in 2s ==="
+    echo "=== If this repeats, the error above is the real one. ==="
+    echo ""
+    sleep 2
+  done
+) >"$LOGS/server.log" 2>&1 &
 
 # Poll rather than sleep-and-hope. The API not being up yet is not fatal — Vite
 # proxies to it lazily — so this waits a bounded time and carries on either way.
 for _ in $(seq 1 30); do
-  curl -sf "http://localhost:${API_PORT}/v1/campaigns" >/dev/null 2>&1 && break
+  api_listening && break
   sleep 1
 done
 
@@ -201,8 +237,7 @@ fi   # APP_OK
 # been given a reason to open. A start script that lies about starting is worse than
 # one that fails loudly.
 API_STATE="NOT RUNNING - see ${LOGS}/server.log"
-curl -sf "http://localhost:${API_PORT}/v1/campaigns" >/dev/null 2>&1 &&
-  API_STATE="listening on :${API_PORT}"
+api_listening && API_STATE="listening on :${API_PORT}"
 
 if [ "${SITE_UP:-0}" -eq 1 ]; then
   cat <<BANNER
