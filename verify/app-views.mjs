@@ -21,14 +21,46 @@ import { createRequire } from "node:module";
 import { hostname } from "node:os";
 import { mkdirSync } from "node:fs";
 
-// Resolve playwright from a NAMED package root rather than from wherever this file
-// happens to be mounted. The in-container run executes this script from outside the
-// repo tree, so a bare `import "playwright"` would look in /usr/local/bin/node_modules
-// and find nothing — while the module sits in the repo's own node_modules volume.
-// VERIFY_REQUIRE_FROM points at the package.json to resolve against; unset, it falls
-// back to this file's own location, which is what the verify image wants.
+// USE THE AGENT'S OWN BROWSER, not merely a browser.
+//
+// Two containers run this and they do not have playwright in the same place, and more
+// importantly they do not have the same BUILD of it. The workshop image installs
+// chromium for @playwright/mcp's bundled playwright-core specifically (see
+// app/autonomous/Dockerfile) because the MCP server expects a different build from the
+// base image's. The repo's own node_modules carries a third version, whose browser was
+// never downloaded — asking for that one fails with "Executable doesn't exist" against
+// a container that is perfectly capable of driving a browser.
+//
+// So the MCP copy is tried FIRST. That is the exact stack the agent drives in activity
+// 3, which makes this check the agent's vantage AND the agent's browser rather than an
+// approximation of either. The verify image has no MCP, so it falls through to its own
+// global install. VERIFY_MODULE overrides the lot when something moves.
 const require = createRequire(process.env.VERIFY_REQUIRE_FROM || import.meta.url);
-const { chromium } = require("playwright");
+
+const CANDIDATES = [
+  process.env.VERIFY_MODULE,
+  "/usr/lib/node_modules/@playwright/mcp/node_modules/playwright-core",
+  "playwright",
+  "playwright-core",
+].filter(Boolean);
+
+let chromium;
+let engine;
+const tried = [];
+for (const candidate of CANDIDATES) {
+  try {
+    ({ chromium } = require(candidate));
+    engine = candidate;
+    break;
+  } catch (err) {
+    tried.push(`${candidate}: ${err.code || err.message}`);
+  }
+}
+if (!chromium) {
+  console.error("FAIL: no usable playwright module");
+  tried.forEach((t) => console.error(`  tried ${t}`));
+  process.exit(2);
+}
 
 const URL = process.env.VERIFY_URL;
 const OUT = process.env.VERIFY_OUT;
@@ -41,7 +73,16 @@ if (!URL || !OUT) {
 
 mkdirSync(OUT.replace(/\/[^/]+$/, ""), { recursive: true });
 
-const browser = await chromium.launch();
+let browser;
+try {
+  browser = await chromium.launch();
+} catch (err) {
+  console.error(`FAIL ${LABEL}: could not launch chromium via ${engine}`);
+  console.error(`  ${err.message.split("\n")[0]}`);
+  console.error("  The browser binary for this playwright build is not present.");
+  console.error("  This is the checker being unable to start, not the app being down.");
+  process.exit(2);
+}
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 
 // Fail loudly on the failure mode this whole script exists for. A refused connection
@@ -102,6 +143,7 @@ await browser.close();
 // Machine-readable, because verify-views.sh compares these across two runs in two
 // different containers and needs to do it without parsing prose.
 console.log(`VIEW_LABEL=${LABEL}`);
+console.log(`VIEW_ENGINE=${engine}`);
 console.log(`VIEW_URL=${URL}`);
 console.log(`VIEW_HOST=${hostname()}`);
 console.log(`VIEW_TITLE=${title}`);

@@ -91,9 +91,11 @@ pass "verify-outside.png  \"${OUT_HEAD:-$OUT_TITLE}\""
 
 # --------------------------------------------------------------------- inside view
 #
-# Runs where the agent runs, at the URL activity 3 hands the agent. VERIFY_REQUIRE_FROM
-# points playwright resolution at the repo's own node_modules, because the script is
-# mounted outside the repo tree so it never appears in an attendee's `git status`.
+# Runs where the agent runs, at the URL activity 3 hands the agent, driving the same
+# browser the agent drives — app-views.mjs prefers @playwright/mcp's playwright-core,
+# which is the copy app/autonomous/Dockerfile downloads a chromium for. No module path
+# is passed: the repo's own playwright is a different build with no browser installed,
+# so naming it here would break the check rather than help it.
 printf '   %sINSIDE%s   the workshop container, at the agent'"'"'s own URL\n' "$BOLD" "$RESET"
 
 # IS THE CHECKER EVEN IN THERE?
@@ -123,7 +125,6 @@ IN_LOG="$(compose exec -T \
   -e VERIFY_URL="http://localhost:${PORT}/" \
   -e VERIFY_OUT="/screenshots/verify-inside.png" \
   -e VERIFY_LABEL="inside" \
-  -e VERIFY_REQUIRE_FROM="/workspace/repo/package.json" \
   claude-container node /usr/local/bin/app-views.mjs 2>&1)"
 IN_RC=$?
 if [ "$IN_RC" -ne 0 ]; then
@@ -134,7 +135,7 @@ if [ "$IN_RC" -ne 0 ]; then
   # else — node not starting, playwright not resolving — is the check being broken,
   # not the app being unreachable, and saying otherwise sends the reader after a
   # fault that is not there.
-  if ! printf '%s' "$IN_LOG" | grep -q '^FAIL inside'; then
+  if [ "$IN_RC" -eq 2 ] || ! printf '%s' "$IN_LOG" | grep -q '^FAIL inside'; then
     cat <<EOF
 
    ${BOLD}The checker did not run.${RESET} That is this script being broken, not the
