@@ -440,6 +440,32 @@ else
     # line moving, and without it a slow clone looks exactly like a hang.
     if run_logged "$LOG_DIR/01-clone.log" git clone --progress "$APP_REPO" "$APP_DIR"; then
       APP_ACTION="cloned in $(( $(date +%s) - CLONE_START ))s"
+
+      # LAND ON cp-00, NOT ON main.
+      #
+      # A clone with no branch lands on main's tip, and main is where every rung is
+      # published. That was harmless for exactly as long as main WAS cp-00 — the
+      # moment cp-01 was published, a fresh clone started the day with the whole of
+      # activity 2 already applied, so the first exercise of the workshop was a
+      # no-op and the activity after it began at its own finish line.
+      #
+      # Only on a fresh clone. A returning attendee's app/ is on whatever rung they
+      # have reached, and resetting that to cp-00 would throw away their morning.
+      # That is ./checkpoint.sh's job, and it parks work before it moves anything.
+      #
+      # A named branch rather than a detached HEAD, for the reason checkpoints/README
+      # gives: attendees commit, and git complaining at them for it helps nobody.
+      if git -C "$APP_DIR" rev-parse -q --verify refs/tags/cp-00 >/dev/null 2>&1; then
+        if run_logged "$LOG_DIR/01-clone.log" \
+             git -C "$APP_DIR" checkout -B work/cp-00 cp-00; then
+          APP_ACTION="$APP_ACTION, at cp-00"
+        else
+          fail_check "cloned the app but could not check out cp-00" \
+"the tag exists but the checkout failed - see $LOG_DIR/01-clone.log
+                        without this you would start the day on main, which has
+                        every later checkpoint already applied"
+        fi
+      fi
     else
       fail_check "could not clone the workshop app from $APP_REPO" \
 "this is almost always a network problem - check your connection,
