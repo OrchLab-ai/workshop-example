@@ -706,6 +706,35 @@ if [ "$FAILED" -eq 0 ]; then
   # One variable governs the check and the stack, so an override set once in .env
   # carries through the whole workshop and no command has to change.
   PORT="${WORKSHOP_PORT:-5173}"
+
+  # IS THE WORKSHOP ITSELF HOLDING THE PORT?
+  #
+  # docker-compose.verify.yml publishes THE port on purpose — proving some unrelated
+  # port is free predicts nothing about the day. That rested on "the two stacks never
+  # run at once", which is true right up until somebody re-runs this check on a
+  # working machine. Then nginx cannot bind, and the check reports the workshop's own
+  # healthy stack as a port conflict and tells them to tear it down.
+  #
+  # A running workshop answering on this port is not a failure of the thing this check
+  # is trying to prove. It is that thing, already proven, by the real stack rather
+  # than by a stand-in. So say so and move on.
+  WORKSHOP_HOLDS_PORT=0
+  if workshop_compose ps --status running --services 2>/dev/null | grep -qx 'claude-container' &&
+     curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; then
+    WORKSHOP_HOLDS_PORT=1
+  fi
+
+  # ONE path from here, differing only in which port nginx publishes on. Check 6
+  # still needs a page to photograph either way, and it must not fight the workshop
+  # for the port: 0 publishes on an ephemeral one, read back below because nothing
+  # can predict it.
+  if [ "$WORKSHOP_HOLDS_PORT" -eq 1 ]; then
+    VERIFY_WEB_PORT=0
+  else
+    VERIFY_WEB_PORT="$PORT"
+  fi
+  export VERIFY_WEB_PORT
+
   if ! run_logged "$LOG_DIR/05-web.log" compose up -d verify-web; then
     fail_check "port $PORT is already in use on your machine - this is the port the workshop needs" \
 "if the workshop stack is already running, that is what is holding it:
@@ -716,22 +745,37 @@ if [ "$FAILED" -eq 0 ]; then
                           echo WORKSHOP_PORT=5174 >> .env
                         then re-run  ./verify-setup.sh"
   else
+    # Where nginx actually landed. With an ephemeral publish this is the only way to
+    # know, and polling $PORT instead would test the workshop's app while claiming to
+    # test nginx — a green check for the wrong reason.
+    if [ "$WORKSHOP_HOLDS_PORT" -eq 1 ]; then
+      CHECK_PORT=$(compose port verify-web 80 2>/dev/null | tr -d '\r' | sed 's/.*://')
+      if [ -z "${CHECK_PORT:-}" ]; then
+        CHECK_PORT="$PORT"
+      fi
+    else
+      CHECK_PORT="$PORT"
+    fi
     SITE_START=$(date +%s)
     SITE_OK=0
     # Poll rather than sleep-and-hope, so a slow machine passes and a genuinely
     # broken one fails fast enough to keep the room moving.
     for _ in $(seq 1 30); do
-      if curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>>"$LOG_DIR/05-web.log"; then
+      if curl -fsS -o /dev/null "http://localhost:${CHECK_PORT}/" 2>>"$LOG_DIR/05-web.log"; then
         SITE_OK=1
         break
       fi
       [ "$PROGRESS" -eq 1 ] &&
-        progress_draw "$(( $(date +%s) - SITE_START ))" "waiting for nginx to answer on :${PORT}"
+        progress_draw "$(( $(date +%s) - SITE_START ))" "waiting for nginx to answer on :${CHECK_PORT}"
       sleep 1
     done
     [ "$PROGRESS" -eq 1 ] && progress_clear
     if [ "$SITE_OK" -eq 1 ]; then
-      pass_check "HTTP 200 on :${PORT}, $(( $(date +%s) - SITE_START ))s"
+      if [ "$WORKSHOP_HOLDS_PORT" -eq 1 ]; then
+        pass_check "HTTP 200 on :${CHECK_PORT} — :${PORT} is your own workshop stack, already serving"
+      else
+        pass_check "HTTP 200 on :${PORT}, $(( $(date +%s) - SITE_START ))s"
+      fi
     else
       fail_check "nothing answered on http://localhost:${PORT}/ after 30s" \
 "something may be holding port $PORT without Docker noticing.

@@ -15,7 +15,18 @@ services:
       # day, and proving some unrelated port is free predicts nothing: 5173 is Vite's
       # default and so the port an attendee is most likely to already be using.
       # The two stacks never run at once, so sharing it is safe.
-      - "${WORKSHOP_PORT:-5173}:80"
+      # VERIFY_WEB_PORT, not WORKSHOP_PORT, because these became two questions.
+      # verify-setup.sh exports it: the workshop port normally, and 0 — publish
+      # anywhere free — when the workshop stack is already running and holding that
+      # port. Re-running the environment check on a working machine used to report
+      # the workshop's own healthy stack as a port conflict and tell the attendee
+      # to tear it down.
+      #
+      # Flat default rather than ${VERIFY_WEB_PORT:-${WORKSHOP_PORT:-5173}}: nested
+      # interpolation defaults are not portable across compose versions, and this
+      # file failing to parse would take every check with it. verify-setup.sh is the
+      # supported way in, and it honours WORKSHOP_PORT on the way through.
+      - "${VERIFY_WEB_PORT:-5173}:80"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
       interval: 2s
