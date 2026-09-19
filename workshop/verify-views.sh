@@ -95,6 +95,30 @@ pass "verify-outside.png  \"${OUT_HEAD:-$OUT_TITLE}\""
 # points playwright resolution at the repo's own node_modules, because the script is
 # mounted outside the repo tree so it never appears in an attendee's `git status`.
 printf '   %sINSIDE%s   the workshop container, at the agent'"'"'s own URL\n' "$BOLD" "$RESET"
+
+# IS THE CHECKER EVEN IN THERE?
+#
+# app-views.mjs reaches the container through a bind mount, and a bind mount added to
+# the compose file does not appear in a container that was created before it. The
+# symptom is node exiting 1 with MODULE_NOT_FOUND — the same exit code a genuine
+# navigation failure produces, which is how the first version of this script came to
+# blame IPv6 for a missing file. Ask the question directly instead of inferring it.
+if ! compose exec -T claude-container test -f /usr/local/bin/app-views.mjs 2>/dev/null; then
+  fail "the view checker is not mounted in claude-container"
+  cat <<EOF
+
+   This container was created before the mount was added to $COMPOSE_FILE, and
+   bind mounts are fixed at creation. Recreate it — no rebuild, and your work in
+   app/ is untouched because it lives on the host:
+
+      docker compose -f $COMPOSE_FILE up -d --force-recreate claude-container
+
+   Then run this again.
+
+EOF
+  exit 1
+fi
+
 IN_LOG="$(compose exec -T \
   -e VERIFY_URL="http://localhost:${PORT}/" \
   -e VERIFY_OUT="/screenshots/verify-inside.png" \
@@ -105,6 +129,22 @@ IN_RC=$?
 if [ "$IN_RC" -ne 0 ]; then
   fail "inside view failed — the agent cannot see the app you can"
   printf '%s\n' "$IN_LOG" | sed 's/^/      /'
+
+  # Only the reporter's own FAIL line proves the page could not be loaded. Anything
+  # else — node not starting, playwright not resolving — is the check being broken,
+  # not the app being unreachable, and saying otherwise sends the reader after a
+  # fault that is not there.
+  if ! printf '%s' "$IN_LOG" | grep -q '^FAIL inside'; then
+    cat <<EOF
+
+   ${BOLD}The checker did not run.${RESET} That is this script being broken, not the
+   app being unreachable — the error above is from node, before any browser
+   opened. Nothing is proven about the app either way.
+
+EOF
+    exit 1
+  fi
+
   cat <<EOF
 
    ${BOLD}The outside view passed and the inside view did not.${RESET}
