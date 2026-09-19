@@ -271,9 +271,14 @@ test("starting the stack waits for the app, not just the container", null, () =>
 // tag is the whole mechanism, so it is what gets guarded.
 test("the check image and the workshop images share a base, so one download serves both", null, () => {
   const baseOf = (p) => (codeOf(p).match(/^FROM\s+(\S+)/m) || [])[1];
+  // exists() before read, because read throws on a missing file — which made the
+  // skip below unreachable. app/ is a gitignored clone, so it is absent in CI and on
+  // any machine that has not run the check, and this test has been failing there
+  // since app/ stopped being tracked rather than skipping as it says it does.
+  const baseIfPresent = (p) => (exists(p) ? baseOf(p) : null);
   const check = baseOf("verify/Dockerfile");
-  const workshop = baseOf("app/autonomous/Dockerfile");
-  const demo = baseOf("app/autonomous-demo/Dockerfile");
+  const workshop = baseIfPresent("app/autonomous/Dockerfile");
+  const demo = baseIfPresent("app/autonomous-demo/Dockerfile");
 
   ok(check, "verify/Dockerfile has no FROM");
   // app/ is a separate clone and is gitignored here, so on a machine that has not
