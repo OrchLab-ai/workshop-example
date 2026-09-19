@@ -43,18 +43,28 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1
 `./verify-setup.sh` will tell you this too rather than failing confusingly. See
 [`windows/README.md`](windows/README.md) for the detail.
 
-### Getting your token
+### Your credential
 
-If you have a Claude subscription, run this **on your own machine** (not in the
-container):
+Fill in **one** line in `.env`. Which one depends on what you have — and they are
+not interchangeable:
+
+**A Claude subscription** (most people). Run this on your own machine, never in the
+container. It needs Claude Code installed locally and opens a browser to sign in:
 
 ```bash
 claude setup-token
 ```
 
-Copy the value it prints into `.env` as `CLAUDE_CODE_OAUTH_TOKEN`. If you use an
-API key from [console.anthropic.com](https://console.anthropic.com) instead, set
-`ANTHROPIC_API_KEY` and leave the token blank.
+It prints a token starting `sk-ant-oat01-`. That goes on `CLAUDE_CODE_OAUTH_TOKEN`.
+
+**An Anthropic API key** instead, from [console.anthropic.com](https://console.anthropic.com).
+It starts `sk-ant-api03-` and goes on `ANTHROPIC_API_KEY`. Nothing to install.
+
+The two look almost identical — both `sk-ant-`, both around 108 characters — and
+swapping them is silent: `.env` looks fine, the environment check passes, and Claude
+then asks you to log in anyway. Check 4 of `./verify-setup.sh` tests the prefix for
+exactly this reason. The guide presents the two as sections that cannot both be open
+at once, so nobody reads the half that is not theirs.
 
 ### What a pass looks like
 
@@ -67,14 +77,17 @@ API key from [console.anthropic.com](https://console.anthropic.com) instead, set
    [2/6]  Docker daemon reachable ..................  PASS   27.3.1
    [3/6]  Workshop image builds ....................  PASS   58s
    [4/6]  Claude Code CLI + auth ...................  PASS   claude 2.0.14, credential present
-   [5/6]  Workshop site responds ...................  PASS   HTTP 200 on :8080, 4s
+   [5/6]  Workshop site responds ...................  PASS   HTTP 200 on :5173, 4s
    [6/6]  Playwright screenshot captured ...........  PASS   verify.png, 184 KB
 
    ALL 6 CHECKS PASSED
 
    Your environment is ready. There is nothing else to do.
    Open screenshots/verify.png to see the proof - it should read
-   "ENVIRONMENT OK" with your container name and the time.
+   "ENVIRONMENT OK" and match this:
+
+       Container:  4f2a9c1e88b3
+       Taken at:   2026-09-17 08:41:02 UTC
 
 ============================================================
 ```
@@ -84,6 +97,13 @@ extra setup, and nothing to prepare. Close the terminal.
 
 Open `screenshots/verify.png` if you want to see it for yourself — a real
 headless browser rendered that page and captured it from inside your container.
+
+The container name and timestamp are printed **because the container is gone by the
+time you read them.** It is created for the check and destroyed at the end of it, so
+its hostname cannot be looked up afterwards — and an instruction to check the
+screenshot shows "your container name" is not one anybody can follow against a name
+they were never told. They land in `verify-report.txt` too, so a pasted report and a
+screenshot can be shown to be from the same run rather than assumed to be.
 
 ### You do not need administrator rights
 
@@ -116,7 +136,8 @@ The run stops at the first failed check and tells you exactly what to do:
        Failed check:    Claude Code CLI + auth
        What went wrong: no credential found - .env has neither
                         CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY
-       Fix it:          run  claude setup-token
+       Fix it:          if you have a Claude SUBSCRIPTION, on your own
+                        machine run  claude setup-token
                         ...
        Still stuck?     raise your hand - do not keep retrying.
 ```
@@ -129,7 +150,7 @@ A plain-text copy lands in `verify-report.txt`. Paste that when you ask for help
 | Command | What it does |
 |---|---|
 | `./verify-setup.sh` | The normal run |
-| `VERIFY_PORT=8081 ./verify-setup.sh` | Use a different port if 8080 is taken |
+| `echo WORKSHOP_PORT=5174 >> .env` then `./verify-setup.sh` | Move the workshop off 5173 if it is taken. One value, used by the check *and* the workshop, so nothing else you type changes |
 | `./verify-setup.sh --quiet` | One-line verdict only (facilitators sweeping a room) |
 | `./verify-setup.sh --keep` | Leave the containers up afterwards |
 
@@ -138,8 +159,11 @@ it, but it is there when a check fails.
 
 ### Check 3 takes the longest, and it tells you why
 
-The first run has to download the Playwright base image — roughly 2 GB — so check 3
-can sit there for several minutes. It is not stuck. While it works, that row shows
+The first run downloads the Playwright base image — roughly 2 GB — and then builds
+three images on top of it: the check's own, the workshop container you spend the day
+in, and the Part 3 agent. So check 3 can sit there for several minutes. It is not
+stuck, and this is the check doing its job: everything it fetches now is something
+the workshop would otherwise fetch while you waited. While it works, that row shows
 what Docker is doing and how long it has been at it:
 
 ```
@@ -162,9 +186,9 @@ rather than decorative.
 |---|---|---|
 | 1 | Workshop app cloned | The app you work on all day is present, and `./checkpoint.sh` has a ladder to move you along |
 | 2 | Docker daemon reachable | Docker is the safety boundary for every autonomous exercise |
-| 3 | Workshop image builds | You can build locally — no network surprise mid-exercise |
+| 3 | Workshop image builds | **Every image the day needs is on your machine** — the check builds the real workshop container and the Part 3 agent, so nothing downloads mid-exercise |
 | 4 | Claude Code CLI + auth | The agent runs *inside* the container, not on your laptop |
-| 5 | Workshop site responds | The app under test is reachable from your machine |
+| 5 | Workshop site responds | **The exact port the workshop runs on** (5173) is free and reachable from your machine |
 | 6 | Playwright screenshot | Your agent can *see* — the basis of self-verification in Part 3 |
 
 Check 1 earns its place: the workshop stack bind-mounts `app/`, and an *empty*
@@ -172,8 +196,10 @@ directory bind-mounts perfectly happily — the container would start, report no
 error, and simply have no app inside it.
 
 The check container is built to the same shape as the real workshop container
-(Playwright base image, Claude Code CLI, non-root user), so a pass here predicts
-a pass later.
+(Playwright base image, Claude Code CLI, non-root user) **and on the same base
+image tag**, so a pass here predicts a pass later. That shared tag is load-bearing:
+when the two drifted apart, the check warmed a ~2 GB base that nothing on the day
+used, and the morning downloaded the real one all over again.
 
 ---
 
@@ -189,6 +215,9 @@ verify/
   site/index.html            # The "ENVIRONMENT OK" page
 app/                         # The application, cloned by check 1. Gitignored —
                              # it is a separate repository and carries the cp-* tags
+workshop/
+  start-app.sh               # Boots the app inside the workshop container. Lives
+                             # HERE, not in app/, because checkpoint.sh rewinds app/
 checkpoints/
   manifest.txt               # The ladder — single source of truth
   README.md                  # How checkpoints work; publishing guide

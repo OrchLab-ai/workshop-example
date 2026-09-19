@@ -41,18 +41,54 @@ services:
     build:
       context: ./app/autonomous
       dockerfile: Dockerfile
-    # The image's own entrypoint runs an autonomous loop. For Parts 1 and 2 the
-    # container just needs to stay up so attendees can exec into it.
-    entrypoint: ['sleep', 'infinity']
+    # The image's own entrypoint runs an autonomous loop, which is not what this
+    # container is for. It runs the workshop app instead: dependencies, migrations,
+    # the API and the site, and then it holds itself open so attendees can exec in.
+    # start-app.sh comes from THIS repo rather than from app/, because ./checkpoint.sh
+    # rewinds app/ and the thing that boots the container must not move with it.
+    entrypoint: ['/usr/local/bin/start-app.sh']
+    # GIVE localhost AN IPv4 ADDRESS.
+    #
+    # The base image ships an /etc/hosts with `::1 localhost` and NO IPv4 entry, so
+    # everything inside the container resolving `localhost` gets IPv6 only. Vite is
+    # bound with --host 0.0.0.0 — the IPv4 wildcard, exclusively — so the site is
+    # unreachable at `localhost` from inside, while being perfectly reachable from
+    # the host through the published port.
+    #
+    # curl hides this by falling back to IPv4, which is why every probe and every
+    # health check passed. Headless Chromium has no IPv4 address to fall back to and
+    # simply fails, so the ONE thing that broke was the agent's own view of the app.
+    #
+    # This adds the missing 127.0.0.1 entry, which gives IPv4 something to resolve to
+    # everywhere — including in whatever tool an attendee's agent decides to reach for.
+    extra_hosts:
+      - 'localhost:127.0.0.1'
     working_dir: /workspace/repo
+    # CREDENTIALS COME FROM .env DIRECTLY, not from an `environment:` mapping.
+    #
+    # `ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"` does NOT omit the variable when it
+    # is unset - it sets it to the EMPTY STRING, so the container ends up carrying
+    # ANTHROPIC_API_KEY present and blank. Interactive Claude Code then sees an API key
+    # configured, tries to use it, and drops the attendee at a login prompt - while
+    # `claude -p` authenticates fine on the OAuth token. Every check passes and the only
+    # thing that fails is the thing they actually do.
+    #
+    # env_file has the semantics this needs: a line absent or commented out in .env is
+    # simply not set in the container. `required: false` so a missing .env stays the
+    # environment check's problem to report rather than a raw compose error.
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql://mmf:mmf@db:5432/mmf?sslmode=disable
       JWT_SECRET: workshop-jwt-secret
-      PORT: '3001'
-      # Whichever credential .env supplies. The server-side check in
-      # verify-setup.sh has already confirmed exactly one of them is set.
-      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      # The one port anybody has to care about, and the SAME variable the
+      # environment check proves is free - see docker-compose.verify.yml. Set it once
+      # in .env and the check, the stack and every URL in the guide follow it.
+      WORKSHOP_PORT: "${WORKSHOP_PORT:-5173}"
+      # Internal only. The browser never talks to this: the client fetches relative
+      # /v1 paths and Vite proxies them to localhost:3001 INSIDE the container.
+      PORT_API: '3001'
     volumes:
       # The real repo, so edits show up live in the attendee's editor.
       - ./app:/workspace/repo
@@ -66,13 +102,35 @@ services:
       - workshop_shared_node_modules:/workspace/repo/packages/shared/node_modules
       # Screenshots the agent takes land on the host, where they can be looked at.
       - ./screenshots:/screenshots
+      # How the app is started. Read-only: it is infrastructure, not an exercise.
+      - ./workshop/start-app.sh:/usr/local/bin/start-app.sh:ro
+      # The two-vantage browser check. See workshop/verify-views.sh.
+      - ./verify/app-views.mjs:/usr/local/bin/app-views.mjs:ro
     ports:
       # The app, served from inside the container so it can be viewed in a normal
-      # browser on the host.
-      - '5173:5173'   # Vite (the site)
-      - '3001:3001'   # the API
+      # browser on the host. Host and container port are deliberately the SAME value:
+      # Vite's HMR websocket infers its port from the page URL, so mapping 5174->5173
+      # would serve a page whose live-reload silently never connects.
+      #
+      # The API is deliberately NOT published. Nothing on the host needs it - the
+      # browser only ever talks to the port below - and every published port is
+      # another collision with something the attendee already runs.
+      - "${WORKSHOP_PORT:-5173}:${WORKSHOP_PORT:-5173}"
     mem_limit: 4g
     cpus: 2
+    # Healthy means THE APP ANSWERS, not that the container is running. Without this
+    # `docker compose ps` reports "Up" seconds after start, while the app inside is
+    # still minutes from serving - which is the same lie `up -d` tells. It also makes
+    # plain `docker compose up -d --wait` behave, for anyone not using workshop/up.sh.
+    #
+    # start_period is long because the first run installs a monorepo's dependencies
+    # inside the container; failures during that window do not count against retries.
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS -o /dev/null http://localhost:${WORKSHOP_PORT:-5173}/ || exit 1']
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 600s
     depends_on:
       db:
         condition: service_healthy
@@ -88,14 +146,29 @@ services:
   # rather than drive it, which is the entire lesson of the activity.
   autonomous-agent:
     profiles: ['l4']
+    extra_hosts:
+      - 'localhost:127.0.0.1'
     build:
       context: ./app/autonomous-demo
       dockerfile: Dockerfile
+    # CREDENTIALS COME FROM .env DIRECTLY, not from an `environment:` mapping.
+    #
+    # `ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"` does NOT omit the variable when it
+    # is unset - it sets it to the EMPTY STRING, so the container ends up carrying
+    # ANTHROPIC_API_KEY present and blank. Interactive Claude Code then sees an API key
+    # configured, tries to use it, and drops the attendee at a login prompt - while
+    # `claude -p` authenticates fine on the OAuth token. Every check passes and the only
+    # thing that fails is the thing they actually do.
+    #
+    # env_file has the semantics this needs: a line absent or commented out in .env is
+    # simply not set in the container. `required: false` so a missing .env stays the
+    # environment check's problem to report rather than a raw compose error.
+    env_file:
+      - path: .env
+        required: false
     environment:
       DATABASE_URL: postgresql://mmf:mmf@db:5432/mmf?sslmode=disable
       JWT_SECRET: workshop-jwt-secret
-      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
       # The guardrails are the point of the exercise, so they are visible here
       # rather than buried in the image.
       MAX_ITERATIONS: "${MAX_ITERATIONS:-30}"
@@ -114,6 +187,27 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # The host-side half of the two-vantage check. It reaches the app over the compose
+  # network rather than through localhost, which is the vantage an attendee's browser
+  # has. Compared against the in-container view by workshop/verify-views.sh; the two
+  # disagreeing is the signal, and is exactly what the IPv6 localhost bug looked like.
+  verify-views:
+    profiles: ['check']
+    build:
+      context: .
+      dockerfile: verify/Dockerfile
+    environment:
+      # Overridden by workshop/verify-views.sh with the container's IP. Vite's
+      # allowedHosts blocks the service name with a 403, so this default exists
+      # only to be replaced — the driver is the supported way to run this.
+      VERIFY_URL: 'http://claude-container:${WORKSHOP_PORT:-5173}/'
+      VERIFY_OUT: '/screenshots/verify-outside.png'
+      VERIFY_LABEL: 'outside'
+    volumes:
+      - ./verify/app-views.mjs:/work/app-views.mjs:ro
+      - ./screenshots:/screenshots
+    command: ['node', '/work/app-views.mjs']
 
 volumes:
   workshop_node_modules:

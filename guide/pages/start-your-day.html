@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Automated Code Review — OrchLab Workshop Guide</title>
+<title>Start Your Day — OrchLab Workshop Guide</title>
 <script>
 (function () {
   try {
@@ -578,65 +578,99 @@ nav.pager a:hover { background: var(--surface); }
       <a class="pb-idk" href="environment-setup.html?os=windows#docker-mode">Windows &mdash; not sure which</a>
     </span>
   </div>
-  <span class="actnum">ACTIVITY 10</span>
-  <p class="eyebrow">Part 3 — Orchestration</p>
-  <h1>Automated Code Review</h1>
-  <p class="lede">A third specialist reads the diff, summarises the tests, and writes something a non-technical stakeholder could act on.</p>
-
-  <div class="cp">
-    <span>start from <b>cp-08</b></span>
-    <span>final activity</span>
-  </div>
-
-
   <div data-needs-pathway>
+  <h1>Start your day</h1>
+  <p class="lede">Three windows, one command each. Do this once every morning and
+  leave all three open — every activity assumes it.</p>
+
+  <h2>Three terminals</h2>
+  <div class="terminals">
+  <p class="tm-intro">Open <strong>three terminal windows</strong> before you start and keep all three open all day. Almost every confusion about where a command goes is really a confusion about which of these you are in.</p>
+    <div class="tm">
+    <span class="tm-n">1</span>
+    <div>
+      <b>The host terminal</b> <span class="loc host tm-loc">host terminal</span>
+      <p>A <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> window in your <code>workshop-example</code> folder — the only one of the three that is <em>not</em> inside the container. Only two kinds of command run here: <code>docker</code> and <code>./checkpoint.sh</code>. Nothing you type here touches the app.</p>
+  <div class="copyblock">
+    <div class="cb-head"><span>Start the stack, and wait until the app is really up</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <pre>./workshop/up.sh</pre>
+  </div>
+    </div>
+  </div>
+    <div class="tm">
+    <span class="tm-n">2</span>
+    <div>
+      <b>The work terminal</b> <span class="loc container tm-loc">work terminal</span>
+      <p>Open a second <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> window and run this. You are then <em>inside</em> the container: this is where you run tests, <code>./scripts/ci-check.sh</code>, git commands against the app, and anything else that needs to see the code. Everything badged <em>work terminal</em> goes here.</p>
+  <div class="copyblock">
+    <div class="cb-head"><span>Get a shell inside the container</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <pre>docker compose -f docker-compose.workshop.yml exec claude-container bash</pre>
+  </div>
+    </div>
+  </div>
+    <div class="tm">
+    <span class="tm-n">3</span>
+    <div>
+      <b>The Claude terminal</b> <span class="loc claude tm-loc">claude terminal</span>
+      <p>Open a third <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> window and run this — it drops you straight into Claude, inside the container. Also a container shell, but it gets its own badge and its own window for one reason: <strong>keep it separate.</strong> Claude holds its conversation in that session — exiting it to run one command throws the context away, and that context is most of what you are paying for.</p>
+  <div class="copyblock">
+    <div class="cb-head"><span>Open a third window and start Claude in it</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <pre>docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</pre>
+  </div>
+      <div class="note"><strong>About that flag.</strong> <code>--dangerously-skip-permissions</code> turns off every approval prompt — the deck calls it YOLO mode, and on its own it is exactly as reckless as it sounds. What makes it reasonable <em>here</em> is the layer underneath it: this window is a shell inside the container, with its own filesystem and its own network, and nothing Claude does in it can reach the rest of your machine. That is the isolation the <em>Levels of Safety</em> slide puts first, and it is the only reason the speed is worth having. <strong>Do not take the flag home</strong>, where nothing is containing it.</div>
+    </div>
+  </div>
+      <div data-only="windows-windows">
+    <div class="note"><strong>You are in Windows-container mode.</strong> That is fine for the environment check — there is a Windows-container version of it — but the workshop stack itself is Linux images, and Docker Desktop cannot run both modes at once. Switch Docker Desktop to <strong>Linux containers</strong> before the first activity, and use Git Bash for the commands above. Ask us on the day if you are unsure; do not spend the morning on it.</div>
+      </div>
+  <div class="tm tm-after">
+    <span class="tm-n tm-check">&#10003;</span>
+    <div>
+      <p>That is the whole morning. You will know it worked when the app loads:</p>
+  <div class="copyblock">
+    <div class="cb-head"><span>Check the site is up — open this in your browser</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <pre>http://localhost:5173</pre>
+  </div>
+    </div>
+  </div>
+</div>
+
+  <div class="note"><strong>The first start of the day takes a few minutes, and only the first.</strong> The container installs the app's dependencies before it can serve anything. <code>./workshop/up.sh</code> is the reason step 1 is not a plain <code>docker compose up -d</code>: compose would report the <em>container</em> started — true within seconds — and hand you back a prompt while the app was still minutes away, so opening the URL then looks broken when it is merely early. The script waits, prints each phase as it happens, and tells you <strong>READY</strong> when the site actually answers. If it fails it says so, and names the log to read.</div>
+
+  <h2>If the app stops working</h2>
+  <p>This is a recovery, not part of starting up — you should not need it on a normal
+  morning, and running it on a healthy container just restarts the app for no reason.</p>
   <details class="trouble compact">
-  <summary>Didn't finish the last activity?
-    <span class="cta">Click here to catch up</span>
+  <summary>The app stopped working?
+    <span class="cta">Click here to restart it</span>
   </summary>
   <div class="tr-body">
-    <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
+    <p>Only if <code>http://localhost:5173</code> has stopped answering. This restarts the API and the site <em>inside</em> the running container — you do not lose your shell, your Claude session, or any uncommitted work, and it does not reinstall anything. Give it a few seconds, then reload the page. If it still will not come up, the script prints which log to read.</p>
   <div class="copyblock">
-    <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
-    <pre>./checkpoint.sh 8</pre>
+    <div class="cb-head"><span>Restart the app inside the container</span><span class="loc container">work terminal</span><button type="button">Copy</button></div>
+    <pre>start-app.sh --restart</pre>
   </div>
   </div>
 </details>
 
-  <h2>Commands</h2>
-      <div class="shellreq"><span class="where">Where</span>Each block is badged with the window it belongs in, and the host terminal is <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> in your <code>workshop-example</code> folder. Not set up yet? <a href="start-your-day.html">Start your day</a>.</div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Collect the diff the reviewer will read</span><span class="loc container">work terminal</span><button type="button">Copy</button></div>
-    <pre>git diff main...HEAD &gt; /tmp/review.diff</pre>
-  </div>
-  <div class="note"><strong>Permission prompts are off in here.</strong> Your Claude terminal has been running <code>--dangerously-skip-permissions</code> since this morning — <a href="start-your-day.html">why that is defensible in there, and nowhere else</a>.</div>
+  <h2>Reading the badges</h2>
+  <p>Every command block in this guide carries the badge of the window it belongs in:
+  <span class="loc host">host terminal</span>, <span class="loc container">work terminal</span>
+  or <span class="loc claude">claude terminal</span>. There is nothing to work out —
+  match the badge to the window and run it there.</p>
+  <p>The badges used to say <em>your machine</em> and <em>in the container</em>, which
+  named the two container shells identically. That answered the question nobody gets
+  wrong and stayed silent on the one that costs something: the Claude terminal is the
+  one where exiting to run a quick command throws away the conversation.</p>
 
-  <h2>Prompts — copy, don't retype</h2>
-      <div class="shellreq"><span class="where">Where</span>Inside the <strong>Claude terminal</strong> — the third window, with Claude already running in it.</div>
-  <div class="copyblock is-prompt">
-    <div class="cb-head"><span>The review agent</span><button type="button">Copy</button></div>
-    <pre>You are a code reviewer. Read the diff in /tmp/review.diff and identify risks, regressions, and style violations. Report every issue you find, including ones you're uncertain about — give each a confidence level and a severity rather than filtering them out yourself.</pre>
-  </div>
-  <div class="copyblock is-prompt">
-    <div class="cb-head"><span>The executive summary</span><button type="button">Copy</button></div>
-    <pre>Now summarise this for a non-technical stakeholder in three sentences: what changed, what the risk is, and what happens next. No jargon.</pre>
-  </div>
+  <div class="success">You are ready when <code>http://localhost:5173</code> loads in
+  your browser and you have a <code>claude</code> prompt waiting in terminal 3.</div>
 
-  <h2>You are done when</h2>
-  <div class="success">You planned a feature, delegated it, and reviewed it — without writing a line of code yourself.</div>
-
-  <details class="cheat">
-    <summary>Stuck? Open this</summary>
-    <div class="body">
-      <p>Nothing to skip to. This is the last one.</p>
-      <p>If you are behind, <code>./checkpoint.sh 8</code> gives you a diff worth reviewing.</p>
-    </div>
-  </details>
   </div>
 
   <nav class="pager">
-    <a href="09-plan-first.html">&larr; Plan-First Orchestration</a>
-    <span>Next &rarr;</span>
+    <a href="environment-setup.html">&larr; Setup</a>
+    <a href="02-coding-challenges.html">Coding Challenges &rarr;</a>
   </nav>
 </div>
 <script>

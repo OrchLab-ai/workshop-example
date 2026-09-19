@@ -39,7 +39,7 @@ Usage: .\verify.ps1 [options]
   -Help     Show this message.
 
 Environment:
-  VERIFY_PORT         Host port for the site check (default 8080)
+  WORKSHOP_PORT       Host port for the site, check and workshop alike (default 5173)
   WINDOWS_ISOLATION   hyperv (default) or process
   WINDOWS_MEMORY      Memory limit for the agent container (default 4g)
 
@@ -95,6 +95,8 @@ $script:Failed       = $false
 $script:FailLabel    = ''
 $script:FailCause    = ''
 $script:FailFix      = ''
+$script:ShotHost     = ''
+$script:ShotStamp    = ''
 $script:CurrentLabel = ''
 $script:CurrentLine  = ''
 $script:CurrentPrefix = ''
@@ -341,10 +343,17 @@ Set-Content -LiteralPath $Report -Value '' -Encoding UTF8
 #
 # Parsed by hand rather than sourced, and $value is CR-stripped, because a .env
 # written on Windows is CRLF: a naive read puts a trailing carriage return inside
-# the token, which then fails authentication with no visible cause. (The bash
-# version sources the file, so it inherits this bug on a CRLF checkout.)
+# the token, which then fails authentication with no visible cause. verify-setup.sh
+# sources a CR-stripped copy for the same reason - a CRLF .env must mean the same
+# thing on both pathways or the two scripts stop being the same check.
+# Stripping the CR here is not the fix and on its own makes things worse: docker
+# compose reads the real file and hands the real value to the container, so a
+# CR-stripping check passes while Claude still refuses the credential. Recorded and
+# reported as a hard failure in check 4. Kept identical to verify-setup.sh.
+$script:EnvHasCrlf = $false
 $envFile = Join-Path $RepoRoot '.env'
 if (Test-Path -LiteralPath $envFile) {
+    if ((Get-Content -LiteralPath $envFile -Raw) -match "`r`n") { $script:EnvHasCrlf = $true }
     foreach ($line in (Get-Content -LiteralPath $envFile)) {
         $trimmed = $line.Trim()
         if ($trimmed -eq '' -or $trimmed.StartsWith('#')) { continue }
@@ -357,7 +366,10 @@ if (Test-Path -LiteralPath $envFile) {
     }
 }
 
-$Port = if ($env:VERIFY_PORT) { $env:VERIFY_PORT } else { '8080' }
+# THE port - the one the workshop stack itself publishes, not a stand-in. Kept in
+# step with verify-setup.sh and both compose files: one variable governs the check
+# and the workshop, so an override set once carries through the whole day.
+$Port = if ($env:WORKSHOP_PORT) { $env:WORKSHOP_PORT } else { '5173' }
 
 # ---------------------------------------------------------------------- banner
 
@@ -573,14 +585,56 @@ first build pulls a ~2 GB Windows base image and takes a while -
 
 if (-not $script:Failed) {
     Write-CheckStart 'Claude Code CLI + auth'
-    if ((-not $env:CLAUDE_CODE_OAUTH_TOKEN) -and (-not $env:ANTHROPIC_API_KEY)) {
-        Write-CheckFail 'no credential found - .env has neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY' @'
-run  claude setup-token
-                        copy the value it prints
-                        run  copy .env.example .env   (if you have not already)
-                        paste the value into .env as CLAUDE_CODE_OAUTH_TOKEN
-                        re-run  .\verify.ps1
+    if ($script:EnvHasCrlf) {
+        Write-CheckFail '.env has Windows line endings (CRLF)' @'
+every value in it ends with an invisible carriage return, including
+                        your credential - and a credential with \r on the end is not
+                        your credential. Docker passes the broken value straight to
+                        the container, so Claude asks you to log in even though
+                        everything here looks correct.
+                        Fix it by re-saving .env with LF / Unix line endings, or:
+                          (Get-Content .env -Raw) -replace "`r`n", "`n" | Set-Content .env -NoNewline
+                        then re-run  .\verify.ps1
 '@
+    } elseif ((-not $env:CLAUDE_CODE_OAUTH_TOKEN) -and (-not $env:ANTHROPIC_API_KEY)) {
+        Write-CheckFail 'no credential found - .env has neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY' @'
+if you have a Claude SUBSCRIPTION, on your own machine run
+                          claude setup-token
+                        and paste the sk-ant-oat01- value it prints into .env as
+                          CLAUDE_CODE_OAUTH_TOKEN
+                        if you have an API KEY from console.anthropic.com, paste it
+                        into .env as
+                          ANTHROPIC_API_KEY
+                        no .env yet?  copy .env.example .env
+                        then re-run  .\verify.ps1
+'@
+    # THE ONE THAT COST AN ATTENDEE AN HOUR. An API key pasted into the OAuth line is
+    # non-empty, the right shape and about the right length, and `claude --version`
+    # still runs - so this check passed and Claude then asked them to log in, with
+    # nothing anywhere pointing at the cause. The prefix is the only tell.
+    # Kept identical to check 4 in verify-setup.sh: an attendee on either pathway has
+    # to get the same verdict, or the two scripts stop being the same check.
+    } elseif ($env:CLAUDE_CODE_OAUTH_TOKEN -and (-not $env:CLAUDE_CODE_OAUTH_TOKEN.StartsWith('sk-ant-oat01-'))) {
+        $seen = $env:CLAUDE_CODE_OAUTH_TOKEN.Substring(0, [Math]::Min(13, $env:CLAUDE_CODE_OAUTH_TOKEN.Length))
+        Write-CheckFail 'CLAUDE_CODE_OAUTH_TOKEN is not a setup-token value' @"
+that line takes a token starting  sk-ant-oat01-
+                        what is in it starts  $seen
+                        if that is  sk-ant-api03-  it is an API KEY, not a
+                        setup-token - move it to ANTHROPIC_API_KEY and leave
+                        CLAUDE_CODE_OAUTH_TOKEN empty. Both start sk-ant- and both
+                        are about 108 characters; the prefix is the only difference.
+                        then re-run  .\verify.ps1
+"@
+    } elseif ($env:ANTHROPIC_API_KEY -and (-not $env:ANTHROPIC_API_KEY.StartsWith('sk-ant-api03-'))) {
+        $seen = $env:ANTHROPIC_API_KEY.Substring(0, [Math]::Min(13, $env:ANTHROPIC_API_KEY.Length))
+        Write-CheckFail 'ANTHROPIC_API_KEY is not an API key' @"
+that line takes a key starting  sk-ant-api03-
+                        what is in it starts  $seen
+                        if that is  sk-ant-oat01-  it came from  claude setup-token
+                        - move it to CLAUDE_CODE_OAUTH_TOKEN and leave
+                        ANTHROPIC_API_KEY empty.
+                        then re-run  .\verify.ps1
+"@
     } else {
         # `cmd /c` is required, not decoration: npm installs the CLI as claude.cmd
         # and claude.ps1 shims, NOT claude.exe, and a Windows container's exec form
@@ -592,6 +646,21 @@ run  claude setup-token
 check .verify-logs\04-claude.log for the error
                         if it mentions authentication, re-run  claude setup-token
                         and refresh the value in .env
+'@
+        # One real round trip. Everything above proves the value is present, the right
+        # shape, and that the CLI runs - and `claude --version` makes no network call,
+        # so all of it passed for an attendee whose credential was rejected the moment
+        # they used it. Kept in step with check 4 of verify-setup.sh.
+        } elseif ((Invoke-Compose '04-auth.log' @('run', '--rm', '--no-deps', 'verify-agent', 'cmd', '/c', 'claude -p "Reply with the two characters: OK"')) -ne 0) {
+            Write-CheckFail 'the credential was rejected - Claude could not authenticate' @'
+the value in .env is present and the right shape, but Claude will not
+                        accept it. The usual causes, in order:
+                          - the token has expired or been revoked; run
+                            claude setup-token  again on your own machine
+                          - it was truncated on the way into .env - check there is no
+                            line break or stray quote around it
+                          - .env was saved with Windows line endings (see above)
+                        the exact error is in .verify-logs\04-auth.log
 '@
         } else {
             $claudeVersion = ''
@@ -605,7 +674,7 @@ check .verify-logs\04-claude.log for the error
             if (-not $claudeVersion) { $claudeVersion = 'ok' }
             # Honest wording: this proves the CLI RUNS and a credential is PRESENT.
             # It does not call the API, so it cannot prove the credential is valid.
-            Write-CheckPass "claude $claudeVersion, credential present (not validated)"
+            Write-CheckPass "claude $claudeVersion, credential authenticated (not validated)"
         }
     }
 }
@@ -615,10 +684,13 @@ check .verify-logs\04-claude.log for the error
 if (-not $script:Failed) {
     Write-CheckStart 'Workshop site responds'
     if ((Invoke-Compose '05-web.log' @('up', '-d', 'verify-web')) -ne 0) {
-        Write-CheckFail "the web container would not start" @"
-port $Port is probably already in use on your machine
-                        re-run with a different port:
-                          `$env:VERIFY_PORT=8081; .\verify.ps1
+        Write-CheckFail "port $Port is already in use - this is the port the workshop needs" @"
+if the workshop stack is already running, that is what is holding it:
+                          docker compose -f docker-compose.workshop.yml down
+                        otherwise something else has it - another Vite project is
+                        the usual answer, since 5173 is its default.
+                        Pick a different port, and KEEP it for the workshop:
+                          `$env:WORKSHOP_PORT=5174; .\verify.ps1
 "@
     } else {
         $siteStart = Get-Date
@@ -644,9 +716,9 @@ port $Port is probably already in use on your machine
             Write-CheckPass ("HTTP 200 on :{0}, {1}s" -f $Port, [int]((Get-Date) - $siteStart).TotalSeconds)
         } else {
             Write-CheckFail "nothing answered on http://localhost:$Port/ after 60s" @"
-another program may be holding port $Port
-                        re-run with a different port:
-                          `$env:VERIFY_PORT=8081; .\verify.ps1
+something may be holding port $Port without Docker noticing.
+                        Pick a different port, and KEEP it for the workshop:
+                          `$env:WORKSHOP_PORT=5174; .\verify.ps1
                         container output is in .verify-logs\05-web.log
 "@
         }
@@ -673,6 +745,16 @@ this is usually a Docker file-sharing permission problem
     } else {
         $sizeKb = [int]((Get-Item -LiteralPath $Screenshot).Length / 1024)
         $engine = if ($env:PW_BROWSER) { $env:PW_BROWSER } else { 'firefox' }
+        # What the browser stamped onto the image. Read back out of the log because
+        # the container that knew it is already gone - see the verdict block.
+        $shotLog = Join-Path $LogDir '06-screenshot.log'
+        if (Test-Path -LiteralPath $shotLog) {
+            $lines = Get-Content -LiteralPath $shotLog
+            $h = $lines | Where-Object { $_ -match '^VERIFY_HOST=' } | Select-Object -Last 1
+            $t = $lines | Where-Object { $_ -match '^VERIFY_STAMP=' } | Select-Object -Last 1
+            if ($h) { $script:ShotHost  = ($h -replace '^VERIFY_HOST=', '').Trim() }
+            if ($t) { $script:ShotStamp = ($t -replace '^VERIFY_STAMP=', '').Trim() }
+        }
         Write-CheckPass "verify.png, $sizeKb KB, $engine"
     }
 }
@@ -696,7 +778,15 @@ if (-not $script:Failed) {
     Say ''
     Say "   Your environment is ready. ${BOLD}There is nothing else to do.${RESET}"
     Say "   Open ${BOLD}$ShotRelative${RESET} to see the proof - it should read"
-    Say '   "ENVIRONMENT OK" with your container name and the time.'
+    Say '   "ENVIRONMENT OK" and match this:'
+    Say ''
+    # The container is destroyed as soon as the check finishes, so its hostname
+    # cannot be looked up afterwards. Printing it here is what turns "it should show
+    # your container name" into something an attendee can actually perform.
+    $hostText  = if ($script:ShotHost)  { $script:ShotHost }  else { '(not reported)' }
+    $stampText = if ($script:ShotStamp) { $script:ShotStamp } else { '(not reported)' }
+    Say "       Container:  ${BOLD}$hostText${RESET}"
+    Say "       Taken at:   ${BOLD}$stampText${RESET}"
     Say ''
     Say "   ${BOLD}${Rule}${RESET}"
     if ($Quiet) { Write-Host "PASS  all $Total checks (windows containers)" }

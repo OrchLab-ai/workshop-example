@@ -4,12 +4,19 @@
 # Claude Code CLI + non-root user), so that a passing check actually proves the
 # thing the workshop needs — not a simpler stand-in that passes when the real
 # container would fail.
-FROM mcr.microsoft.com/playwright:v1.49.1-noble
+#
+# THE TAG MUST MATCH app/autonomous/Dockerfile, and it is not cosmetic. This base
+# layer is ~2 GB. When the two drifted (1.49.1 here, 1.58.2 there) an attendee
+# downloaded it TWICE: once the night before for a check that proved nothing about
+# the morning, and again at 09:05 when the workshop stack pulled the one it actually
+# uses. Sharing the tag is what makes the check's download the workshop's download.
+# tests/run-tests.mjs fails if these two ever diverge again.
+FROM mcr.microsoft.com/playwright:v1.58.2-noble
 
 # Pin to the base image's Playwright version. A mismatch here is the classic
 # "browser not found at runtime" failure: the npm package looks for a browser
 # revision the preinstalled /ms-playwright never shipped.
-ARG PLAYWRIGHT_VERSION=1.49.1
+ARG PLAYWRIGHT_VERSION=1.58.2
 
 RUN npm install -g \
       playwright@${PLAYWRIGHT_VERSION} \

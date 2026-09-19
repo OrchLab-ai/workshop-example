@@ -27,13 +27,19 @@ if (!response || !response.ok()) {
 // The page ships as a static file, so the run-specific facts are injected here
 // rather than baked in — that way the screenshot proves *this* run, not a
 // stale artefact left behind by an earlier one.
+// Named, because these two are both stamped onto the page AND printed to stdout
+// below for the caller to echo. Computing them inline in the evaluate() call was
+// what made it impossible to tell the attendee what to look for.
+const HOST = hostname();
+const STAMP = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+
 await page.evaluate(
   ([host, stamp, checkpoint]) => {
     document.getElementById("host").textContent = host;
     document.getElementById("stamp").textContent = stamp;
     document.getElementById("checkpoint").textContent = checkpoint;
   },
-  [hostname(), new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC", CHECKPOINT]
+  [HOST, STAMP, CHECKPOINT]
 );
 
 const heading = await page.textContent("h1");
@@ -44,4 +50,12 @@ if (!heading || !heading.includes("ENVIRONMENT OK")) {
 
 await page.screenshot({ path: OUT });
 await browser.close();
+
+// Report the two facts that were stamped INTO the image, so the caller can print
+// them beside the file path. The container these ran in is destroyed the moment the
+// check finishes (--rm, then compose down), so its hostname is otherwise unknowable
+// — and "check the screenshot shows your container name" is not a check anybody can
+// perform against a name they were never told.
+console.log(`VERIFY_HOST=${HOST}`);
+console.log(`VERIFY_STAMP=${STAMP}`);
 console.log(`screenshot written to ${OUT}`);

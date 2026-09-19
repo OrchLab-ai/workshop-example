@@ -7,9 +7,12 @@
 <script>
 (function () {
   try {
+    // LIGHT IS THE DEFAULT, not the OS preference. This guide is read on a projector
+    // and over a lot of shoulders, and it is handed to a room rather than to one
+    // person's configured machine. Dark is one click away and is remembered, so
+    // somebody who wants it pays for it once.
     var stored = localStorage.getItem('orchlab-guide-theme');
-    var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-    document.documentElement.setAttribute('data-theme', stored || (prefersLight ? 'light' : 'dark'));
+    document.documentElement.setAttribute('data-theme', stored || 'light');
   } catch (e) {}
 })();
 </script>
@@ -27,22 +30,13 @@
   --strong:      #111111;
   --accent:      #3f6b2b;  /* deep green — 6.3:1 on white */
   --amber:       #7a5200;
+  --danger:      #a02e1a;  /* red — 7.2:1 on white */
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --bg:          #222222;
-    --panel:       #2a2a2a;
-    --surface:     #383838;
-    --surface-alt: #444444;
-    --border:      #383838;
-    --text:        #eeeeee;
-    --muted:       #9e9e9e;
-    --strong:      #ffffff;
-    --accent:      #8cc26c;
-    --amber:       #ffbd2e;
-  }
-}
+/* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
+   whatever the operating system says — this is read on projectors and over
+   shoulders, and it is handed to a room rather than to one person's configured
+   machine. A media query flipping it would also mean the same reader gets light with
+   JavaScript on and dark with it off. Dark is the toggle below, and it persists. */
 :root[data-theme="dark"] {
   color-scheme: dark;
   --bg:          #222222;
@@ -55,6 +49,7 @@
   --strong:      #ffffff;
   --accent:      #8cc26c;
   --amber:       #ffbd2e;
+  --danger:      #ff9580;
 }
 :root {
   /* Constant in both themes */
@@ -97,10 +92,6 @@ header.site .spacer { flex: 1 1 auto; }
 .theme-toggle .to-dark { display: none; }
 :root[data-theme="dark"] .theme-toggle .to-dark { display: inline; }
 :root[data-theme="dark"] .theme-toggle .to-light { display: none; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .theme-toggle .to-dark { display: inline; }
-  :root:not([data-theme="light"]) .theme-toggle .to-light { display: none; }
-}
 
 h1 { font-size: 31px; line-height: 1.2; margin: 18px 0 10px; color: var(--strong); }
 h2 {
@@ -213,6 +204,228 @@ details.cheat[open] > summary::before { content: "▾ "; }
 details.cheat .body { padding: 0 18px 16px; }
 details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
 
+/* The three windows. A numbered rail rather than prose, because it is consulted
+   ("which one again?") far more often than it is read. */
+.terminals {
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--surface); padding: 15px 18px; margin: 0 0 16px;
+}
+.terminals .tm-intro { margin: 0 0 14px; font-size: 15px; color: var(--strong); }
+.terminals .tm { display: flex; gap: 13px; align-items: baseline; margin: 0 0 12px; }
+.terminals .tm:last-child { margin-bottom: 0; }
+.terminals .tm > div { flex: 1 1 auto; }
+.terminals .tm p { margin: 4px 0 0; font-size: 14.5px; color: var(--text); }
+.terminals .tm b { color: var(--strong); font-size: 15px; }
+.terminals .tm-n {
+  flex: none; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--brand); color: var(--on-brand);
+  font: 700 13px/24px ui-monospace, Menlo, monospace; text-align: center;
+}
+/* The badge reuses .loc, so the colour here means the same thing it means on every
+   command block — which is the entire point of repeating it. */
+.terminals .tm-loc { margin-left: 6px; }
+
+/* Each window now carries the command that opens it, rather than the commands being
+   a second numbered list below with the mapping left to the reader. Tightened up: a
+   full-size copy block inside a step made the step look like a section. */
+.terminals .copyblock { margin: 9px 0 0; }
+.terminals .tm > div > div[data-only] { margin: 0; }
+/* Steps are separated by the gap, not by rules — except the last one, which is the
+   "did it work" check and is a different KIND of thing. */
+.terminals .tm-after {
+  margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);
+}
+.terminals .tm-check { background: var(--accent); color: var(--bg); }
+.terminals .note { margin: 12px 0 0; }
+
+/* Three spellings of the same slot, one per pathway; the platform script hides the
+   two that do not apply. Before anything is picked all three show, which reads as
+   "Terminal / Git Bash / PowerShell" and is honest rather than wrong. */
+.shellname + .shellname::before { content: " / "; font-weight: 400; color: var(--muted); }
+
+/* Two exclusive sections, styled as a choice rather than as a disclosure: full
+   width, equal weight, and the closed one clearly still clickable. The point is that
+   only one set of instructions is ever on screen, so the reader cannot follow the
+   half that is not theirs. */
+details.cred {
+  border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+  margin: 0 0 10px;
+}
+details.cred[open] { background: var(--surface); border-color: var(--accent); }
+details.cred > summary {
+  cursor: pointer; padding: 13px 16px; list-style: none;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px;
+}
+details.cred > summary::-webkit-details-marker { display: none; }
+/* The affordance has to survive the section being closed — a flat row of two closed
+   details with no marker reads as two dead headings. */
+details.cred > summary::before {
+  content: "▸"; color: var(--accent); font-size: 12px; flex: none;
+}
+details.cred[open] > summary::before { content: "▾"; }
+details.cred > summary b { color: var(--strong); font-size: 15px; }
+details.cred > summary .hint { color: var(--muted); font-size: 13.5px; }
+details.cred .cred-body {
+  padding: 0 16px 15px; border-top: 1px solid var(--border); margin-top: 2px;
+}
+details.cred .cred-body p { margin: 12px 0 0; font-size: 14.5px; }
+details.cred .cred-body .copyblock { margin: 11px 0 0; }
+
+/* One row, above the fold on nine pages: it has to read as chrome, not as content.
+   Two variants, because only one is ever visible: the "set" bar is quiet and
+   ignorable; the "ask" bar is amber and is the only thing on the page until it is
+   answered. */
+.pathbar, .statusbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+  margin: 0 0 20px; padding: 8px 12px;
+  border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+}
+.pathbar.is-set, .statusbar { background: var(--panel); }
+.pathbar.is-ask {
+  background: color-mix(in srgb, var(--amber) 14%, var(--bg));
+  border-color: var(--amber); padding: 12px 14px;
+}
+.pathbar .pb-lbl, .statusbar .pb-lbl { color: var(--muted); letter-spacing: .04em; }
+.pathbar .pb-cta { color: var(--amber); font-weight: 700; letter-spacing: .02em; }
+.pathbar .pb-pick { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pathbar b, .statusbar b { color: var(--strong); font-size: 13.5px; }
+.pathbar button, .statusbar button {
+  font: inherit; cursor: pointer; padding: 4px 10px; border-radius: 4px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+}
+.pathbar button:hover, .statusbar button:hover { background: var(--surface-alt); color: var(--strong); }
+.pathbar.is-ask button { border-color: var(--amber); color: var(--strong); }
+.pathbar.is-ask button:hover { background: var(--amber); color: var(--bg); }
+/* A link, not a fourth option: it leaves for the page that can answer the question. */
+.pathbar .pb-idk {
+  color: var(--amber); text-decoration: underline; text-underline-offset: 3px;
+  padding: 4px 2px;
+}
+
+/* The setup-page question, asked before anything else on the page. Sized to be the
+   thing you answer, not a banner you scroll past — it decides whether three quarters
+   of the page is relevant. */
+/* A step that is blocking the rest of the page. Amber while unanswered, and plain
+   once it is not — the highlight has to leave, or every page ends up shouting. */
+.stepblock { padding: 2px 0; }
+.stepblock.is-ask {
+  border: 1px solid var(--amber); border-radius: 6px;
+  background: color-mix(in srgb, var(--amber) 9%, var(--bg));
+  padding: 4px 18px 18px; margin-bottom: 22px;
+}
+.stepblock.is-ask > h2 { color: var(--amber); }
+.stepblock .sb-why { margin: 0 0 14px; font-size: 14px; color: var(--text); max-width: 62ch; }
+
+.setupask {
+  border: 1px solid var(--accent); border-radius: 6px;
+  background: var(--panel); padding: 18px 20px; margin: 0 0 22px;
+}
+.setupask .sa-q { margin: 0; font-size: 17px; font-weight: 700; color: var(--strong); }
+.setupask .sa-d { margin: 7px 0 0; font-size: 14px; color: var(--muted); }
+.setupask .sa-opts {
+  display: grid; gap: 10px; margin-top: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.setupask button {
+  font: inherit; text-align: left; cursor: pointer; padding: 11px 14px; border-radius: 5px;
+  background: var(--surface); color: var(--strong); border: 1px solid var(--border);
+}
+.setupask button:hover { background: var(--surface-alt); border-color: var(--accent); }
+.setupask button .sub {
+  display: block; font-weight: 400; font-size: 13px; color: var(--muted); margin-top: 4px;
+}
+
+p.tinynote { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+p.tinynote a { color: var(--accent); }
+
+/* A recovery, not a step: same red as the troubleshooting section, smaller. */
+details.trouble.compact { margin: 0 0 10px; }
+details.trouble.compact > summary { padding: 12px 16px; font-size: 15px; }
+details.trouble.compact > summary .cta { font-size: 13.5px; margin-top: 4px; }
+
+/* Command groups. Subordinate to the h2 they sit under, and quieter than it — the
+   headings exist to make "see Start your day below" land somewhere real, not to
+   compete with the section they divide. */
+h3.cmdgroup {
+  font-size: 13px; margin: 22px 0 12px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 1.2px; font-weight: 700;
+}
+h3.cmdgroup:first-of-type { margin-top: 4px; }
+
+/* troubleshooting — the whole section is one red, collapsed <details>.
+   COLLAPSED because the people who need it are a minority of the room and the page
+   ends on "ALL 6 CHECKS PASSED": a passing setup should not have to scroll past
+   thirteen failures to reach the pager. RED because it is the one thing on this page
+   somebody scans for while something is actually broken, and red is what the eye
+   finds. It is the only use of --danger in the guide, which is what keeps it loud. */
+details.trouble {
+  margin: 34px 0 0; background: var(--panel);
+  border: 1px solid var(--danger); border-left: 4px solid var(--danger);
+  border-radius: 0 6px 6px 0;
+}
+details.trouble > summary {
+  cursor: pointer; padding: 16px 18px; color: var(--danger);
+  font: 700 16px/1.4 inherit; list-style: none; user-select: none;
+}
+details.trouble > summary::-webkit-details-marker { display: none; }
+details.trouble > summary::before { content: "▸ "; }
+details.trouble[open] > summary::before { content: "▾ "; }
+details.trouble > summary:hover { background: var(--surface); }
+/* The summary is a question, and a question does not look clickable. This is the
+   line that says it is — underlined, so it reads as the control it is even to
+   somebody who has not registered that the whole row is a target. It flips to
+   "Hide" when open, so the row never tells you to click something already showing. */
+details.trouble > summary .cta {
+  display: block; margin-top: 6px;
+  font: 600 14.5px/1.5 inherit; color: var(--danger);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+details.trouble[open] > summary .cta::after { content: " — click again to hide"; }
+details.trouble > summary .sub {
+  display: block; font: 400 14px/1.5 inherit; color: var(--muted); margin-top: 5px;
+}
+details.trouble .tr-body { padding: 0 18px 20px; }
+/* The section headings inside are h3, not h2: they sit under the summary, and the
+   accent-green h2 treatment would fight the red rail around them. */
+details.trouble .tr-body h3 {
+  font-size: 15px; margin: 24px 0 12px; color: var(--danger);
+  text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;
+}
+details.trouble .tr-body > h3:first-child { margin-top: 4px; }
+
+/* one <details> per failure the check can report.
+   Collapsed, because nobody reads thirteen failures they do not have: the summary
+   quotes the cause line VERBATIM from verify-setup.sh so someone can scan this list
+   against what is on their screen and open exactly one. Distinguished from
+   details.cheat by shape rather than colour — a bordered card, not a coloured rail —
+   since the two never appear on the same page and amber already means "shortcut". */
+details.fix {
+  margin: 0 0 10px; background: var(--panel);
+  border: 1px solid var(--border); border-radius: 6px;
+}
+details.fix[open] { background: var(--surface); }
+details.fix > summary {
+  cursor: pointer; padding: 13px 16px; color: var(--strong);
+  list-style: none; user-select: none; font-size: 15px;
+}
+details.fix > summary::-webkit-details-marker { display: none; }
+details.fix > summary::before { content: "▸ "; color: var(--muted); }
+details.fix[open] > summary::before { content: "▾ "; }
+details.fix > summary:hover { background: var(--surface-alt); border-radius: 6px; }
+details.fix .fx-check {
+  display: inline-block; background: var(--surface-alt); color: var(--muted);
+  font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
+  text-transform: uppercase; padding: 5px 8px; border-radius: 3px;
+  margin-right: 10px; vertical-align: 1px;
+}
+details.fix[open] .fx-check { background: var(--panel); }
+details.fix .fx-body { padding: 4px 16px 14px; }
+details.fix .fx-body p { margin: 0 0 14px; font-size: 15px; }
+
+/* "when to stop and ask" — an ordered list, because the order is the advice */
+ol.helpsteps { padding-left: 24px; margin: 0 0 18px; }
+ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
+
 /* platform picker
    Choices are real <button>s so they are keyboard-reachable and announce their
    pressed state. The panels are VISIBLE by default and hidden by script — that way
@@ -279,9 +492,13 @@ details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
 }
 .shellreq strong { color: var(--strong); }
 
-/* Which shell does this command belong in. Two places, two colours, stated on every
-   block rather than once at the top of the page — by the time someone has scrolled
-   to the third command they have forgotten a heading. */
+/* WHICH OF THE THREE WINDOWS does this command belong in. Named after the terminals
+   themselves rather than after host-vs-container, because host-vs-container is not
+   the question anyone gets wrong: two of the three windows are container shells, and
+   badging both "in the container" answered a question nobody was asking while
+   staying silent on the one that costs something. Stated on every block rather than
+   once at the top of the page — by the time someone has scrolled to the third
+   command they have forgotten a heading. */
 .loc {
   flex: none; margin-left: auto; margin-right: 10px; padding: 3px 8px; border-radius: 3px;
   font: 700 10.5px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
@@ -289,9 +506,33 @@ details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
 }
 .loc.host      { background: var(--amber);  color: var(--bg); }
 .loc.container { background: var(--accent); color: var(--bg); }
+/* Outlined rather than filled: it is a container shell like the one above it, so it
+   keeps that colour, and the difference between them stays visible at a glance. */
+.loc.claude    { background: none; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .shellreq .not { color: var(--amber); font-weight: 700; }
 
 /* nav */
+div.before {
+  display: grid; gap: 10px; margin: 0 0 26px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+a.b-step {
+  display: block; text-decoration: none; padding: 13px 15px;
+  background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+}
+a.b-step:hover { background: var(--surface-alt); }
+a.b-step .b-n {
+  display: block; font-size: 10.5px; letter-spacing: .12em;
+  color: var(--muted); margin-bottom: 5px;
+}
+a.b-step b { color: var(--accent); font-size: 15px; }
+a.b-step p { margin: 5px 0 0; color: var(--text); font-size: 13px; line-height: 1.5; }
+
+p.dailylink {
+  margin: 0 0 14px; font-size: 13px; color: var(--muted);
+}
+p.dailylink a { color: var(--accent); }
+
 nav.pager {
   display: flex; justify-content: space-between; gap: 14px;
   margin-top: 46px; padding-top: 22px; border-top: 1px solid var(--border);
@@ -309,87 +550,100 @@ nav.pager a:hover { background: var(--surface); }
   <header class="site">
     <a href="../start-here.html">← ALL ACTIVITIES</a>
     <a href="environment-setup.html">SETUP</a>
+    <a href="start-your-day.html">START YOUR DAY</a>
     <a href="links.html">ALL LINKS</a>
     <span class="spacer"></span>
     <button class="theme-toggle" type="button" data-theme-toggle
       aria-label="Switch between light and dark theme"
     ><span class="to-dark">☀ LIGHT</span><span class="to-light">☾ DARK</span></button>
   </header>
+  <div class="pathbar is-set" data-pick-chosen hidden>
+    <span class="pb-lbl">Your pathway</span>
+    <b data-pick-label
+      data-label-macos="macOS"
+      data-label-windows-linux="Windows &middot; Linux containers"
+      data-label-windows-windows="Windows &middot; Windows containers"></b>
+    <button type="button" data-pick-reset>Change</button>
+  </div>
+  <div class="pathbar is-ask" data-pick-empty>
+    <span class="pb-cta">Pick your pathway to continue</span>
+    <span class="pb-pick">
+      <button type="button" data-pick="macos" aria-pressed="false">macOS</button>
+      <button type="button" data-pick="windows-linux" aria-pressed="false">Windows &middot; Linux containers</button>
+      <button type="button" data-pick="windows-windows" aria-pressed="false">Windows &middot; Windows containers</button>
+      <!-- Not a third guess. Windows attendees genuinely do not know which container
+           mode Docker is in — that is why the setup page has them RUN a command rather
+           than choose. Guessing here would send them down a pathway whose every
+           command is wrong for them; this sends them to the question. -->
+      <a class="pb-idk" href="environment-setup.html?os=windows#docker-mode">Windows &mdash; not sure which</a>
+    </span>
+  </div>
   <span class="actnum">ACTIVITY 03</span>
   <p class="eyebrow">Part 1 — AI Coding</p>
   <h1>Give Your Agent Sight</h1>
-  <p class="lede">Your container already has Playwright. The skill is asking the agent to use it — to open the running app, look at what it changed, and prove it with a screenshot.</p>
+  <p class="lede">Your container already has Playwright. The skill is asking the agent to use it — to capture the page <em>before</em> it builds, then prove with a second screenshot that the thing it claims to have built is actually on screen.</p>
 
   <div class="cp">
     <span>start from <b>cp-01</b></span>
     <span>produces <b>cp-02</b></span>
-    <span>behind? <code>./checkpoint.sh 1</code></span>
   </div>
 
-  <h2>What to do</h2>
-  <ol>
-    <li>Start Claude Code in the container — Playwright and its MCP server are already installed, so there is nothing to wire up.</li>
-    <li>Paste one of the prompts. The words that matter are <strong>use Playwright</strong>: without them the agent will reason about the code instead of looking at the page.</li>
-    <li>Read what it reports back against what you can see yourself at <code>http://localhost:5173</code>.</li>
-    <li>Check the screenshots it wrote — they land in <code>screenshots/</code> on your own machine.</li>
-  </ol>
 
-  <h2>Commands</h2>
-      <div class="shellreq"><span class="where">Where</span>Run these in <strong>two places — your machine, and the container</strong>. Commands marked <strong>your machine</strong> run in Git Bash (Windows) or Terminal (macOS), from the root of your <code>workshop-example</code> clone. Commands marked <strong>in the container</strong> run after you are inside it — see <em>Start your day</em> below.</div>
+  <div data-needs-pathway>
+  <details class="trouble compact">
+  <summary>Didn't finish the last activity?
+    <span class="cta">Click here to catch up</span>
+  </summary>
+  <div class="tr-body">
+    <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
   <div class="copyblock">
-    <div class="cb-head"><span>1. Start the stack (once a day — leave it running)</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
-    <pre>docker compose -f docker-compose.workshop.yml up -d</pre>
-  </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>2. Get a shell inside the container</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
-    <pre>docker compose -f docker-compose.workshop.yml exec claude-container bash</pre>
-  </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>3. Check the site is up — open this in your browser</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
-    <pre>http://localhost:5173</pre>
-  </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Jump to the starting checkpoint</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
     <pre>./checkpoint.sh 1</pre>
   </div>
+  </div>
+</details>
+
+  <h2>Commands</h2>
+      <div class="shellreq"><span class="where">Where</span>Each block is badged with the window it belongs in, and the host terminal is <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> in your <code>workshop-example</code> folder. Not set up yet? <a href="start-your-day.html">Start your day</a>.</div>
   <div class="copyblock">
-    <div class="cb-head"><span>Confirm the agent has a browser to drive</span><span class="loc container">in the container</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Confirm the agent has a browser to drive</span><span class="loc container">work terminal</span><button type="button">Copy</button></div>
     <pre>claude mcp list</pre>
-  </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Start Claude Code, then ask it to look at the page itself</span><span class="loc container">in the container</span><button type="button">Copy</button></div>
-    <pre>claude</pre>
-  </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Screenshots it takes land here, on your machine</span><span class="loc host">your machine</span><button type="button">Copy</button></div>
-    <pre>screenshots/</pre>
   </div>
 
   <h2>Prompts — copy, don't retype</h2>
+      <div class="shellreq"><span class="where">Where</span>Inside the <strong>Claude terminal</strong> — the third window, with Claude already running in it.</div>
   <div class="copyblock is-prompt">
-    <div class="cb-head"><span>Ask it to look</span><button type="button">Copy</button></div>
-    <pre>Use Playwright to open http://localhost:5173, navigate to the page I changed in the last exercise, and take a screenshot to /screenshots. Then tell me what you actually see on the page — not what the code says it should do.</pre>
+    <div class="cb-head"><span>1. Baseline — run this before you ask for any code</span><button type="button">Copy</button></div>
+    <pre>Use Playwright to open http://localhost:5173, navigate to the Explore Missions page, and save a screenshot to /screenshots/explore-before.png. Do not change any code yet. Tell me what is on the page right now — what you actually see, not what the code says should be there.</pre>
   </div>
   <div class="copyblock is-prompt">
-    <div class="cb-head"><span>Ask it to compare</span><button type="button">Copy</button></div>
-    <pre>Use Playwright to screenshot the page before and after your change, save both to /screenshots, and tell me what visibly differs. If the change did not render, say so plainly rather than explaining why it should have worked.</pre>
+    <div class="cb-head"><span>2. Build it</span><button type="button">Copy</button></div>
+    <pre>Add a 'Trending Missions' section to the Explore Missions page: the three most popular live missions by contributor count, shown above the main grid. Match the existing page's styling and add tests.</pre>
   </div>
   <div class="copyblock is-prompt">
-    <div class="cb-head"><span>Ask it to check itself</span><button type="button">Copy</button></div>
-    <pre>Use Playwright to verify the change actually works in the browser: click through the flow a user would take, and report anything that errors or looks wrong. Fix what you find, then screenshot the result.</pre>
+    <div class="cb-head"><span>3. Prove it</span><button type="button">Copy</button></div>
+    <pre>Use Playwright to screenshot the Explore Missions page again to /screenshots/explore-after.png, compare it against explore-before.png, and tell me what visibly differs. Then click through the page as a user would and report anything that errors or looks wrong. If Trending Missions did not render, say so plainly rather than explaining why it should have worked.</pre>
+  </div>
+
+  <h2>Check your work</h2>
+  <div class="copyblock">
+    <div class="cb-head"><span>Screenshots it takes land here, on your machine</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <pre>screenshots/</pre>
   </div>
 
   <h2>You are done when</h2>
-  <div class="success">You have two screenshots on disk that the agent captured itself, without you driving a browser.</div>
+  <div class="success">Two screenshots on disk that the agent captured itself, without you driving a browser — and the only difference between them is the feature you asked for.</div>
 
   <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
       <p>If the agent says it cannot find a browser, check <code>claude mcp list</code> inside the container — the Playwright MCP server should be listed.</p>
+      <p>Agent built it before taking the baseline? That is the mistake this activity is about. <code>git stash</code>, screenshot, <code>git stash pop</code> — then make it compare properly.</p>
       <p>Want to read a working version instead? The <code>verify/</code> directory drives a real browser in a container and captures a screenshot — it is what your environment check ran this morning.</p>
       <p>This matters more than it looks: everything in Part 3 depends on an agent that can check its own work.</p>
     </div>
   </details>
+  </div>
 
   <nav class="pager">
     <a href="02-coding-challenges.html">&larr; Coding Challenges</a>
@@ -405,6 +659,37 @@ nav.pager a:hover { background: var(--surface); }
 // not — which is exactly the moment the guide needs to ask the second question.
 var PLATFORM_KEY = 'orchlab-guide-platform';
 
+// The second remembered answer, on the setup page only: have you done this before?
+// Kept as its own tiny state machine rather than folded into the platform one - they
+// are independent questions, and the platform state already carries a half-answered
+// case that has nothing to do with this.
+var SETUP_KEY = 'orchlab-guide-setup';
+
+function applySetup(state) {
+  // Elements list the states they belong to, so "shown in both" is data rather than
+  // a special case, and nothing is visible until the question has been answered.
+  document.querySelectorAll('[data-setup]').forEach(function (el) {
+    el.hidden = !state || el.getAttribute('data-setup').split(' ').indexOf(state) < 0;
+  });
+  document.querySelectorAll('[data-setup-empty]').forEach(function (el) {
+    el.hidden = !!state;
+  });
+  document.querySelectorAll('[data-setup-chosen]').forEach(function (el) {
+    el.hidden = !state;
+  });
+  document.querySelectorAll('[data-setup-label]').forEach(function (el) {
+    if (state) el.textContent = el.getAttribute('data-label-' + state) || state;
+  });
+}
+
+function setSetup(state) {
+  try {
+    if (state) localStorage.setItem(SETUP_KEY, state);
+    else localStorage.removeItem(SETUP_KEY);
+  } catch (e) {}
+  applySetup(state || '');
+}
+
 function applyPlatform(state) {
   var os = state ? state.split('-')[0] : '';
   var final = state && state !== 'windows';
@@ -415,8 +700,43 @@ function applyPlatform(state) {
   document.querySelectorAll('[data-pathway]').forEach(function (el) {
     el.hidden = el.getAttribute('data-pathway') !== state;
   });
+  // Troubleshooting entries, and commands that are a different language in a
+  // different shell. Two rules, and the second one matters more than it looks:
+  //
+  //   1. Nothing is chosen  ->  show EVERYTHING. Somebody who scrolled to
+  //      "Something went wrong?" without answering the picker is the person most
+  //      likely to be stuck, and hiding every fix from them would be perverse.
+  //   2. Half-answered ('windows', OS known but container mode not) -> show both
+  //      Windows pathways' entries, because either could still turn out to apply.
+  //
+  // Same show-by-default contract as the pathway panels: the attribute is inert
+  // markup, and only this script ever hides anything.
+  document.querySelectorAll('[data-only]').forEach(function (el) {
+    var ids = el.getAttribute('data-only').split(' ').filter(Boolean);
+    var show;
+    if (!state) show = true;
+    else if (ids.indexOf(state) >= 0) show = true;
+    else if (final) show = false;
+    else show = ids.some(function (id) { return id.split('-')[0] === os; });
+    el.hidden = !show;
+  });
   document.querySelectorAll('[data-pick-empty]').forEach(function (el) {
     el.hidden = !!final;
+  });
+  // Page content that only makes sense once a pathway is known. Held back rather than
+  // shown three ways at once: with nothing chosen, every gated fix and command on the
+  // page renders all of its variants, and the reader has no way to tell which is
+  // theirs. The bar above says so in amber and is one click to resolve.
+  document.querySelectorAll('[data-needs-pathway]').forEach(function (el) {
+    el.hidden = !final;
+  });
+  // The section that ASKS stays visible and goes amber instead of being swapped for
+  // another element: it is the one thing on the page that must not disappear, and a
+  // page whose only remaining content is unmarked reads as broken rather than as
+  // waiting for an answer.
+  document.querySelectorAll('[data-pick-highlight]').forEach(function (el) {
+    if (final) el.classList.remove('is-ask');
+    else el.classList.add('is-ask');
   });
   document.querySelectorAll('[data-pick-chosen]').forEach(function (el) {
     el.hidden = !final;
@@ -442,26 +762,78 @@ function setPlatform(state) {
   var stored = '';
   try { stored = localStorage.getItem(PLATFORM_KEY) || ''; } catch (err) {}
   applyPlatform(stored);
+
+  // WHICH DEFAULT depends on how you got here, because the same page serves two
+  // arrivals. The SETUP link and the pre-workshop invite are people setting a machine
+  // up, so the full guide is what they want and asking first is a wasted click. The
+  // "I want to prove my setup works" card is opened ON the day by someone who may or
+  // may not be set up — that one carries ?ask and gets the question.
+  //
+  // The default is NOT written to storage: it stays a default, so arriving later from
+  // the card still asks rather than replaying a choice nobody made.
+  var setup = '';
+  try { setup = localStorage.getItem(SETUP_KEY) || ''; } catch (err) {}
+  if (!setup && !/[?&]ask(=|&|$)/.test(location.search)) setup = 'fresh';
+  applySetup(setup);
+
+  // "Windows — not sure which" on any pathway bar sends people here with the OS
+  // half-answered, which is exactly the state that reveals the container-mode
+  // question. Applied after the above so it wins, and scrolled to because the
+  // question sits below the fold on the page it lands on.
+  if (/[?&]os=windows(&|$)/.test(location.search)) {
+    // FORCE THE FULL-SETUP BRANCH FIRST. The container-mode question lives inside
+    // step 1, which the "already set up" branch does not render — so a reader who had
+    // answered "just run the check" and then clicked "not sure which" landed on this
+    // page, scrolled to an element that was hidden, and saw nothing happen. The link
+    // exists precisely because they cannot answer the pathway question, and the only
+    // place that answers it is step 1.
+    setSetup('fresh');
+    setPlatform('windows');
+    var mode = document.getElementById('docker-mode');
+    if (mode) setTimeout(function () { mode.scrollIntoView({ block: 'center' }); }, 0);
+  }
 })();
 
 document.addEventListener('click', function (e) {
   var toggle = e.target.closest('[data-theme-toggle]');
   if (toggle) {
     var root = document.documentElement;
-    var current = root.getAttribute('data-theme');
-    if (!current) {
-      var prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-      current = prefersLight ? 'light' : 'dark';
-    }
-    var next = current === 'light' ? 'dark' : 'light';
+    // The boot script always stamps the attribute, so there is no unset case to
+    // resolve here — and no second copy of the default rule to fall out of step.
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     root.setAttribute('data-theme', next);
     try { localStorage.setItem('orchlab-guide-theme', next); } catch (err) {}
     return;
   }
 
+  // Exclusive accordions. Modern browsers do this natively via <details name>, and
+  // on those this listener is a no-op because they have already closed the sibling.
+  // Where the attribute is unsupported it would otherwise degrade to every section
+  // open at once, which is the exact state these sections exist to prevent: the
+  // reader seeing both credentials and following the wrong one.
+  var toggled = e.target.closest('details[data-exclusive] > summary');
+  if (toggled) {
+    var d = toggled.parentNode;
+    if (!d.open) {
+      var group = d.getAttribute('data-exclusive');
+      document.querySelectorAll('details[data-exclusive="' + group + '"]').forEach(function (other) {
+        if (other !== d) other.open = false;
+      });
+    }
+  }
+
   var pick = e.target.closest('[data-pick]');
   if (pick) {
     setPlatform(pick.getAttribute('data-pick'));
+    return;
+  }
+  var setup = e.target.closest('[data-setup-pick]');
+  if (setup) {
+    setSetup(setup.getAttribute('data-setup-pick'));
+    return;
+  }
+  if (e.target.closest('[data-setup-reset]')) {
+    setSetup(null);
     return;
   }
   if (e.target.closest('[data-pick-reset]')) {

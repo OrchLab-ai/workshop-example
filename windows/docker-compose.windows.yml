@@ -35,10 +35,10 @@ services:
       # The SAME site the Linux stack serves — one source of truth for the page.
       - ../verify/site:C:\site:ro
     ports:
-      # Host-side port only exists so check 4 can prove the site is reachable from
-      # *your machine*, not just from inside the Docker network. Override with
-      # VERIFY_PORT if 8080 is already taken.
-      - "${VERIFY_PORT:-8080}:80"
+      # Deliberately the SAME port the workshop stack publishes, and the same
+      # variable - see ../docker-compose.workshop.yml. The check exists to predict
+      # the day, and proving some unrelated port is free predicts nothing.
+      - "${WORKSHOP_PORT:-5173}:80"
     isolation: ${WINDOWS_ISOLATION:-hyperv}
     healthcheck:
       # No wget/curl on Server Core. Invoke-WebRequest is the portable probe, and
@@ -60,6 +60,15 @@ services:
     depends_on:
       verify-web:
         condition: service_healthy
+    # CREDENTIALS COME FROM .env DIRECTLY, not from an `environment:` mapping.
+    # `ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"` sets the variable to the EMPTY
+    # STRING when it is unset rather than omitting it, and interactive Claude Code
+    # then sees an API key configured, tries to use it, and asks the attendee to log
+    # in. env_file omits what is absent or commented out. Kept identical to
+    # docker-compose.workshop.yml and docker-compose.verify.yml.
+    env_file:
+      - path: ../.env
+        required: false
     environment:
       VERIFY_URL: http://verify-web/
       VERIFY_OUT: "C:/screenshots/verify.png"
@@ -67,8 +76,6 @@ services:
       # Firefox, not Chromium — Chromium cannot render on Server Core at all.
       # See the long comment in windows/Dockerfile.
       PW_BROWSER: "${PW_BROWSER:-firefox}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
-      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
     volumes:
       - ../screenshots:C:\screenshots
     # Hyper-V isolation gives the container its own kernel — materially stronger

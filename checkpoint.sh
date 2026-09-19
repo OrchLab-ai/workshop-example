@@ -226,7 +226,18 @@ idx=$(index_of "$TARGET") || die "No checkpoint called \"$TARGET\". Try  ./check
 if ! tag_exists "$TARGET"; then
   # It may simply not have been fetched yet — try once before giving up, so an
   # attendee with a stale clone is not told a real checkpoint doesn't exist.
-  app_git fetch --tags --quiet >/dev/null 2>&1
+  # --force because a plain `fetch --tags` REFUSES to update a tag that already
+  # exists locally. Rungs get republished — a checkpoint found to be carrying a
+  # defect is corrected by moving its tag — and without this, the one person who
+  # most needs the correction (somebody who already cloned) is the one person who
+  # silently never receives it, while fresh clones get the fixed rung.
+  #
+  # --prune-tags for the same reason in the other direction: --force updates a tag
+  # that MOVED but keeps one that was DELETED. A retired rung would then read as
+  # published forever to anyone who had already fetched it, and jumping to it would
+  # land them on a checkpoint that no longer exists. Ladders get shortened as well
+  # as corrected, and it has to be both or it is not a safety net.
+  app_git fetch --tags --force --prune --prune-tags --quiet >/dev/null 2>&1
 fi
 if ! tag_exists "$TARGET"; then
   printf '\n   %s\n' "${AMBER}${BOLD}${TARGET} has not been published yet.${RESET}"
@@ -263,10 +274,41 @@ if app_git rev-parse -q --verify "refs/heads/$WORK" >/dev/null 2>&1; then
   else
     app_git checkout -q "$WORK" || die "Could not switch to $WORK."
     ACTION="resumed (your earlier commits are still here)"
+    # DID THE RUNG MOVE UNDER THIS BRANCH?
+    #
+    # A resumed work branch was created from wherever the tag pointed AT THE TIME.
+    # Republish the rung — which is how a checkpoint carrying a defect gets fixed —
+    # and resuming silently keeps the old content while reporting success. The
+    # attendee is then working on precisely the tree the republish existed to
+    # replace, and nothing says so: "resumed, your earlier commits are still here"
+    # reads as good news.
+    #
+    # If the tag is not an ancestor of this branch, the branch predates the move.
+    if ! app_git merge-base --is-ancestor "$TARGET" "$WORK" 2>/dev/null; then
+      ACTION="resumed — WARNING: $TARGET has moved since this branch was made"
+      STALE_WORK=1
+    fi
   fi
 else
   app_git checkout -q -b "$WORK" "$TARGET" || die "Could not create $WORK from $TARGET."
 fi
+
+# CLEAR COMPILED OUTPUT. A jump is a whole-tree checkout, but dist/ is gitignored,
+# so git leaves it exactly where it was — full of the PREVIOUS rung's build. tsc -b
+# regenerates what the current source produces and never deletes what it no longer
+# does, so the orphans survive indefinitely.
+#
+# That bites hardest in the direction attendees actually travel. Build at cp-01, jump
+# back to cp-00, and dist/__tests__ still holds the compiled proposals tests, which
+# fail against a tree where Proposal does not exist. The failure names files that are
+# not in the repository, so it reads as a broken checkpoint rather than as stale
+# output — and the ladder exists precisely so that a jump is never the thing that
+# breaks.
+#
+# Only dist. node_modules is expensive and correct across rungs; the lockfile is what
+# governs it, and start-app.sh reinstalls when that changes.
+app_git rev-parse --show-toplevel >/dev/null 2>&1 &&
+  rm -rf "$APP_DIR"/packages/*/dist "$APP_DIR"/dist 2>/dev/null || true
 
 printf '\n   %s  %s\n' "${GREEN}${BOLD}${TARGET}${RESET}" "${TITLES[$idx]}"
 printf '   %s%s%s\n\n' "$DIM" "${STATES[$idx]}" "$RESET"
@@ -275,6 +317,12 @@ if [ -n "$PARKED" ]; then
   printf '   Parked:   %s %s\n' "${BOLD}${PARKED}${RESET}" "${DIM}— your previous work is committed there, nothing lost${RESET}"
 fi
 printf '   Next up:  %s\n' "${BOLD}${NEXTS[$idx]}${RESET}"
+if [ "${STALE_WORK:-0}" -eq 1 ]; then
+  printf '\n   %sThis branch was made from an older %s.%s\n' "$BOLD" "$TARGET" "$RESET"
+  printf '   %s\n' "The checkpoint has been republished since — you are not on the current one."
+  printf '   %s\n' "To take the update (your work is parked first, nothing is lost):"
+  printf '      %s\n' "${BOLD}./checkpoint.sh ${TARGET#cp-} --fresh${RESET}"
+fi
 if [ "$FRESH" -eq 0 ] && [ "$ACTION" = "resumed (your earlier commits are still here)" ]; then
   printf '   %s\n' "${DIM}To start this checkpoint over from scratch:  ./checkpoint.sh ${TARGET} --fresh${RESET}"
 fi

@@ -14,6 +14,7 @@ set -uo pipefail
 
 TOTAL=6
 COMPOSE_FILE="docker-compose.verify.yml"
+WORKSHOP_COMPOSE_FILE="docker-compose.workshop.yml"
 # The application attendees work on. It lives in its own repository so that its
 # history (the cp-* ladder) moves independently of this one — see
 # checkpoints/README.md. Overridable so a fork or a mirror can be pointed at.
@@ -85,11 +86,35 @@ FAILED=0
 CURRENT_LABEL=""
 CURRENT_LINE=""
 CURRENT_PREFIX=""
+CURRENT_PREFIX_SHORT=""
+SHOT_HOST=""
+SHOT_STAMP=""
+PROGRESS_EPOCH=""
+STEP_NOTE_PREFIX=""
 FAIL_LABEL=""
 FAIL_CAUSE=""
 FAIL_FIX=""
 
 compose() { docker compose -f "$COMPOSE_FILE" "$@"; }
+
+# The real workshop stack. Check 3 builds through this so that the images warmed the
+# night before are the images `up -d` wants in the morning - see check 3.
+workshop_compose() { docker compose -f "$WORKSHOP_COMPOSE_FILE" "$@"; }
+
+# IS THE WORKSHOP STACK ALREADY UP?
+#
+# Asked once, here, because two later decisions need the answer and the count of
+# checks has to be known before the first one is drawn.
+#
+# On a cold machine there is no app, which is why the two-vantage view check lives in
+# workshop/up.sh rather than here. But somebody re-running this on a working machine
+# HAS an app, and is asking exactly the question that check answers — so when the
+# stack is up, run it, and let the total be seven instead of six.
+WORKSHOP_RUNNING=0
+if workshop_compose ps --status running --services 2>/dev/null | grep -qx 'claude-container'; then
+  WORKSHOP_RUNNING=1
+  TOTAL=7
+fi
 
 # check <label> <log-name> -- runs the remaining args, silencing them.
 # On success the caller sets DETAIL to the short right-hand annotation.
@@ -105,6 +130,13 @@ start_check() {
   # still running those columns are worth more as room for a progress note, so the
   # animated line uses an unpadded prefix and the padded line overwrites it.
   CURRENT_PREFIX="   [$IDX/$TOTAL]  $label ... "
+  # What a narrow terminal falls back to. The counter is kept because it is what
+  # tells you which check you are watching; the label is dropped because it is
+  # static, and the moving note beside it is worth more columns.
+  CURRENT_PREFIX_SHORT="   [$IDX/$TOTAL] "
+  # One clock per check, however many commands it runs. See run_logged.
+  PROGRESS_EPOCH=$(date +%s)
+  STEP_NOTE_PREFIX=""
 }
 
 pass_check() {
@@ -135,11 +167,27 @@ fail_check() {
 PROGRESS=0
 if [ -t 1 ] && [ "$QUIET" -eq 0 ] && [ -z "${CI:-}" ]; then PROGRESS=1; fi
 
+# term_cols - the REAL width of the terminal, which is harder than it looks.
+#
+# `tput cols` on its own is wrong here. term_cols is always called inside $( ),
+# where stdout is a pipe, so tput cannot measure the terminal and falls back to the
+# terminfo default for $TERM - 80 for xterm, and narrower for some others. That is
+# how a 200-column window ended up computing its layout against 80 columns, and how
+# a terminal whose terminfo says less than 80 ended up truncating the one line on
+# screen that was actually moving.
+#
+# So: ask the terminal itself, via /dev/tty, and only then fall back. stty is first
+# because it reports the CURRENT size and so survives the window being resized
+# mid-build, which is exactly when a long pull is running.
 term_cols() {
-  local c
-  c=$(tput cols 2>/dev/null)
+  local c=""
+  if [ -r /dev/tty ]; then
+    c=$(stty size </dev/tty 2>/dev/null | cut -d' ' -f2)
+    case "$c" in '' | *[!0-9]*) c=$(tput cols </dev/tty 2>/dev/null) ;; esac
+  fi
+  case "$c" in '' | *[!0-9]*) c="${COLUMNS:-}" ;; esac
   case "$c" in '' | *[!0-9]*) c=80 ;; esac
-  [ "$c" -lt 48 ] && c=48
+  [ "$c" -lt 40 ] && c=40
   printf '%s' "$c"
 }
 
@@ -183,15 +231,48 @@ progress_note() {
   printf 'working'
 }
 
-# progress_draw <elapsed-seconds> <note> - repaint the current check line. The
-# note is truncated so the line cannot wrap: a wrapped line defeats the \r redraw
-# and leaves a trail of half-finished rows up the screen.
+# progress_draw <elapsed-seconds> <note> - repaint the current check line. The line
+# must not wrap: a wrapped line defeats the \r redraw and leaves a trail of
+# half-finished rows up the screen. So something has to give when it will not fit,
+# and the order of what gives is the whole point of this function.
+#
+# THE NOTE IS THE LAST THING TO BE CUT. It is the only part of the row that moves,
+# and on a first run it is the only evidence on screen that a ~2 GB download is
+# progressing rather than hung - which is precisely when somebody kills it. The
+# prefix beside it is static text they read when the check started. So a narrow
+# terminal drops to the SHORT prefix ("   [3/6] ") and gives the reclaimed columns
+# to the note, and the note is only truncated once even that is not enough.
 progress_draw() {
-  local secs="$1" note="$2" room
-  room=$(( $(term_cols) - ${#CURRENT_PREFIX} - 10 ))
+  local secs="$1" note="$2" cols prefix room tail_len
+  cols=$(term_cols)
+  # What the suffix actually costs: a space, the seconds, and the "s".
+  tail_len=$(( ${#secs} + 2 ))
+
+  prefix="$CURRENT_PREFIX"
+  room=$(( cols - ${#prefix} - tail_len ))
+  if [ "$room" -lt ${#note} ]; then
+    prefix="$CURRENT_PREFIX_SHORT"
+    room=$(( cols - ${#prefix} - tail_len ))
+  fi
+
   [ "$room" -lt 8 ] && room=8
   if [ ${#note} -gt "$room" ]; then note="${note:0:$((room - 3))}..."; fi
-  printf '\r%s%s%s %ss%s' "$CURRENT_PREFIX" "$DIM" "$note" "$secs" "$RESET"
+
+  # Pad to the width of the terminal, because \r only moves the cursor - it does not
+  # erase. A new line one character shorter than the last leaves that character
+  # standing, which is where the stray "30ss" came from: the previous row ended in
+  # "31s", this one in "30s", and the old trailing "s" was never overwritten. Byte
+  # counters change width constantly ("9.9MB / 1.9GB" -> "10MB / 1.9GB"), so this is
+  # every second, not an edge case.
+  #
+  # Spaces rather than the ANSI erase-to-end-of-line: NO_COLOR blanks every escape
+  # this script emits, and an erase sequence that ignored that would be the one piece
+  # of ANSI left in a deliberately plain output.
+  local line pad
+  line="${prefix}${note} ${secs}s"
+  pad=$(( cols - ${#line} ))
+  [ "$pad" -lt 0 ] && pad=0
+  printf '\r%s%s%s %ss%s%*s' "$prefix" "$DIM" "$note" "$secs" "$RESET" "$pad" ''
 }
 
 progress_clear() {
@@ -212,10 +293,19 @@ run_logged() {
   fi
   : > "$log"
   "$@" >"$log" 2>&1 </dev/null &
-  local pid=$! start rc
+  local pid=$! start base rc note
   start=$(date +%s)
+  # Time the CHECK, not this command. A check that runs several commands in sequence
+  # (check 3 builds three images and pulls a fourth) otherwise restarts its clock at
+  # every one, and the row counts up, snaps back to 0s, and counts up again - which
+  # reads as the thing having crashed and restarted.
+  base="${PROGRESS_EPOCH:-$start}"
   while kill -0 "$pid" 2>/dev/null; do
-    progress_draw "$(( $(date +%s) - start ))" "$(progress_note "$log")"
+    note=$(progress_note "$log")
+    # Say WHICH image, or the phase words alone ("starting", "working", "step 12/12")
+    # look like noise from nowhere - they belong to a sub-step the row never named.
+    [ -n "${STEP_NOTE_PREFIX:-}" ] && note="${STEP_NOTE_PREFIX} ${note}"
+    progress_draw "$(( $(date +%s) - base ))" "$note"
     sleep 1
   done
   wait "$pid"
@@ -234,11 +324,27 @@ trap cleanup EXIT
 cd "$(dirname "$0")" || exit 1
 
 # Load .env so the token checks see the same values the containers will.
+#
+# Sourced through a CR-stripping copy rather than directly. The audience is mostly
+# Windows, .env gets opened in Notepad, and it comes back CRLF - at which point every
+# value carries a trailing \r that is invisible in every error message it causes.
+#
+# STRIPPING IS NOT THE FIX, AND ON ITS OWN IT MAKES THINGS WORSE. This script is not
+# the only thing that reads .env: `docker compose` reads the real file and hands the
+# real value to the container. Strip here and nowhere else and the result is the worst
+# possible outcome - the check passes, the credential looks perfect, and Claude asks
+# the attendee to log in anyway with all six checks green behind them. So the file is
+# also TESTED for CRLF further down, and that is a hard failure with an explicit fix.
+ENV_HAS_CRLF=0
 if [ -f .env ]; then
+  if tr -d '\n' < .env | grep -q "$(printf '\r')"; then ENV_HAS_CRLF=1; fi
+  ENV_CLEAN="$(mktemp)"
+  tr -d '\r' < .env > "$ENV_CLEAN"
   set -a
   # shellcheck disable=SC1091
-  . ./.env
+  . "$ENV_CLEAN"
   set +a
+  rm -f "$ENV_CLEAN"
 fi
 
 # ------------------------------------------------- wrong-container-mode gate
@@ -349,6 +455,32 @@ else
     # line moving, and without it a slow clone looks exactly like a hang.
     if run_logged "$LOG_DIR/01-clone.log" git clone --progress "$APP_REPO" "$APP_DIR"; then
       APP_ACTION="cloned in $(( $(date +%s) - CLONE_START ))s"
+
+      # LAND ON cp-00, NOT ON main.
+      #
+      # A clone with no branch lands on main's tip, and main is where every rung is
+      # published. That was harmless for exactly as long as main WAS cp-00 — the
+      # moment cp-01 was published, a fresh clone started the day with the whole of
+      # activity 2 already applied, so the first exercise of the workshop was a
+      # no-op and the activity after it began at its own finish line.
+      #
+      # Only on a fresh clone. A returning attendee's app/ is on whatever rung they
+      # have reached, and resetting that to cp-00 would throw away their morning.
+      # That is ./checkpoint.sh's job, and it parks work before it moves anything.
+      #
+      # A named branch rather than a detached HEAD, for the reason checkpoints/README
+      # gives: attendees commit, and git complaining at them for it helps nobody.
+      if git -C "$APP_DIR" rev-parse -q --verify refs/tags/cp-00 >/dev/null 2>&1; then
+        if run_logged "$LOG_DIR/01-clone.log" \
+             git -C "$APP_DIR" checkout -B work/cp-00 cp-00; then
+          APP_ACTION="$APP_ACTION, at cp-00"
+        else
+          fail_check "cloned the app but could not check out cp-00" \
+"the tag exists but the checkout failed - see $LOG_DIR/01-clone.log
+                        without this you would start the day on main, which has
+                        every later checkpoint already applied"
+        fi
+      fi
     else
       fail_check "could not clone the workshop app from $APP_REPO" \
 "this is almost always a network problem - check your connection,
@@ -360,7 +492,11 @@ else
     # was made should be visible, but being offline must not fail a check that
     # has everything it needs on disk. checkpoint.sh retries a fetch of its own
     # when a tag it wants is missing.
-    run_logged "$LOG_DIR/01-clone.log" git -C "$APP_DIR" fetch --tags --quiet || true
+    # --force: a plain fetch will not update a tag that already exists locally, so a
+    # republished rung would never reach a returning attendee. --prune-tags: nor will
+    # it remove one that was deleted, so a retired rung would read as published
+    # forever. See checkpoint.sh.
+    run_logged "$LOG_DIR/01-clone.log" git -C "$APP_DIR" fetch --tags --force --prune --prune-tags --quiet || true
   fi
 
   if [ "$FAILED" -eq 0 ]; then
@@ -443,13 +579,52 @@ fi
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop image builds"
   BUILD_START=$(date +%s)
-  if run_logged "$LOG_DIR/03-build.log" compose build verify-agent; then
-    pass_check "$(( $(date +%s) - BUILD_START ))s"
+  # Build the images the WORKSHOP uses, not just the check's own. This step exists
+  # to move every download to the night before, and it only does that if it fetches
+  # what the morning will fetch: `up -d` otherwise sat there pulling ~2 GB while a
+  # room waited, having "passed" a check that warmed a different image entirely.
+  #
+  # Ordered cheapest-signal-first. The check's own image shares its base layer with
+  # the workshop's (see verify/Dockerfile), so by the time the second build runs the
+  # expensive part is already in the local cache.
+  # A log PER sub-step. They shared one, and since run_logged truncates its log on
+  # entry, each build wiped the previous one's output while the note reader was still
+  # reading it - so the row flipped between "starting", "working" and a step counter
+  # belonging to whichever build had last emptied the file.
+  BUILD_OK=1
+  STEP_NOTE_PREFIX="check image:"
+  run_logged "$LOG_DIR/03-build.log" compose build verify-agent || BUILD_OK=0
+
+  if [ "$BUILD_OK" -eq 1 ]; then
+    # The container every attendee lives in all day.
+    STEP_NOTE_PREFIX="workshop container:"
+    run_logged "$LOG_DIR/03-build-workshop.log" \
+      workshop_compose build claude-container || BUILD_OK=0
+  fi
+  if [ "$BUILD_OK" -eq 1 ]; then
+    # Not --quiet: the byte counters are the only thing that moves during a pull, and
+    # they are what progress_note reads to keep the row alive.
+    STEP_NOTE_PREFIX="postgres:"
+    run_logged "$LOG_DIR/03-pull-db.log" workshop_compose pull db || BUILD_OK=0
+  fi
+  if [ "$BUILD_OK" -eq 1 ]; then
+    # Part 3's image. Not needed until the afternoon, which is exactly why it is
+    # fetched now: a 2 GB pull is worst when it lands in the middle of an exercise.
+    STEP_NOTE_PREFIX="part 3 agent:"
+    run_logged "$LOG_DIR/03-build-agent.log" \
+      workshop_compose --profile l4 build autonomous-agent || BUILD_OK=0
+  fi
+  STEP_NOTE_PREFIX=""
+
+  if [ "$BUILD_OK" -eq 1 ]; then
+    pass_check "check + workshop + agent, $(( $(date +%s) - BUILD_START ))s"
   else
-    fail_check "the container image failed to build" \
+    fail_check "a container image failed to build" \
 "this is almost always a network problem - check your connection,
                         then re-run  ./verify-setup.sh
-                        full build output is in $LOG_DIR/03-build.log"
+                        the failing step names its own log in $LOG_DIR/:
+                        03-build.log, 03-build-workshop.log,
+                        03-pull-db.log, 03-build-agent.log"
   fi
 fi
 
@@ -457,22 +632,84 @@ fi
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Claude Code CLI + auth"
-  if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+  # TWO credentials, and the attendee tells us which they have. The guide presents
+  # them as a pair of exclusive accordions rather than a list of options, because a
+  # list of options is what produced the failure the prefix guards below exist to
+  # catch. Here we accept either and validate whichever is present.
+  #
+  # When this grows to other providers (Cursor CLI, Codex), each gets its own branch
+  # here and its own section in the guide - never an extra unexplained line in .env.
+  if [ "$ENV_HAS_CRLF" -eq 1 ]; then
+    fail_check ".env has Windows line endings (CRLF)" \
+"every value in it ends with an invisible carriage return, including
+                        your credential - and a credential with \\r on the end is not
+                        your credential. Docker passes the broken value straight to
+                        the container, so Claude asks you to log in even though
+                        everything here looks correct.
+                        This happens when .env is saved from Notepad. Fix it with:
+                          sed -i 's/\\r\$//' .env
+                        or re-save the file from your editor as LF / Unix line
+                        endings, then re-run  ./verify-setup.sh"
+  elif [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
     fail_check "no credential found - .env has neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY" \
-"run  claude setup-token
-                        copy the value it prints
-                        run  cp .env.example .env   (if you have not already)
-                        paste the value into .env as CLAUDE_CODE_OAUTH_TOKEN
-                        re-run  ./verify-setup.sh"
+"if you have a Claude SUBSCRIPTION, on your own machine run
+                          claude setup-token
+                        and paste the sk-ant-oat01- value it prints into .env as
+                          CLAUDE_CODE_OAUTH_TOKEN
+                        if you have an API KEY from console.anthropic.com, paste it
+                        into .env as
+                          ANTHROPIC_API_KEY
+                        no .env yet?  cp .env.example .env
+                        then re-run  ./verify-setup.sh"
+  # THE ONE THAT COST AN ATTENDEE AN HOUR. A credential in the other line is
+  # non-empty, the right shape and about the right length, and `claude --version`
+  # still runs - so this check passed and Claude then asked them to log in, with
+  # nothing anywhere pointing at the cause. The prefix is the only tell.
+  elif [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && \
+       case "$CLAUDE_CODE_OAUTH_TOKEN" in sk-ant-oat01-*) false ;; *) true ;; esac; then
+    fail_check "CLAUDE_CODE_OAUTH_TOKEN is not a setup-token value" \
+"that line takes a token starting  sk-ant-oat01-
+                        what is in it starts  $(printf '%.13s' "$CLAUDE_CODE_OAUTH_TOKEN")
+                        if that is  sk-ant-api03-  it is an API KEY, not a
+                        setup-token - move it to ANTHROPIC_API_KEY and leave
+                        CLAUDE_CODE_OAUTH_TOKEN empty. Both start sk-ant- and both
+                        are about 108 characters; the prefix is the only difference.
+                        then re-run  ./verify-setup.sh"
+  elif [ -n "${ANTHROPIC_API_KEY:-}" ] && \
+       case "$ANTHROPIC_API_KEY" in sk-ant-api03-*) false ;; *) true ;; esac; then
+    fail_check "ANTHROPIC_API_KEY is not an API key" \
+"that line takes a key starting  sk-ant-api03-
+                        what is in it starts  $(printf '%.13s' "$ANTHROPIC_API_KEY")
+                        if that is  sk-ant-oat01-  it came from  claude setup-token
+                        - move it to CLAUDE_CODE_OAUTH_TOKEN and leave
+                        ANTHROPIC_API_KEY empty.
+                        then re-run  ./verify-setup.sh"
   elif ! run_logged "$LOG_DIR/04-claude.log" \
         compose run --rm --no-deps verify-agent claude --version; then
     fail_check "the Claude Code CLI did not start inside the container" \
 "check $LOG_DIR/04-claude.log for the error
                         if it mentions authentication, re-run  claude setup-token
                         and refresh the value in .env"
+  # THE CHECK THAT ACTUALLY CHECKS. Everything above proves the value is present, is
+  # the right shape, and that the CLI runs - and `claude --version` makes no network
+  # call at all, so every one of those passed for an attendee whose credential was
+  # rejected the moment they tried to use it. Six green checks and then a login
+  # prompt. One real round trip is the only thing that distinguishes a credential
+  # that exists from one that works, and it costs a handful of tokens.
+  elif ! STEP_NOTE_PREFIX="authenticating " run_logged "$LOG_DIR/04-auth.log" \
+        compose run --rm --no-deps verify-agent claude -p "Reply with the two characters: OK"; then
+    fail_check "the credential was rejected - Claude could not authenticate" \
+"the value in .env is present and the right shape, but Claude will not
+                        accept it. The usual causes, in order:
+                          - the token has expired or been revoked; run
+                            claude setup-token  again on your own machine
+                          - it was truncated on the way into .env - check there is no
+                            line break or stray quote around it
+                          - .env was saved with Windows line endings (see above)
+                        the exact error is in $LOG_DIR/04-auth.log"
   else
     CLAUDE_VERSION=$(tr -d '\r' < "$LOG_DIR/04-claude.log" | tail -1 | awk '{print $1}')
-    pass_check "claude ${CLAUDE_VERSION:-ok}, credential present"
+    pass_check "claude ${CLAUDE_VERSION:-ok}, credential authenticated"
   fi
 fi
 
@@ -480,32 +717,88 @@ fi
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop site responds"
-  PORT="${VERIFY_PORT:-8080}"
-  if ! run_logged "$LOG_DIR/05-web.log" compose up -d verify-web; then
-    fail_check "the web container would not start" \
-"port $PORT is probably already in use on your machine
-                        re-run with a different port:  VERIFY_PORT=8081 ./verify-setup.sh"
+  # THE port - the one the workshop stack itself publishes, not a stand-in. Proving
+  # some unrelated port is free predicts nothing about the day; 5173 is Vite's
+  # default and therefore the port an attendee is most likely to already be using.
+  # One variable governs the check and the stack, so an override set once in .env
+  # carries through the whole workshop and no command has to change.
+  PORT="${WORKSHOP_PORT:-5173}"
+
+  # IS THE WORKSHOP ITSELF HOLDING THE PORT?
+  #
+  # docker-compose.verify.yml publishes THE port on purpose — proving some unrelated
+  # port is free predicts nothing about the day. That rested on "the two stacks never
+  # run at once", which is true right up until somebody re-runs this check on a
+  # working machine. Then nginx cannot bind, and the check reports the workshop's own
+  # healthy stack as a port conflict and tells them to tear it down.
+  #
+  # A running workshop answering on this port is not a failure of the thing this check
+  # is trying to prove. It is that thing, already proven, by the real stack rather
+  # than by a stand-in. So say so and move on.
+  WORKSHOP_HOLDS_PORT=0
+  if [ "$WORKSHOP_RUNNING" -eq 1 ] &&
+     curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; then
+    WORKSHOP_HOLDS_PORT=1
+  fi
+
+  # ONE path from here, differing only in which port nginx publishes on. Check 6
+  # still needs a page to photograph either way, and it must not fight the workshop
+  # for the port: 0 publishes on an ephemeral one, read back below because nothing
+  # can predict it.
+  if [ "$WORKSHOP_HOLDS_PORT" -eq 1 ]; then
+    VERIFY_WEB_PORT=0
   else
+    VERIFY_WEB_PORT="$PORT"
+  fi
+  export VERIFY_WEB_PORT
+
+  if ! run_logged "$LOG_DIR/05-web.log" compose up -d verify-web; then
+    fail_check "port $PORT is already in use on your machine - this is the port the workshop needs" \
+"if the workshop stack is already running, that is what is holding it:
+                          docker compose -f docker-compose.workshop.yml down
+                        otherwise something else on your machine has it - another
+                        Vite project is the usual answer, since 5173 is its default.
+                        Pick a different port, and KEEP it for the workshop:
+                          echo WORKSHOP_PORT=5174 >> .env
+                        then re-run  ./verify-setup.sh"
+  else
+    # Where nginx actually landed. With an ephemeral publish this is the only way to
+    # know, and polling $PORT instead would test the workshop's app while claiming to
+    # test nginx — a green check for the wrong reason.
+    if [ "$WORKSHOP_HOLDS_PORT" -eq 1 ]; then
+      CHECK_PORT=$(compose port verify-web 80 2>/dev/null | tr -d '\r' | sed 's/.*://')
+      if [ -z "${CHECK_PORT:-}" ]; then
+        CHECK_PORT="$PORT"
+      fi
+    else
+      CHECK_PORT="$PORT"
+    fi
     SITE_START=$(date +%s)
     SITE_OK=0
     # Poll rather than sleep-and-hope, so a slow machine passes and a genuinely
     # broken one fails fast enough to keep the room moving.
     for _ in $(seq 1 30); do
-      if curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>>"$LOG_DIR/05-web.log"; then
+      if curl -fsS -o /dev/null "http://localhost:${CHECK_PORT}/" 2>>"$LOG_DIR/05-web.log"; then
         SITE_OK=1
         break
       fi
       [ "$PROGRESS" -eq 1 ] &&
-        progress_draw "$(( $(date +%s) - SITE_START ))" "waiting for nginx to answer on :${PORT}"
+        progress_draw "$(( $(date +%s) - SITE_START ))" "waiting for nginx to answer on :${CHECK_PORT}"
       sleep 1
     done
     [ "$PROGRESS" -eq 1 ] && progress_clear
     if [ "$SITE_OK" -eq 1 ]; then
-      pass_check "HTTP 200 on :${PORT}, $(( $(date +%s) - SITE_START ))s"
+      if [ "$WORKSHOP_HOLDS_PORT" -eq 1 ]; then
+        pass_check "HTTP 200 on :${CHECK_PORT} — :${PORT} is your own workshop stack, already serving"
+      else
+        pass_check "HTTP 200 on :${PORT}, $(( $(date +%s) - SITE_START ))s"
+      fi
     else
       fail_check "nothing answered on http://localhost:${PORT}/ after 30s" \
-"another program may be holding port $PORT
-                        re-run with a different port:  VERIFY_PORT=8081 ./verify-setup.sh"
+"something may be holding port $PORT without Docker noticing.
+                        Pick a different port, and KEEP it for the workshop:
+                          echo WORKSHOP_PORT=5174 >> .env
+                        then re-run  ./verify-setup.sh"
     fi
   fi
 fi
@@ -527,7 +820,31 @@ if [ "$FAILED" -eq 0 ]; then
                         (Settings > Resources > File Sharing)"
   else
     SIZE_KB=$(( $(wc -c < "$SCREENSHOT") / 1024 ))
+    # What the browser stamped onto the image. Read back out of the log because the
+    # container that knew it is already gone - see the verdict block below.
+    SHOT_HOST=$(tr -d '\r' < "$LOG_DIR/06-screenshot.log" | sed -n 's/^VERIFY_HOST=//p' | tail -1)
+    SHOT_STAMP=$(tr -d '\r' < "$LOG_DIR/06-screenshot.log" | sed -n 's/^VERIFY_STAMP=//p' | tail -1)
     pass_check "verify.png, ${SIZE_KB} KB"
+  fi
+fi
+
+# ------------------------------------------- 7: Agent sees what you see (if up)
+#
+# Only when the workshop stack is already running — see the detection at the top.
+# This is the check that would have caught both of the faults that cost a real run:
+# an API probe asking for a renamed route, and localhost resolving to IPv6 only
+# inside the container while Vite listened on IPv4. Every other check in this file
+# uses curl, and curl falls back to IPv4 where headless Chromium does not.
+
+if [ "$FAILED" -eq 0 ] && [ "$WORKSHOP_RUNNING" -eq 1 ]; then
+  start_check "Agent sees the same app you do"
+  if ! run_logged "$LOG_DIR/07-views.log" ./workshop/verify-views.sh; then
+    fail_check "the app is up, but the two vantage points do not agree" \
+"see $LOG_DIR/07-views.log - it names which vantage failed and why
+                        the screenshots are in screenshots/verify-outside.png
+                        and screenshots/verify-inside.png, side by side"
+  else
+    pass_check "both vantages agree"
   fi
 fi
 
@@ -542,6 +859,9 @@ while [ "$IDX" -lt "$TOTAL" ]; do
     4) start_check "Claude Code CLI + auth" ;;
     5) start_check "Workshop site responds" ;;
     6) start_check "Playwright screenshot captured" ;;
+    # Only ever reached when TOTAL is 7, i.e. when the workshop stack was already
+    # running at the top of the run. On a cold machine the loop stops at 6.
+    7) start_check "Agent sees the same app you do" ;;
   esac
   say "${CURRENT_LINE}${DIM}----${RESET}   ${DIM}not reached${RESET}"
 done
@@ -554,7 +874,15 @@ if [ "$FAILED" -eq 0 ]; then
   say ""
   say "   Your environment is ready. ${BOLD}There is nothing else to do.${RESET}"
   say "   Open ${BOLD}${SCREENSHOT}${RESET} to see the proof - it should read"
-  say "   \"ENVIRONMENT OK\" with your container name and the time."
+  say "   \"ENVIRONMENT OK\" and match this:"
+  say ""
+  # The container is destroyed as soon as the check finishes, so its hostname cannot
+  # be looked up afterwards. Printing it here is what turns "it should show your
+  # container name" from an instruction into something an attendee can actually
+  # perform - and it lands in verify-report.txt too, so a pasted report and a
+  # screenshot can be told to be from the same run rather than assumed to be.
+  say "       Container:  ${BOLD}${SHOT_HOST:-(not reported)}${RESET}"
+  say "       Taken at:   ${BOLD}${SHOT_STAMP:-(not reported)}${RESET}"
   say ""
   say "   ${BOLD}${RULE}${RESET}"
   [ "$QUIET" -eq 1 ] && printf 'PASS  all %s checks\n' "$TOTAL"

@@ -10,10 +10,23 @@ services:
     volumes:
       - ./verify/site:/usr/share/nginx/html:ro
     ports:
-      # Host-side port only exists so check 4 can prove the site is reachable
-      # from *your machine*, not just from inside the Docker network. Override
-      # with VERIFY_PORT if 8080 is already taken.
-      - "${VERIFY_PORT:-8080}:80"
+      # Deliberately the SAME port the workshop stack publishes, and the same
+      # variable - see docker-compose.workshop.yml. The check exists to predict the
+      # day, and proving some unrelated port is free predicts nothing: 5173 is Vite's
+      # default and so the port an attendee is most likely to already be using.
+      # The two stacks never run at once, so sharing it is safe.
+      # VERIFY_WEB_PORT, not WORKSHOP_PORT, because these became two questions.
+      # verify-setup.sh exports it: the workshop port normally, and 0 — publish
+      # anywhere free — when the workshop stack is already running and holding that
+      # port. Re-running the environment check on a working machine used to report
+      # the workshop's own healthy stack as a port conflict and tell the attendee
+      # to tear it down.
+      #
+      # Flat default rather than ${VERIFY_WEB_PORT:-${WORKSHOP_PORT:-5173}}: nested
+      # interpolation defaults are not portable across compose versions, and this
+      # file failing to parse would take every check with it. verify-setup.sh is the
+      # supported way in, and it honours WORKSHOP_PORT on the way through.
+      - "${VERIFY_WEB_PORT:-5173}:80"
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost/"]
       interval: 2s
@@ -27,12 +40,25 @@ services:
     depends_on:
       verify-web:
         condition: service_healthy
+    # CREDENTIALS COME FROM .env DIRECTLY, not from an `environment:` mapping.
+    #
+    # `ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"` does NOT omit the variable when it
+    # is unset - it sets it to the EMPTY STRING, so the container ends up carrying
+    # ANTHROPIC_API_KEY present and blank. Interactive Claude Code then sees an API key
+    # configured, tries to use it, and drops the attendee at a login prompt - while
+    # `claude -p` authenticates fine on the OAuth token. Every check passes and the only
+    # thing that fails is the thing they actually do.
+    #
+    # env_file has the semantics this needs: a line absent or commented out in .env is
+    # simply not set in the container. `required: false` so a missing .env stays the
+    # environment check's problem to report rather than a raw compose error.
+    env_file:
+      - path: .env
+        required: false
     environment:
       VERIFY_URL: http://verify-web/
       VERIFY_OUT: /screenshots/verify.png
       VERIFY_CHECKPOINT: "${VERIFY_CHECKPOINT:-cp-00}"
-      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
-      CLAUDE_CODE_OAUTH_TOKEN: "${CLAUDE_CODE_OAUTH_TOKEN:-}"
     volumes:
       - ./verify/screenshot.mjs:/work/screenshot.mjs:ro
       - ./screenshots:/screenshots
