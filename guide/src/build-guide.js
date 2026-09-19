@@ -828,11 +828,18 @@ document.addEventListener('click', function (e) {
 });
 `;
 
+// Quotes are escaped as well as angle brackets, because two call sites drop this
+// straight into an attribute value (`data-only="..."`, `data-label-x="..."`) and a
+// quote in the source text would end the attribute early and turn the rest of the
+// string into markup. Escaping here rather than at those two sites means the next
+// attribute written with esc() is safe without anyone having to notice that it is an
+// attribute. In element text &quot; renders as a quote, so nothing else changes.
 function esc(s) {
   return String(s)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 // activities.js intentionally contains inline markup (<code>, <strong>) in prose
