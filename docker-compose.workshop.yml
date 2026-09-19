@@ -47,6 +47,22 @@ services:
     # start-app.sh comes from THIS repo rather than from app/, because ./checkpoint.sh
     # rewinds app/ and the thing that boots the container must not move with it.
     entrypoint: ['/usr/local/bin/start-app.sh']
+    # GIVE localhost AN IPv4 ADDRESS.
+    #
+    # The base image ships an /etc/hosts with `::1 localhost` and NO IPv4 entry, so
+    # everything inside the container resolving `localhost` gets IPv6 only. Vite is
+    # bound with --host 0.0.0.0 — the IPv4 wildcard, exclusively — so the site is
+    # unreachable at `localhost` from inside, while being perfectly reachable from
+    # the host through the published port.
+    #
+    # curl hides this by falling back to IPv4, which is why every probe and every
+    # health check passed. Headless Chromium has no IPv4 address to fall back to and
+    # simply fails, so the ONE thing that broke was the agent's own view of the app.
+    #
+    # This adds the missing 127.0.0.1 entry, which gives IPv4 something to resolve to
+    # everywhere — including in whatever tool an attendee's agent decides to reach for.
+    extra_hosts:
+      - 'localhost:127.0.0.1'
     working_dir: /workspace/repo
     # CREDENTIALS COME FROM .env DIRECTLY, not from an `environment:` mapping.
     #
@@ -128,6 +144,8 @@ services:
   # rather than drive it, which is the entire lesson of the activity.
   autonomous-agent:
     profiles: ['l4']
+    extra_hosts:
+      - 'localhost:127.0.0.1'
     build:
       context: ./app/autonomous-demo
       dockerfile: Dockerfile
