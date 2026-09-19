@@ -878,6 +878,37 @@ test("workflows declare least-privilege permissions", "WIN-027", () => {
 
 // ------------------------------------------------------------------ guide
 
+// Drop <script> and <style> bodies. Three tests read the generated markup and none
+// of them means the code inside those elements: it mentions tags in comments and
+// strings, and a nesting walk or a text extraction that counts them reads nonsense.
+//
+// Written once, and written properly, because CodeQL reads these as HTML sanitizers
+// and was right about both holes even though the input is our own generator's output:
+// a case-sensitive pattern misses <SCRIPT>, and a single pass can leave a `<script`
+// behind that the first pass stepped over. Looping to a fixed point costs one extra
+// scan of a file we already have in memory.
+function stripCode(html, fill = "") {
+  let out = html;
+  for (let prev; out !== prev; ) {
+    prev = out;
+    out = out.replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, fill);
+  }
+  return out;
+}
+
+// The literal text of a copy block, back from the HTML that carries it.
+//
+// &amp; is undone LAST. Undoing it first turns `&amp;#39;` — a command containing the
+// literal text &#39; — into `&#39;`, which the next rule then reads as an entity and
+// turns into a quote, so the test sees a command the page never offered.
+const unescapeCommand = (s) =>
+  s
+    .replace(/&gt;/g, ">")
+    .replace(/&lt;/g, "<")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&");
+
 // Every .html under guide/, with its path relative to the repo root.
 function guidePages() {
   const found = [];
@@ -1172,7 +1203,7 @@ function visibleMarkup(html, state) {
       ? out.slice(0, m.index) + out.slice(end)
       : out.slice(0, m.index) + out.slice(m.index + m[0].length, end) + out.slice(end);
   }
-  return out.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<style[\s\S]*?<\/style>/g, " ");
+  return stripCode(out, " ");
 }
 
 // The same walk, flattened to readable text.
@@ -1305,10 +1336,7 @@ test("no copy block puts a command after an interactive session", null, () => {
 
   for (const p of guidePages()) {
     for (const m of read(p).matchAll(/<div class="copyblock[^"]*">[\s\S]*?<pre>([\s\S]*?)<\/pre>/g)) {
-      const lines = m[1]
-        .replace(/&gt;/g, ">")
-        .replace(/&amp;/g, "&")
-        .replace(/&#39;/g, "'")
+      const lines = unescapeCommand(m[1])
         .split("\n")
         .filter((l) => l.trim());
       for (let i = 0; i < lines.length - 1; i++) {
@@ -1411,7 +1439,7 @@ test("a blocking step says what it is blocking", null, () => {
 // The commands a reader in `state` is offered: the <pre> of every visible copyblock.
 function visibleCommands(html, state) {
   return [...visibleMarkup(html, state).matchAll(/<div class="copyblock[^"]*">[\s\S]*?<pre>([\s\S]*?)<\/pre>/g)].map(
-    (m) => m[1].replace(/&gt;/g, ">").replace(/&amp;/g, "&").replace(/&#39;/g, "'")
+    (m) => unescapeCommand(m[1])
   );
 }
 
@@ -1489,10 +1517,7 @@ test("every generated page has balanced block nesting", null, () => {
   const problems = [];
   for (const p of guidePages()) {
     // Script and style bodies mention tags in comments and strings; only markup counts.
-    const body = read(p)
-      .slice(read(p).indexOf('<div class="wrap">'))
-      .replace(/<script[\s\S]*?<\/script>/g, "")
-      .replace(/<style[\s\S]*?<\/style>/g, "");
+    const body = stripCode(read(p).slice(read(p).indexOf('<div class="wrap">')));
 
     const stack = [];
     const re = /<(\/?)(div|nav|details|ol|ul|section|header)\b([^>]*)>/g;
