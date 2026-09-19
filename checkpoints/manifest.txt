@@ -6,12 +6,12 @@
 # A tag listed here that does not exist yet in git is reported as "not published"
 # rather than failing — that is how a partially-built ladder stays usable.
 
-cp-00 | Environment verified        | Clean clone with the environment check passing. Nothing built yet.                    | Part 1 — Coding Challenges
-cp-01 | Warm-up challenges complete | Campaign renamed to Proposal, and structured request logging with a correlation ID.  | Part 1 — Give Your Agent Sight
-cp-02 | Agent has sight             | Trending Missions built, and proved on screen by the agent's own before/after shots. | Part 2 — the Blog Engine exercise
-cp-03 | Mission Updates, by prompt  | Mission Updates built from a micro-prompt and a mega-prompt. Deliberately mediocre.   | Part 2 — Create the spec
-cp-04 | Spec written                | mission-updates.spec.md — role, context, standards, acceptance criteria.             | Part 2 — Brand Your Mission Updates
-cp-05 | Brand written and applied   | Your own specs/standards/brand.md, with tokens.css regenerated from it.               | Part 2 — Socratic build
-cp-06 | Mission Updates, by spec    | The L2 reference implementation, built from the spec and wearing your brand.          | Part 3 — Build an Autonomous Agent
-cp-07 | Autonomous agent run        | Agent loop with guardrails: iteration cap, cost limit, rollback on failing tests.     | Part 3 — Plan-First Orchestration
-cp-08 | Plan / code handoff         | The feature rebuilt by a planning agent handing off to a separate coding agent.       | Part 3 — Automated Code Review
+cp-00 | Environment verified        | Clean clone with the environment check passing. Nothing built yet.                    | Activity 02 — Coding Challenges
+cp-01 | Warm-up challenges complete | Campaign renamed to Proposal, and structured request logging with a correlation ID.  | Activity 03 — Give Your Agent Sight
+cp-02 | Agent has sight             | Trending Missions built, and proved on screen by the agent's own before/after shots. | Activity 04 — Mission Updates, by Prompt
+cp-03 | Mission Updates, by prompt  | Mission Updates built from a micro-prompt and a mega-prompt. Deliberately mediocre.   | Activity 05 — Create the Spec
+cp-04 | Spec written                | mission-updates.spec.md — role, context, standards, acceptance criteria.             | Activity 06 — Brand Your Mission Updates
+cp-05 | Brand written and applied   | Your own specs/standards/brand.md, with tokens.css regenerated from it.               | Activity 07 — Build It Properly
+cp-06 | Mission Updates, by spec    | The L2 reference implementation, built from the spec and wearing your brand.          | Activity 08 — Build an Autonomous Agent
+cp-07 | Autonomous agent run        | Agent loop with guardrails: iteration cap, cost limit, rollback on failing tests.     | Activity 09 — Plan-First Orchestration
+cp-08 | Plan / code handoff         | The feature rebuilt by a planning agent handing off to a separate coding agent.       | Activity 10 — Automated Code Review
