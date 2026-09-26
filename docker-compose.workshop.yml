@@ -106,6 +106,10 @@ services:
       - ./workshop/start-app.sh:/usr/local/bin/start-app.sh:ro
       # The two-vantage browser check. See workshop/verify-views.sh.
       - ./verify/app-views.mjs:/usr/local/bin/app-views.mjs:ro
+      # The environment check's screenshot of verify-web. It runs HERE, in the
+      # container attendees live in, so a pass proves this container's browser and
+      # not a stand-in's. See verify-setup.sh check 7.
+      - ./verify/screenshot.mjs:/usr/local/bin/screenshot.mjs:ro
     ports:
       # The app, served from inside the container so it can be viewed in a normal
       # browser on the host. Host and container port are deliberately the SAME value:
@@ -187,6 +191,24 @@ services:
     depends_on:
       db:
         condition: service_healthy
+
+  # The page the environment check photographs: a static "ENVIRONMENT OK" that
+  # claude-container's browser loads over the compose network and stamps with its
+  # own hostname. A known page, rather than the app, so a failure here is the
+  # browser and never the app — check 8 is the one that looks at the app.
+  #
+  # No published port. Only claude-container needs to reach it, and the port the
+  # attendee's browser needs is proven by the app itself in check 5.
+  verify-web:
+    profiles: ['check']
+    image: nginx:alpine
+    volumes:
+      - ./verify/site:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost/']
+      interval: 2s
+      timeout: 3s
+      retries: 15
 
   # The host-side half of the two-vantage check. It reaches the app over the compose
   # network rather than through localhost, which is the vantage an attendee's browser

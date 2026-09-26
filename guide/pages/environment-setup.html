@@ -30,6 +30,7 @@
   --strong:      #111111;
   --accent:      #3f6b2b;  /* deep green — 6.3:1 on white */
   --amber:       #7a5200;
+  --blue:        #1f5fa8;  /* 6.4:1 on white */
   --danger:      #a02e1a;  /* red — 7.2:1 on white */
 }
 /* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
@@ -49,6 +50,7 @@
   --strong:      #ffffff;
   --accent:      #8cc26c;
   --amber:       #ffbd2e;
+  --blue:        #6cb4ff;
   --danger:      #ff9580;
 }
 :root {
@@ -509,25 +511,12 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 /* Outlined rather than filled: it is a container shell like the one above it, so it
    keeps that colour, and the difference between them stays visible at a glance. */
 .loc.claude    { background: none; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* Not a terminal at all. A URL badged "host terminal" read as a command to type into
+   one, so it gets a colour none of the three windows use. */
+.loc.browser   { background: var(--blue);   color: var(--bg); }
 .shellreq .not { color: var(--amber); font-weight: 700; }
 
 /* nav */
-div.before {
-  display: grid; gap: 10px; margin: 0 0 26px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
-a.b-step {
-  display: block; text-decoration: none; padding: 13px 15px;
-  background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
-}
-a.b-step:hover { background: var(--surface-alt); }
-a.b-step .b-n {
-  display: block; font-size: 10.5px; letter-spacing: .12em;
-  color: var(--muted); margin-bottom: 5px;
-}
-a.b-step b { color: var(--accent); font-size: 15px; }
-a.b-step p { margin: 5px 0 0; color: var(--text); font-size: 13px; line-height: 1.5; }
-
 p.dailylink {
   margin: 0 0 14px; font-size: 13px; color: var(--muted);
 }
@@ -558,12 +547,12 @@ nav.pager a:hover { background: var(--surface); }
     ><span class="to-dark">☀ LIGHT</span><span class="to-light">☾ DARK</span></button>
   </header>
 
-  <span class="actnum">ACTIVITY 01</span>
+  <span class="actnum">ACTIVITY 01a</span>
   <p class="eyebrow">Before we start</p>
   <h1>Environment Check</h1>
   <p class="lede">One command that checks six things and gives you a straight answer. Run it before the workshop, not on the day.</p>
 
-  <div class="cp">
+  <div class="cp" data-setup="done fresh">
     <span>start of the day</span>
     <span>produces <b>cp-00</b></span>
   </div>
@@ -585,6 +574,7 @@ nav.pager a:hover { background: var(--surface); }
       data-label-fresh="Full setup"></b>
     <button type="button" data-setup-reset>Change</button>
   </div>
+  <div data-setup="done fresh">
 
 
   <div class="stepblock" data-pick-highlight data-setup="fresh">
@@ -723,15 +713,15 @@ cd workshop-example</pre>
       <p>The key starts <code>sk-ant-api03-</code>. Uncomment <code>ANTHROPIC_API_KEY</code> in <code>.env</code>, paste it there, and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> empty.</p>
     </div>
   </details>
-  <div class="note"><strong>The two are not interchangeable and they look almost identical</strong> — both start <code>sk-ant-</code>, both run to about 108 characters. Only the prefix tells them apart, and putting one on the other's line fails <em>silently</em>: <code>.env</code> looks right, all six checks pass, and Claude asks you to log in anyway. Check 4 tests the prefix so that it fails loudly instead. Either value is a credential: <code>.env</code> is gitignored, and it must never be pasted into a message or a screenshot.</div>
+  <div class="note"><strong>The two are not interchangeable and they look almost identical</strong> — both start <code>sk-ant-</code>, both run to about 108 characters. Only the prefix tells them apart, and putting one on the other's line fails <em>silently</em>: <code>.env</code> looks right, every check passes, and Claude asks you to log in anyway. Check 4 tests the prefix so that it fails loudly instead. Either value is a credential: <code>.env</code> is gitignored, and it must never be pasted into a message or a screenshot.</div>
   </div>
 
   <h2 data-setup="fresh">Step 4 &middot; Run the check</h2>
   <h2 data-setup="done">Run the check</h2>
   <p data-setup="fresh">This reads <code>.env</code>, so do step 3 first — check 4 is
   the credential check, and it fails if that line is still empty.</p>
-  <p data-setup="done">Six checks, one command, and a straight answer. It is safe to
-  run as often as you like.</p>
+  <p data-setup="done">One command, and a straight answer. It is safe to run as often
+  as you like.</p>
     <div class="pathway" data-pathway="macos">
   <div class="copyblock">
     <div class="cb-head"><span>Run the check</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
@@ -775,7 +765,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   <div class="note"><strong>The first check clones the app for you.</strong> The application you spend the day on lives in its own repository, and check 1 clones it into <code>app/</code> — so there is no second <code>git clone</code> to remember. That folder is where all your work happens, and it is what <code>./checkpoint.sh</code> moves between checkpoints. If you see <code>no checkpoints published yet</code> beside that check, nothing is wrong: the ladder is published one rung at a time.</div>
 
   <h2>You are done when</h2>
-  <div class="success">The last line reads <strong>ALL CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof. Six checks on a cold machine; a seventh appears if the workshop stack is already running, because there is then a real app to point a browser at.</div>
+  <div class="success">The last line reads <strong>ALL CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof. The check starts the real workshop stack, asks every question of the container you will work in, and then stops it again — keeping the installed dependencies, so the day's first start takes seconds rather than minutes.</div>
 
   <details class="trouble">
     <summary>Something went wrong?
@@ -793,7 +783,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
     <details class="fix" data-only="windows-linux windows-windows">
       <summary><span class="fx-check">Before check 1</span>Docker is in Windows-container mode — run windows\verify.ps1 instead</summary>
       <div class="fx-body">
-        <p>Not a failure, and nothing is broken. Every image <code>./verify-setup.sh</code> uses is a Linux image, and one Docker daemon serves one mode. You do <strong>not</strong> need to switch modes — there is a Windows-container check that proves the same six things.</p>
+        <p>Not a failure, and nothing is broken. Every image <code>./verify-setup.sh</code> uses is a Linux image, and one Docker daemon serves one mode. You do <strong>not</strong> need to switch modes — there is a Windows-container check that tests the same toolchain: Docker, Claude and a browser.</p>
   <div class="copyblock">
     <div class="cb-head"><span>Run this instead</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
     <pre>powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
@@ -857,19 +847,19 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
     <details class="fix">
       <summary><span class="fx-check">Check 3</span>it has been sitting on check 3 for several minutes</summary>
       <div class="fx-body">
-        <p><strong>Nothing is wrong, and this is the check earning its keep.</strong> The first run downloads the Playwright base image — roughly 2&nbsp;GB — then builds three images on it: the check's own, the workshop container you spend the day inside, and the Part 3 agent. Every byte it fetches now is a byte the workshop would otherwise fetch on the day, while a room waits. The row tells you what Docker is doing and how long it has been at it (<code>pulling 742.8MB / 1.9GB 96s</code>). Later runs reuse it all and check 3 takes seconds. This is the reason to run the check the night before rather than at 09:05.</p>
+        <p><strong>Nothing is wrong, and this is the check earning its keep.</strong> The first run downloads the Playwright base image — roughly 2&nbsp;GB — then builds the images the day needs on it, starting with the workshop container you spend the day inside. Every byte it fetches now is a byte the workshop would otherwise fetch on the day, while a room waits. The row tells you what Docker is doing and how long it has been at it (<code>pulling 742.8MB / 1.9GB 96s</code>). Later runs reuse it all and check 3 takes seconds. This is the reason to run the check the night before rather than at 09:05.</p>
       </div>
     </details>
     <details class="fix">
       <summary><span class="fx-check">Check 3</span>the container image failed to build</summary>
       <div class="fx-body">
-        <p>Almost always the network, for the same reason as above — the build has to pull that base image. Check your connection and re-run; the full build output is in <code>.verify-logs/03-build.log</code>. <span data-only="windows-linux windows-windows">If that log mentions Windows containers rather than a download, you are in the wrong container mode — see the first entry on this list.</span></p>
+        <p>Almost always the network, for the same reason as above — the build has to pull that base image. Check your connection and re-run; the failure message names the log in <code>.verify-logs/</code> that holds the full build output. <span data-only="windows-linux windows-windows">If that log mentions Windows containers rather than a download, you are in the wrong container mode — see the first entry on this list.</span></p>
       </div>
     </details>
     <details class="fix">
       <summary><span class="fx-check">Check 4</span>no credential found — .env has neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY</summary>
       <div class="fx-body">
-        <p>The most common failure of the six, and it is usually one of two things: <code>.env</code> was never created from <code>.env.example</code>, or the credential was pasted into the example file instead of into <code>.env</code>. Then open <em>Your credential</em> above and follow whichever of the two sections describes you — one of them, not both.</p>
+        <p>The most common failure of them all, and it is usually one of two things: <code>.env</code> was never created from <code>.env.example</code>, or the credential was pasted into the example file instead of into <code>.env</code>. Then open <em>Your credential</em> above and follow whichever of the two sections describes you — one of them, not both.</p>
   <div data-only="macos windows-linux">
   <div class="copyblock">
     <div class="cb-head"><span>Create .env if you have not already</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
@@ -887,42 +877,90 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
     <details class="fix">
       <summary><span class="fx-check">Check 4</span>CLAUDE_CODE_OAUTH_TOKEN is not a setup-token value / ANTHROPIC_API_KEY is not an API key</summary>
       <div class="fx-body">
-        <p><strong>The credential is on the wrong line.</strong> The two values are near-identical — both start <code>sk-ant-</code>, both around 108 characters — so this is easy to do and impossible to spot. Only the prefix tells them apart: <code>sk-ant-oat01-</code> comes from <code>claude setup-token</code> and belongs on <code>CLAUDE_CODE_OAUTH_TOKEN</code>; <code>sk-ant-api03-</code> is an API key from the Anthropic console and belongs on <code>ANTHROPIC_API_KEY</code>. Move it to the other line, leave the one you vacated empty, and re-run the check. <strong>This check exists because the failure is otherwise silent:</strong> without it the value is accepted, all six checks pass, and Claude asks you to log in later with nothing pointing at the cause.</p>
+        <p><strong>The credential is on the wrong line.</strong> The two values are near-identical — both start <code>sk-ant-</code>, both around 108 characters — so this is easy to do and impossible to spot. Only the prefix tells them apart: <code>sk-ant-oat01-</code> comes from <code>claude setup-token</code> and belongs on <code>CLAUDE_CODE_OAUTH_TOKEN</code>; <code>sk-ant-api03-</code> is an API key from the Anthropic console and belongs on <code>ANTHROPIC_API_KEY</code>. Move it to the other line, leave the one you vacated empty, and re-run the check. <strong>This check exists because the failure is otherwise silent:</strong> without it the value is accepted, every check passes, and Claude asks you to log in later with nothing pointing at the cause.</p>
       </div>
     </details>
-    <details class="fix">
-      <summary><span class="fx-check">Check 4</span>the Claude Code CLI did not start inside the container</summary>
+    <details class="fix" data-only="macos windows-linux">
+      <summary><span class="fx-check">Check 5</span>it has been sitting on check 5 for several minutes</summary>
       <div class="fx-body">
-        <p>The credential is present but the container could not use it. Read <code>.verify-logs/04-claude.log</code>: if it mentions authentication, the token has expired or was truncated on the way into <code>.env</code> — re-run <code>claude setup-token</code> and replace the value. Check there is no stray quote or line break around it.</p>
+        <p><strong>Nothing is wrong.</strong> Check 5 starts the real workshop stack, exactly as it is started on the day, and the first start installs the app's dependencies inside the container. The row names the phase it is in. It happens once: the dependencies are kept when the check stops the stack again, so the morning's start takes seconds.</p>
       </div>
     </details>
-    <details class="fix">
+    <details class="fix" data-only="macos windows-linux">
       <summary><span class="fx-check">Check 5</span>port 5173 is already in use — this is the port the workshop needs</summary>
       <div class="fx-body">
-        <p>Check 5 deliberately claims <strong>the port the workshop itself runs on</strong>, not a spare one, so a pass means the day will work rather than merely that some port was free. 5173 is Vite's default, so the usual culprit is another project of yours already running. If you have the workshop stack up from earlier, that is what is holding it: <code>docker compose -f docker-compose.workshop.yml down</code>. Otherwise move the workshop to another port — put it in <code>.env</code> and it is picked up by the check <em>and</em> the stack, so every other command in this guide stays exactly as written.</p>
-  <div data-only="macos windows-linux">
+        <p>Check 5 starts the workshop on <strong>the port it runs on all day</strong>, so a pass means the day will work rather than merely that some port was free. 5173 is Vite's default, so the usual culprit is another project of yours already running. Stop it, or move the workshop to another port — put it in <code>.env</code> and it is picked up by the check <em>and</em> the stack, so every other command in this guide stays exactly as written.</p>
   <div class="copyblock">
     <div class="cb-head"><span>Move the workshop to another port, once</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
     <pre>echo WORKSHOP_PORT=5174 &gt;&gt; .env
 ./verify-setup.sh</pre>
   </div>
+      </div>
+    </details>
+    <details class="fix" data-only="macos windows-linux">
+      <summary><span class="fx-check">Check 5</span>the workshop container started, but the app inside it did not / the workshop app did not start answering</summary>
+      <div class="fx-body">
+        <p>Docker and the images are fine; the app itself did not come up. The reason is at the end of <code>.verify-logs/05-up.log</code>, and the container's own output has the rest. Re-run once — if it fails the same way twice, that is the point to ask rather than keep re-running.</p>
+  <div class="copyblock">
+    <div class="cb-head"><span>The container's full output</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <pre>docker compose -f docker-compose.workshop.yml logs claude-container</pre>
   </div>
-  <div data-only="windows-windows">
+      </div>
+    </details>
+    <details class="fix" data-only="macos windows-linux">
+      <summary><span class="fx-check">Check 6</span>the Claude Code CLI did not start inside the workshop container</summary>
+      <div class="fx-body">
+        <p>The credential is present but the container could not use it. Read <code>.verify-logs/06-claude.log</code>: if it mentions authentication, the token has expired or was truncated on the way into <code>.env</code> — re-run <code>claude setup-token</code> and replace the value. Check there is no stray quote or line break around it.</p>
+      </div>
+    </details>
+    <details class="fix" data-only="windows-windows">
+      <summary><span class="fx-check">Check 4</span>the Claude Code CLI did not start inside the container</summary>
+      <div class="fx-body">
+        <p>The credential is present but the container could not use it. Read <code>.verify-logs/04-claude.log</code>: if it mentions authentication, the token has expired or was truncated on the way into <code>.env</code> — re-run <code>claude setup-token</code> and replace the value. Check there is no stray quote or line break around it.</p>
+      </div>
+    </details>
+    <details class="fix" data-only="windows-windows">
+      <summary><span class="fx-check">Check 5</span>port 5173 is already in use — this is the port the workshop needs</summary>
+      <div class="fx-body">
+        <p>Check 5 deliberately claims <strong>the port the workshop itself runs on</strong>, not a spare one, so a pass means the day will work rather than merely that some port was free. 5173 is Vite's default, so the usual culprit is another project of yours already running. Otherwise move the workshop to another port, and it is picked up by the check <em>and</em> the stack.</p>
   <div class="copyblock">
     <div class="cb-head"><span>Move the workshop to another port, once</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
     <pre>$env:WORKSHOP_PORT=5174
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
-  </div>
       </div>
     </details>
-    <details class="fix">
+    <details class="fix" data-only="macos windows-linux">
+      <summary><span class="fx-check">Check 7</span>the page the screenshot is taken of did not start</summary>
+      <div class="fx-body">
+        <p>The small ENVIRONMENT OK page the screenshot photographs could not be started. Read <code>.verify-logs/07-web.log</code> and re-run; it is almost always the network, because the page's server image is downloaded in check 3 and a failed download shows up here.</p>
+      </div>
+    </details>
+    <details class="fix" data-only="macos windows-linux">
+      <summary><span class="fx-check">Check 7</span>Playwright reported success but screenshots/verify.png was not written</summary>
+      <div class="fx-body">
+        <p>The browser rendered the page; the container then could not write the file back out to your machine. That is a Docker file-sharing permission, not a browser problem. In Docker Desktop, check this folder is shared: <strong>Settings &rarr; Resources &rarr; File Sharing</strong>.</p>
+      </div>
+    </details>
+    <details class="fix" data-only="macos windows-linux">
+      <summary><span class="fx-check">Check 7</span>the headless browser could not render and capture the page</summary>
+      <div class="fx-body">
+        <p>Read <code>.verify-logs/07-screenshot.log</code> and re-run. This is the workshop container's own browser — the one your agent drives — so it is worth fixing rather than working round. If it fails twice with the same error, that is the point to ask rather than keep re-running.</p>
+      </div>
+    </details>
+    <details class="fix" data-only="macos windows-linux">
+      <summary><span class="fx-check">Check 8</span>the app is up, but the two vantage points do not agree</summary>
+      <div class="fx-body">
+        <p>Your browser can see the app and the agent inside the container cannot — or they see different pages. <code>.verify-logs/08-views.log</code> names which view failed and why, and the two screenshots are side by side in <code>screenshots/verify-outside.png</code> and <code>screenshots/verify-inside.png</code>. This is the check that catches addressing faults every other check misses, so do not skip past it — raise your hand.</p>
+      </div>
+    </details>
+    <details class="fix" data-only="windows-windows">
       <summary><span class="fx-check">Check 6</span>Playwright reported success but screenshots/verify.png was not written</summary>
       <div class="fx-body">
         <p>The browser rendered the page; the container then could not write the file back out to your machine. That is a Docker file-sharing permission, not a browser problem. In Docker Desktop, check this folder is shared: <strong>Settings &rarr; Resources &rarr; File Sharing</strong>.</p>
       </div>
     </details>
-    <details class="fix">
+    <details class="fix" data-only="windows-windows">
       <summary><span class="fx-check">Check 6</span>the headless browser could not render and capture the page</summary>
       <div class="fx-body">
         <p>Read <code>.verify-logs/06-screenshot.log</code> and re-run. This one is rare, and on a machine where checks 1–5 passed it is usually transient — the site had not finished starting. If it fails twice with the same error, that is the point to ask rather than keep re-running.</p>
@@ -952,6 +990,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <p>Ran the wrong one for your setup? No harm done — each script detects the wrong container mode and points you at the other one instead of failing confusingly.</p>
     </div>
   </details>
+  </div>
   </div>
 
   <nav class="pager">
@@ -1083,6 +1122,12 @@ function setPlatform(state) {
   var setup = '';
   try { setup = localStorage.getItem(SETUP_KEY) || ''; } catch (err) {}
   if (!setup && !/[?&]ask(=|&|$)/.test(location.search)) setup = 'fresh';
+  // THE PRE-WORKSHOP LINK: ?setup=fresh. Sent out before the day, so it must show the
+  // whole setup whatever this browser answered last time - a facilitator who clicked
+  // "just run the check" while testing would otherwise see, and forward, the short
+  // version. Like the default above it is NOT stored: it answers for this visit only.
+  var forced = /[?&]setup=(fresh|done)(&|$)/.exec(location.search);
+  if (forced) setup = forced[1];
   applySetup(setup);
 
   // "Windows — not sure which" on any pathway bar sends people here with the OS

@@ -12,8 +12,12 @@
 #
 set -uo pipefail
 
-TOTAL=6
-COMPOSE_FILE="docker-compose.verify.yml"
+TOTAL=8
+# ONE stack: the workshop's own. The checks used to run in a separate check stack
+# (an nginx page and a look-alike agent image), which proved that a container shaped
+# like the workshop's worked - not that the workshop's did. Now the check starts the
+# real stack through workshop/up.sh and asks its questions of claude-container, the
+# container attendees actually spend the day in.
 WORKSHOP_COMPOSE_FILE="docker-compose.workshop.yml"
 # The application attendees work on. It lives in its own repository so that its
 # history (the cp-* ladder) moves independently of this one — see
@@ -33,7 +37,9 @@ Usage: ./verify-setup.sh [options]
 
   --quiet   Suppress the banner; print only the final verdict line.
             Intended for facilitators sweeping a room.
-  --keep    Leave the check containers running afterwards.
+  --keep    Leave the workshop stack running afterwards. By default it is
+            stopped again (its installed dependencies are kept), unless
+            it was already running when the check started.
   --help    Show this message.
 
 Exit code is 0 only when all checks pass.
@@ -61,8 +67,8 @@ RULE="============================================================"
 
 # Git Bash / MSYS rewrites any argument that looks like a POSIX path into a Windows
 # path before the program sees it. That is right for host paths and catastrophic for
-# CONTAINER paths: `node /work/screenshot.mjs` reached docker as
-#   node C:/Program Files/Git/work/screenshot.mjs
+# CONTAINER paths: `node /usr/local/bin/screenshot.mjs` reached docker as
+#   node C:/Program Files/Git/usr/local/bin/screenshot.mjs
 # and check 5 failed with a MODULE_NOT_FOUND naming a path nobody wrote. Harmless
 # on macOS and Linux, where these variables mean nothing.
 export MSYS_NO_PATHCONV=1
@@ -95,25 +101,19 @@ FAIL_LABEL=""
 FAIL_CAUSE=""
 FAIL_FIX=""
 
-compose() { docker compose -f "$COMPOSE_FILE" "$@"; }
-
-# The real workshop stack. Check 3 builds through this so that the images warmed the
-# night before are the images `up -d` wants in the morning - see check 3.
+# The workshop stack. Every check from 3 on goes through this, so the images warmed
+# the night before are the images `up -d` wants in the morning, and the container the
+# checks ask questions of is the one attendees will exec into.
 workshop_compose() { docker compose -f "$WORKSHOP_COMPOSE_FILE" "$@"; }
 
 # IS THE WORKSHOP STACK ALREADY UP?
 #
-# Asked once, here, because two later decisions need the answer and the count of
-# checks has to be known before the first one is drawn.
-#
-# On a cold machine there is no app, which is why the two-vantage view check lives in
-# workshop/up.sh rather than here. But somebody re-running this on a working machine
-# HAS an app, and is asking exactly the question that check answers — so when the
-# stack is up, run it, and let the total be seven instead of six.
+# Asked once, before anything starts it, because teardown needs the answer. A stack
+# this check started is stopped again afterwards; a stack somebody was already
+# working in is left exactly as it was found.
 WORKSHOP_RUNNING=0
 if workshop_compose ps --status running --services 2>/dev/null | grep -qx 'claude-container'; then
   WORKSHOP_RUNNING=1
-  TOTAL=7
 fi
 
 # check <label> <log-name> -- runs the remaining args, silencing them.
@@ -203,6 +203,16 @@ progress_note() {
     grep -oE '(Receiving|Resolving|Counting|Compressing) objects: +[0-9]+%' | tail -1)
   if [ -n "$line" ]; then
     printf '%s' "$(printf '%s' "$line" | tr 'A-Z' 'a-z')"
+    return
+  fi
+
+  # workshop/up.sh, not docker. Check 5 starts the stack through it, and it prints
+  # one "   ... <phase>" line per phase of start-app.sh - the installing of the app's
+  # dependencies is the long one on a first run, and naming it is what stops a
+  # several-minute wait from reading as a hang.
+  line=$(grep -E '^   \.\.\. ' "$log" 2>/dev/null | tail -1 | sed 's/^   \.\.\. //')
+  if [ -n "$line" ]; then
+    printf '%s' "$line"
     return
   fi
 
@@ -314,9 +324,20 @@ run_logged() {
   return $rc
 }
 
+# STOP WHAT THIS CHECK STARTED, AND NOTHING ELSE.
+#
+# Plain `down`, never `down -v`: the named volumes hold the app's installed
+# dependencies, and keeping them is most of what running this the night before buys -
+# the morning's ./workshop/up.sh then starts in seconds rather than minutes.
+#
+# A stack that was already running when the check began is somebody's working day.
+# It is left up; only the check's own verify-web is removed from it.
 cleanup() {
-  if [ "$KEEP" -eq 0 ]; then
-    compose down --remove-orphans >"$LOG_DIR/teardown.log" 2>&1
+  [ "$KEEP" -eq 1 ] && return 0
+  if [ "$WORKSHOP_RUNNING" -eq 1 ]; then
+    workshop_compose --profile check rm -sf verify-web >"$LOG_DIR/teardown.log" 2>&1
+  else
+    workshop_compose --profile check down --remove-orphans >"$LOG_DIR/teardown.log" 2>&1
   fi
 }
 trap cleanup EXIT
@@ -333,7 +354,7 @@ cd "$(dirname "$0")" || exit 1
 # the only thing that reads .env: `docker compose` reads the real file and hands the
 # real value to the container. Strip here and nowhere else and the result is the worst
 # possible outcome - the check passes, the credential looks perfect, and Claude asks
-# the attendee to log in anyway with all six checks green behind them. So the file is
+# the attendee to log in anyway with every check green behind them. So the file is
 # also TESTED for CRLF further down, and that is a hard failure with an explicit fix.
 ENV_HAS_CRLF=0
 if [ -f .env ]; then
@@ -382,7 +403,7 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
    This is not your fault and nothing is broken. Pick one:
 
    A) Run the Windows-container check instead. No daemon switch, and it
-      proves the same six things:
+      checks the same toolchain - Docker, Claude, a browser:
 
           powershell -ExecutionPolicy Bypass -File windows\verify.ps1
 
@@ -579,33 +600,35 @@ fi
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop image builds"
   BUILD_START=$(date +%s)
-  # Build the images the WORKSHOP uses, not just the check's own. This step exists
-  # to move every download to the night before, and it only does that if it fetches
-  # what the morning will fetch: `up -d` otherwise sat there pulling ~2 GB while a
-  # room waited, having "passed" a check that warmed a different image entirely.
+  # Build the images the WORKSHOP uses. This step exists to move every download to
+  # the night before, and it only does that if it fetches what the morning will
+  # fetch: `up -d` once sat there pulling ~2 GB while a room waited, having "passed"
+  # a check that warmed a different image entirely.
   #
-  # Ordered cheapest-signal-first. The check's own image shares its base layer with
-  # the workshop's (see verify/Dockerfile), so by the time the second build runs the
-  # expensive part is already in the local cache.
+  # The workshop container first: it carries the ~2 GB base layer, and everything
+  # after it shares that layer (see verify/Dockerfile) and so builds from cache.
   # A log PER sub-step. They shared one, and since run_logged truncates its log on
   # entry, each build wiped the previous one's output while the note reader was still
   # reading it - so the row flipped between "starting", "working" and a step counter
   # belonging to whichever build had last emptied the file.
   BUILD_OK=1
-  STEP_NOTE_PREFIX="check image:"
-  run_logged "$LOG_DIR/03-build.log" compose build verify-agent || BUILD_OK=0
+  # The container every attendee lives in all day.
+  STEP_NOTE_PREFIX="workshop container:"
+  run_logged "$LOG_DIR/03-build-workshop.log" \
+    workshop_compose build claude-container || BUILD_OK=0
 
   if [ "$BUILD_OK" -eq 1 ]; then
-    # The container every attendee lives in all day.
-    STEP_NOTE_PREFIX="workshop container:"
-    run_logged "$LOG_DIR/03-build-workshop.log" \
-      workshop_compose build claude-container || BUILD_OK=0
+    # Check 8's outside vantage, and the page check 7 photographs.
+    STEP_NOTE_PREFIX="view checker:"
+    run_logged "$LOG_DIR/03-build-check.log" \
+      workshop_compose --profile check build verify-views || BUILD_OK=0
   fi
   if [ "$BUILD_OK" -eq 1 ]; then
     # Not --quiet: the byte counters are the only thing that moves during a pull, and
     # they are what progress_note reads to keep the row alive.
-    STEP_NOTE_PREFIX="postgres:"
-    run_logged "$LOG_DIR/03-pull-db.log" workshop_compose pull db || BUILD_OK=0
+    STEP_NOTE_PREFIX="postgres + nginx:"
+    run_logged "$LOG_DIR/03-pull.log" \
+      workshop_compose --profile check pull db verify-web || BUILD_OK=0
   fi
   if [ "$BUILD_OK" -eq 1 ]; then
     # Part 3's image. Not needed until the afternoon, which is exactly why it is
@@ -617,21 +640,25 @@ if [ "$FAILED" -eq 0 ]; then
   STEP_NOTE_PREFIX=""
 
   if [ "$BUILD_OK" -eq 1 ]; then
-    pass_check "check + workshop + agent, $(( $(date +%s) - BUILD_START ))s"
+    pass_check "workshop + checker + agent, $(( $(date +%s) - BUILD_START ))s"
   else
     fail_check "a container image failed to build" \
 "this is almost always a network problem - check your connection,
                         then re-run  ./verify-setup.sh
                         the failing step names its own log in $LOG_DIR/:
-                        03-build.log, 03-build-workshop.log,
-                        03-pull-db.log, 03-build-agent.log"
+                        03-build-workshop.log, 03-build-check.log,
+                        03-pull.log, 03-build-agent.log"
   fi
 fi
 
-# --------------------------------------------------------- 4: Claude Code auth
+# ---------------------------------------------------- 4: Claude credential in .env
+#
+# Everything that can be known about the credential WITHOUT a container, checked
+# before check 5 starts the stack. A first start installs the app's dependencies and
+# takes minutes; an empty .env should not cost those minutes to discover.
 
 if [ "$FAILED" -eq 0 ]; then
-  start_check "Claude Code CLI + auth"
+  start_check "Claude credential in .env"
   # TWO credentials, and the attendee tells us which they have. The guide presents
   # them as a pair of exclusive accordions rather than a list of options, because a
   # list of options is what produced the failure the prefix guards below exist to
@@ -684,20 +711,78 @@ if [ "$FAILED" -eq 0 ]; then
                         - move it to CLAUDE_CODE_OAUTH_TOKEN and leave
                         ANTHROPIC_API_KEY empty.
                         then re-run  ./verify-setup.sh"
-  elif ! run_logged "$LOG_DIR/04-claude.log" \
-        compose run --rm --no-deps verify-agent claude --version; then
-    fail_check "the Claude Code CLI did not start inside the container" \
-"check $LOG_DIR/04-claude.log for the error
+  elif [ -n "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+    pass_check "CLAUDE_CODE_OAUTH_TOKEN, sk-ant-oat01-"
+  else
+    pass_check "ANTHROPIC_API_KEY, sk-ant-api03-"
+  fi
+fi
+
+# ------------------------------------------------------- 5: Workshop stack starts
+#
+# The real stack, started the way it is started on the day: through workshop/up.sh,
+# which waits until the app answers on THE port from the host - the vantage an
+# attendee's own browser has. So a pass here is also the port check: nothing else on
+# this machine is holding WORKSHOP_PORT, because the workshop itself is serving on it.
+#
+# The two-vantage view check up.sh would run next is skipped here and run as check 8,
+# so that it gets a row of its own rather than failing under this one's label.
+
+if [ "$FAILED" -eq 0 ]; then
+  start_check "Workshop app up and serving"
+  PORT="${WORKSHOP_PORT:-5173}"
+  UP_START=$(date +%s)
+  if WORKSHOP_SKIP_VIEW_CHECK=1 run_logged "$LOG_DIR/05-up.log" ./workshop/up.sh; then
+    if [ "$WORKSHOP_RUNNING" -eq 1 ]; then
+      pass_check "http://localhost:${PORT} - your stack, already running"
+    else
+      pass_check "http://localhost:${PORT}, $(( $(date +%s) - UP_START ))s"
+    fi
+  # `compose up -d` names the port when it cannot publish it, in words that vary by
+  # Docker version and platform. Any of them means the same thing to an attendee.
+  elif grep -qiE 'port is already allocated|address already in use|ports are not available' \
+       "$LOG_DIR/05-up.log"; then
+    fail_check "port $PORT is already in use on your machine - this is the port the workshop needs" \
+"something else on your machine has it - another Vite project is the
+                        usual answer, since 5173 is its default.
+                        Pick a different port, and KEEP it for the workshop:
+                          echo WORKSHOP_PORT=5174 >> .env
+                        then re-run  ./verify-setup.sh"
+  elif grep -q 'WORKSHOP APP DID NOT START' "$LOG_DIR/05-up.log"; then
+    fail_check "the workshop container started, but the app inside it did not" \
+"the reason is at the end of $LOG_DIR/05-up.log
+                        the container's full output:
+                          docker compose -f $WORKSHOP_COMPOSE_FILE logs claude-container"
+  else
+    fail_check "the workshop app did not start answering on http://localhost:${PORT}/" \
+"see $LOG_DIR/05-up.log - it says how far the start got
+                        the container's full output:
+                          docker compose -f $WORKSHOP_COMPOSE_FILE logs claude-container"
+  fi
+fi
+
+# --------------------------------------------------------- 6: Claude Code auth
+#
+# Asked of the running claude-container, with `exec`, so the answer comes from the
+# same container, the same user and the same environment an attendee's
+# `docker compose exec claude-container claude` will get.
+
+if [ "$FAILED" -eq 0 ]; then
+  start_check "Claude Code CLI + auth"
+  if ! run_logged "$LOG_DIR/06-claude.log" \
+        workshop_compose exec -T claude-container claude --version; then
+    fail_check "the Claude Code CLI did not start inside the workshop container" \
+"check $LOG_DIR/06-claude.log for the error
                         if it mentions authentication, re-run  claude setup-token
                         and refresh the value in .env"
-  # THE CHECK THAT ACTUALLY CHECKS. Everything above proves the value is present, is
-  # the right shape, and that the CLI runs - and `claude --version` makes no network
-  # call at all, so every one of those passed for an attendee whose credential was
-  # rejected the moment they tried to use it. Six green checks and then a login
-  # prompt. One real round trip is the only thing that distinguishes a credential
-  # that exists from one that works, and it costs a handful of tokens.
-  elif ! STEP_NOTE_PREFIX="authenticating " run_logged "$LOG_DIR/04-auth.log" \
-        compose run --rm --no-deps verify-agent claude -p "Reply with the two characters: OK"; then
+  # THE CHECK THAT ACTUALLY CHECKS. Check 4 proves the value is present and the right
+  # shape, and `claude --version` makes no network call at all - so both of those
+  # passed for an attendee whose credential was rejected the moment they tried to use
+  # it. All green and then a login prompt. One real round trip is the only thing that
+  # distinguishes a credential that exists from one that works, and it costs a
+  # handful of tokens.
+  elif ! STEP_NOTE_PREFIX="authenticating " run_logged "$LOG_DIR/06-auth.log" \
+        workshop_compose exec -T claude-container claude -p "Reply with the two characters: OK"; then
     fail_check "the credential was rejected - Claude could not authenticate" \
 "the value in .env is present and the right shape, but Claude will not
                         accept it. The usual causes, in order:
@@ -706,112 +791,36 @@ if [ "$FAILED" -eq 0 ]; then
                           - it was truncated on the way into .env - check there is no
                             line break or stray quote around it
                           - .env was saved with Windows line endings (see above)
-                        the exact error is in $LOG_DIR/04-auth.log"
+                        the exact error is in $LOG_DIR/06-auth.log"
   else
-    CLAUDE_VERSION=$(tr -d '\r' < "$LOG_DIR/04-claude.log" | tail -1 | awk '{print $1}')
+    CLAUDE_VERSION=$(tr -d '\r' < "$LOG_DIR/06-claude.log" | tail -1 | awk '{print $1}')
     pass_check "claude ${CLAUDE_VERSION:-ok}, credential authenticated"
   fi
 fi
 
-# ------------------------------------------------------------ 5: Site reachable
-
-if [ "$FAILED" -eq 0 ]; then
-  start_check "Workshop site responds"
-  # THE port - the one the workshop stack itself publishes, not a stand-in. Proving
-  # some unrelated port is free predicts nothing about the day; 5173 is Vite's
-  # default and therefore the port an attendee is most likely to already be using.
-  # One variable governs the check and the stack, so an override set once in .env
-  # carries through the whole workshop and no command has to change.
-  PORT="${WORKSHOP_PORT:-5173}"
-
-  # IS THE WORKSHOP ITSELF HOLDING THE PORT?
-  #
-  # docker-compose.verify.yml publishes THE port on purpose — proving some unrelated
-  # port is free predicts nothing about the day. That rested on "the two stacks never
-  # run at once", which is true right up until somebody re-runs this check on a
-  # working machine. Then nginx cannot bind, and the check reports the workshop's own
-  # healthy stack as a port conflict and tells them to tear it down.
-  #
-  # A running workshop answering on this port is not a failure of the thing this check
-  # is trying to prove. It is that thing, already proven, by the real stack rather
-  # than by a stand-in. So say so and move on.
-  WORKSHOP_HOLDS_PORT=0
-  if [ "$WORKSHOP_RUNNING" -eq 1 ] &&
-     curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; then
-    WORKSHOP_HOLDS_PORT=1
-  fi
-
-  # ONE path from here, differing only in which port nginx publishes on. Check 6
-  # still needs a page to photograph either way, and it must not fight the workshop
-  # for the port: 0 publishes on an ephemeral one, read back below because nothing
-  # can predict it.
-  if [ "$WORKSHOP_HOLDS_PORT" -eq 1 ]; then
-    VERIFY_WEB_PORT=0
-  else
-    VERIFY_WEB_PORT="$PORT"
-  fi
-  export VERIFY_WEB_PORT
-
-  if ! run_logged "$LOG_DIR/05-web.log" compose up -d verify-web; then
-    fail_check "port $PORT is already in use on your machine - this is the port the workshop needs" \
-"if the workshop stack is already running, that is what is holding it:
-                          docker compose -f docker-compose.workshop.yml down
-                        otherwise something else on your machine has it - another
-                        Vite project is the usual answer, since 5173 is its default.
-                        Pick a different port, and KEEP it for the workshop:
-                          echo WORKSHOP_PORT=5174 >> .env
-                        then re-run  ./verify-setup.sh"
-  else
-    # Where nginx actually landed. With an ephemeral publish this is the only way to
-    # know, and polling $PORT instead would test the workshop's app while claiming to
-    # test nginx — a green check for the wrong reason.
-    if [ "$WORKSHOP_HOLDS_PORT" -eq 1 ]; then
-      CHECK_PORT=$(compose port verify-web 80 2>/dev/null | tr -d '\r' | sed 's/.*://')
-      if [ -z "${CHECK_PORT:-}" ]; then
-        CHECK_PORT="$PORT"
-      fi
-    else
-      CHECK_PORT="$PORT"
-    fi
-    SITE_START=$(date +%s)
-    SITE_OK=0
-    # Poll rather than sleep-and-hope, so a slow machine passes and a genuinely
-    # broken one fails fast enough to keep the room moving.
-    for _ in $(seq 1 30); do
-      if curl -fsS -o /dev/null "http://localhost:${CHECK_PORT}/" 2>>"$LOG_DIR/05-web.log"; then
-        SITE_OK=1
-        break
-      fi
-      [ "$PROGRESS" -eq 1 ] &&
-        progress_draw "$(( $(date +%s) - SITE_START ))" "waiting for nginx to answer on :${CHECK_PORT}"
-      sleep 1
-    done
-    [ "$PROGRESS" -eq 1 ] && progress_clear
-    if [ "$SITE_OK" -eq 1 ]; then
-      if [ "$WORKSHOP_HOLDS_PORT" -eq 1 ]; then
-        pass_check "HTTP 200 on :${CHECK_PORT} — :${PORT} is your own workshop stack, already serving"
-      else
-        pass_check "HTTP 200 on :${PORT}, $(( $(date +%s) - SITE_START ))s"
-      fi
-    else
-      fail_check "nothing answered on http://localhost:${PORT}/ after 30s" \
-"something may be holding port $PORT without Docker noticing.
-                        Pick a different port, and KEEP it for the workshop:
-                          echo WORKSHOP_PORT=5174 >> .env
-                        then re-run  ./verify-setup.sh"
-    fi
-  fi
-fi
-
-# --------------------------------------------------------------- 6: Screenshot
+# --------------------------------------------------------------- 7: Screenshot
+#
+# claude-container's own browser - the one the agent drives through the Playwright
+# MCP server - loads the ENVIRONMENT OK page from verify-web over the compose network
+# and stamps its hostname onto it. A known static page, so a failure here is the
+# browser and never the app.
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Playwright screenshot captured"
   rm -f "$SCREENSHOT"
-  if ! run_logged "$LOG_DIR/06-screenshot.log" \
-       compose run --rm verify-agent node /work/screenshot.mjs; then
+  if ! run_logged "$LOG_DIR/07-web.log" \
+       workshop_compose --profile check up -d --wait verify-web; then
+    fail_check "the page the screenshot is taken of did not start" \
+"check $LOG_DIR/07-web.log for the error
+                        then re-run  ./verify-setup.sh"
+  elif ! run_logged "$LOG_DIR/07-screenshot.log" \
+       workshop_compose exec -T \
+         -e VERIFY_URL=http://verify-web/ \
+         -e VERIFY_OUT=/screenshots/verify.png \
+         -e VERIFY_CHECKPOINT="${VERIFY_CHECKPOINT:-cp-00}" \
+         claude-container node /usr/local/bin/screenshot.mjs; then
     fail_check "the headless browser could not render and capture the page" \
-"check $LOG_DIR/06-screenshot.log for the error
+"check $LOG_DIR/07-screenshot.log for the error
                         then re-run  ./verify-setup.sh"
   elif [ ! -s "$SCREENSHOT" ]; then
     fail_check "Playwright reported success but $SCREENSHOT was not written" \
@@ -821,26 +830,26 @@ if [ "$FAILED" -eq 0 ]; then
   else
     SIZE_KB=$(( $(wc -c < "$SCREENSHOT") / 1024 ))
     # What the browser stamped onto the image. Read back out of the log because the
-    # container that knew it is already gone - see the verdict block below.
-    SHOT_HOST=$(tr -d '\r' < "$LOG_DIR/06-screenshot.log" | sed -n 's/^VERIFY_HOST=//p' | tail -1)
-    SHOT_STAMP=$(tr -d '\r' < "$LOG_DIR/06-screenshot.log" | sed -n 's/^VERIFY_STAMP=//p' | tail -1)
+    # container that knew it is stopped when the check ends - see the verdict block.
+    SHOT_HOST=$(tr -d '\r' < "$LOG_DIR/07-screenshot.log" | sed -n 's/^VERIFY_HOST=//p' | tail -1)
+    SHOT_STAMP=$(tr -d '\r' < "$LOG_DIR/07-screenshot.log" | sed -n 's/^VERIFY_STAMP=//p' | tail -1)
     pass_check "verify.png, ${SIZE_KB} KB"
   fi
 fi
 
-# ------------------------------------------- 7: Agent sees what you see (if up)
+# ---------------------------------------------------- 8: Agent sees what you see
 #
-# Only when the workshop stack is already running — see the detection at the top.
-# This is the check that would have caught both of the faults that cost a real run:
-# an API probe asking for a renamed route, and localhost resolving to IPv6 only
-# inside the container while Vite listened on IPv4. Every other check in this file
-# uses curl, and curl falls back to IPv4 where headless Chromium does not.
+# The check that would have caught both of the faults that cost a real run: an API
+# probe asking for a renamed route, and localhost resolving to IPv6 only inside the
+# container while Vite listened on IPv4. Checks 5 and 7 load pages with curl and with
+# a browser respectively, but neither loads THE APP in a browser from inside - and
+# curl falls back to IPv4 where headless Chromium does not.
 
-if [ "$FAILED" -eq 0 ] && [ "$WORKSHOP_RUNNING" -eq 1 ]; then
+if [ "$FAILED" -eq 0 ]; then
   start_check "Agent sees the same app you do"
-  if ! run_logged "$LOG_DIR/07-views.log" ./workshop/verify-views.sh; then
+  if ! run_logged "$LOG_DIR/08-views.log" ./workshop/verify-views.sh; then
     fail_check "the app is up, but the two vantage points do not agree" \
-"see $LOG_DIR/07-views.log - it names which vantage failed and why
+"see $LOG_DIR/08-views.log - it names which vantage failed and why
                         the screenshots are in screenshots/verify-outside.png
                         and screenshots/verify-inside.png, side by side"
   else
@@ -856,12 +865,11 @@ while [ "$IDX" -lt "$TOTAL" ]; do
   case $((IDX + 1)) in
     2) start_check "Docker daemon reachable" ;;
     3) start_check "Workshop image builds" ;;
-    4) start_check "Claude Code CLI + auth" ;;
-    5) start_check "Workshop site responds" ;;
-    6) start_check "Playwright screenshot captured" ;;
-    # Only ever reached when TOTAL is 7, i.e. when the workshop stack was already
-    # running at the top of the run. On a cold machine the loop stops at 6.
-    7) start_check "Agent sees the same app you do" ;;
+    4) start_check "Claude credential in .env" ;;
+    5) start_check "Workshop app up and serving" ;;
+    6) start_check "Claude Code CLI + auth" ;;
+    7) start_check "Playwright screenshot captured" ;;
+    8) start_check "Agent sees the same app you do" ;;
   esac
   say "${CURRENT_LINE}${DIM}----${RESET}   ${DIM}not reached${RESET}"
 done
@@ -876,13 +884,21 @@ if [ "$FAILED" -eq 0 ]; then
   say "   Open ${BOLD}${SCREENSHOT}${RESET} to see the proof - it should read"
   say "   \"ENVIRONMENT OK\" and match this:"
   say ""
-  # The container is destroyed as soon as the check finishes, so its hostname cannot
+  # The container is removed as soon as the check finishes, so its hostname cannot
   # be looked up afterwards. Printing it here is what turns "it should show your
   # container name" from an instruction into something an attendee can actually
   # perform - and it lands in verify-report.txt too, so a pasted report and a
   # screenshot can be told to be from the same run rather than assumed to be.
   say "       Container:  ${BOLD}${SHOT_HOST:-(not reported)}${RESET}"
   say "       Taken at:   ${BOLD}${SHOT_STAMP:-(not reported)}${RESET}"
+  say ""
+  # Say what became of the stack, because it is the first thing the morning needs.
+  if [ "$WORKSHOP_RUNNING" -eq 1 ] || [ "$KEEP" -eq 1 ]; then
+    say "   The workshop stack is running: ${BOLD}http://localhost:${WORKSHOP_PORT:-5173}${RESET}"
+  else
+    say "   The workshop stack has been stopped again, with its dependencies"
+    say "   kept. On the day, ${BOLD}./workshop/up.sh${RESET} brings it back."
+  fi
   say ""
   say "   ${BOLD}${RULE}${RESET}"
   [ "$QUIET" -eq 1 ] && printf 'PASS  all %s checks\n' "$TOTAL"

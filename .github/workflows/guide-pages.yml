@@ -1,0 +1,73 @@
+# Publish the how-to guide to GitHub Pages, so it can be linked BEFORE the day.
+#
+# Why this exists: the guide's setup page is what people need before the workshop,
+# and a file:// link only works for someone who already has the repo — while cloning
+# the repo is step 2 of that very page. So the guide is served from Pages, and the
+# pre-workshop link is:
+#
+#   https://orchlab-ai.github.io/workshop-example/before-the-day/
+#
+# which redirects to pages/environment-setup.html?setup=fresh — the full setup, with
+# the "have you set this machine up already?" question pre-answered "No".
+#
+# ONE-OFF SETUP, by a repo admin: Settings → Pages → Build and deployment →
+# Source: GitHub Actions. Until then the deploy step fails and nothing is published.
+#
+# The generated guide is committed (see guide/src/build-guide.js), so this publishes
+# guide/ as it is in the repo rather than rebuilding it — what is served is exactly
+# what is reviewed.
+name: guide-pages
+
+on:
+  push:
+    branches: [main]
+    paths: ['guide/**', '.github/workflows/guide-pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one halfway through.
+concurrency:
+  group: guide-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble the site
+        # Only the rendered guide. guide/src/ is the generator and its data, and has no
+        # business being served. The two redirect pages exist only in the published
+        # site: in the repo, the guide folder must present exactly one thing to open
+        # (start-here.html), and a second HTML file beside it would undo that.
+        run: |
+          mkdir -p _site/before-the-day
+          cp guide/start-here.html _site/
+          cp -r guide/pages _site/pages
+          redirect() {
+            cat > "$1" <<EOF
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>OrchLab Workshop</title>
+          <meta http-equiv="refresh" content="0; url=$2">
+          <link rel="canonical" href="$2">
+          <p><a href="$2">Continue to the workshop guide</a></p>
+          EOF
+          }
+          redirect _site/index.html start-here.html
+          redirect _site/before-the-day/index.html ../pages/environment-setup.html?setup=fresh
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

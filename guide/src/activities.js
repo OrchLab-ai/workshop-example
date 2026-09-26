@@ -124,7 +124,7 @@ const CREDENTIALS = {
   // Shown under both, because it is the thing neither section can tell you on its
   // own: that the other one exists and looks the same.
   warning:
-    "<strong>The two are not interchangeable and they look almost identical</strong> — both start <code>sk-ant-</code>, both run to about 108 characters. Only the prefix tells them apart, and putting one on the other's line fails <em>silently</em>: <code>.env</code> looks right, all six checks pass, and Claude asks you to log in anyway. Check 4 tests the prefix so that it fails loudly instead. Either value is a credential: <code>.env</code> is gitignored, and it must never be pasted into a message or a screenshot.",
+    "<strong>The two are not interchangeable and they look almost identical</strong> — both start <code>sk-ant-</code>, both run to about 108 characters. Only the prefix tells them apart, and putting one on the other's line fails <em>silently</em>: <code>.env</code> looks right, every check passes, and Claude asks you to log in anyway. Check 4 tests the prefix so that it fails loudly instead. Either value is a credential: <code>.env</code> is gitignored, and it must never be pasted into a message or a screenshot.",
 };
 
 const PLATFORMS = [
@@ -232,7 +232,7 @@ const TROUBLESHOOTING = [
     fix:
       "Not a failure, and nothing is broken. Every image <code>./verify-setup.sh</code> uses is a " +
       "Linux image, and one Docker daemon serves one mode. You do <strong>not</strong> need to " +
-      "switch modes — there is a Windows-container check that proves the same six things.",
+      "switch modes — there is a Windows-container check that tests the same toolchain: Docker, Claude and a browser.",
     commands: [
       { label: "Run this instead", code: "powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
     ],
@@ -312,8 +312,8 @@ const TROUBLESHOOTING = [
     symptom: "it has been sitting on check 3 for several minutes",
     fix:
       "<strong>Nothing is wrong, and this is the check earning its keep.</strong> The first run " +
-      "downloads the Playwright base image — roughly 2&nbsp;GB — then builds three images on it: the " +
-      "check's own, the workshop container you spend the day inside, and the Part 3 agent. Every byte " +
+      "downloads the Playwright base image — roughly 2&nbsp;GB — then builds the images the day needs " +
+      "on it, starting with the workshop container you spend the day inside. Every byte " +
       "it fetches now is a byte the workshop would otherwise fetch on the day, while a room waits. The " +
       "row tells you what Docker is doing and how long it has been at it " +
       "(<code>pulling 742.8MB / 1.9GB 96s</code>). Later runs reuse it all and check 3 takes seconds. " +
@@ -324,7 +324,8 @@ const TROUBLESHOOTING = [
     symptom: "the container image failed to build",
     fix:
       "Almost always the network, for the same reason as above — the build has to pull that base image. " +
-      "Check your connection and re-run; the full build output is in <code>.verify-logs/03-build.log</code>. " +
+      "Check your connection and re-run; the failure message names the log in <code>.verify-logs/</code> " +
+      "that holds the full build output. " +
       winOnly(
         "If that log mentions Windows containers rather than a download, you are in the wrong " +
           "container mode — see the first entry on this list."
@@ -334,7 +335,7 @@ const TROUBLESHOOTING = [
     check: "Check 4",
     symptom: "no credential found — .env has neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY",
     fix:
-      "The most common failure of the six, and it is usually one of two things: <code>.env</code> was " +
+      "The most common failure of them all, and it is usually one of two things: <code>.env</code> was " +
       "never created from <code>.env.example</code>, or the credential was pasted into the example file " +
       "instead of into <code>.env</code>. Then open <em>Your credential</em> above and follow whichever " +
       "of the two sections describes you — one of them, not both.",
@@ -354,11 +355,58 @@ const TROUBLESHOOTING = [
       "<code>sk-ant-api03-</code> is an API key from the Anthropic console and belongs on " +
       "<code>ANTHROPIC_API_KEY</code>. Move it to the other line, leave the one you vacated empty, and " +
       "re-run the check. <strong>This check exists because the failure is otherwise silent:</strong> " +
-      "without it the value is accepted, all six checks pass, and Claude asks you to log in later with " +
+      "without it the value is accepted, every check passes, and Claude asks you to log in later with " +
       "nothing pointing at the cause.",
   },
   {
+    check: "Check 5",
+    only: ["macos", "windows-linux"],
+    symptom: "it has been sitting on check 5 for several minutes",
+    fix:
+      "<strong>Nothing is wrong.</strong> Check 5 starts the real workshop stack, exactly as it is " +
+      "started on the day, and the first start installs the app's " +
+      "dependencies inside the container. The row names the phase it is in. It happens once: the " +
+      "dependencies are kept when the check stops the stack again, so the morning's start takes seconds.",
+  },
+  {
+    check: "Check 5",
+    only: ["macos", "windows-linux"],
+    symptom: "port 5173 is already in use — this is the port the workshop needs",
+    fix:
+      "Check 5 starts the workshop on <strong>the port it runs on all day</strong>, so a pass means " +
+      "the day will work rather than merely that some port was free. 5173 is Vite's default, so the " +
+      "usual culprit is another project of yours already running. Stop it, or move the workshop to " +
+      "another port — put it in <code>.env</code> and it is picked up by the check <em>and</em> the " +
+      "stack, so every other command in this guide stays exactly as written.",
+    commands: [
+      { label: "Move the workshop to another port, once", code: "echo WORKSHOP_PORT=5174 >> .env\n./verify-setup.sh" },
+    ],
+  },
+  {
+    check: "Check 5",
+    only: ["macos", "windows-linux"],
+    symptom: "the workshop container started, but the app inside it did not / the workshop app did not start answering",
+    fix:
+      "Docker and the images are fine; the app itself did not come up. The reason is at the end of " +
+      "<code>.verify-logs/05-up.log</code>, and the container's own output has the rest. Re-run once — " +
+      "if it fails the same way twice, that is the point to ask rather than keep re-running.",
+    commands: [
+      { label: "The container's full output", code: "docker compose -f docker-compose.workshop.yml logs claude-container" },
+    ],
+  },
+  {
+    check: "Check 6",
+    only: ["macos", "windows-linux"],
+    symptom: "the Claude Code CLI did not start inside the workshop container",
+    fix:
+      "The credential is present but the container could not use it. Read " +
+      "<code>.verify-logs/06-claude.log</code>: if it mentions authentication, the token has expired or " +
+      "was truncated on the way into <code>.env</code> — re-run <code>claude setup-token</code> and " +
+      "replace the value. Check there is no stray quote or line break around it.",
+  },
+  {
     check: "Check 4",
+    only: ["windows-windows"],
     symptom: "the Claude Code CLI did not start inside the container",
     fix:
       "The credential is present but the container could not use it. Read " +
@@ -368,22 +416,58 @@ const TROUBLESHOOTING = [
   },
   {
     check: "Check 5",
+    only: ["windows-windows"],
     symptom: "port 5173 is already in use — this is the port the workshop needs",
     fix:
       "Check 5 deliberately claims <strong>the port the workshop itself runs on</strong>, not a spare " +
       "one, so a pass means the day will work rather than merely that some port was free. 5173 is " +
-      "Vite's default, so the usual culprit is another project of yours already running. If you have " +
-      "the workshop stack up from earlier, that is what is holding it: " +
-      "<code>docker compose -f docker-compose.workshop.yml down</code>. Otherwise move the workshop to " +
-      "another port — put it in <code>.env</code> and it is picked up by the check <em>and</em> the " +
-      "stack, so every other command in this guide stays exactly as written.",
+      "Vite's default, so the usual culprit is another project of yours already running. Otherwise " +
+      "move the workshop to another port, and it is picked up by the check <em>and</em> the stack.",
     commands: [
-      { label: "Move the workshop to another port, once", code: "echo WORKSHOP_PORT=5174 >> .env\n./verify-setup.sh", only: ["macos", "windows-linux"] },
-      { label: "Move the workshop to another port, once", code: "$env:WORKSHOP_PORT=5174\npowershell -ExecutionPolicy Bypass -File windows\\verify.ps1", only: ["windows-windows"] },
+      { label: "Move the workshop to another port, once", code: "$env:WORKSHOP_PORT=5174\npowershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
     ],
   },
   {
+    check: "Check 7",
+    only: ["macos", "windows-linux"],
+    symptom: "the page the screenshot is taken of did not start",
+    fix:
+      "The small ENVIRONMENT OK page the screenshot photographs could not be started. Read " +
+      "<code>.verify-logs/07-web.log</code> and re-run; it is almost always the network, because the " +
+      "page's server image is downloaded in check 3 and a failed download shows up here.",
+  },
+  {
+    check: "Check 7",
+    only: ["macos", "windows-linux"],
+    symptom: "Playwright reported success but screenshots/verify.png was not written",
+    fix:
+      "The browser rendered the page; the container then could not write the file back out to your " +
+      "machine. That is a Docker file-sharing permission, not a browser problem. In Docker Desktop, " +
+      "check this folder is shared: <strong>Settings &rarr; Resources &rarr; File Sharing</strong>.",
+  },
+  {
+    check: "Check 7",
+    only: ["macos", "windows-linux"],
+    symptom: "the headless browser could not render and capture the page",
+    fix:
+      "Read <code>.verify-logs/07-screenshot.log</code> and re-run. This is the workshop container's " +
+      "own browser — the one your agent drives — so it is worth fixing rather than working round. If " +
+      "it fails twice with the same error, that is the point to ask rather than keep re-running.",
+  },
+  {
+    check: "Check 8",
+    only: ["macos", "windows-linux"],
+    symptom: "the app is up, but the two vantage points do not agree",
+    fix:
+      "Your browser can see the app and the agent inside the container cannot — or they see different " +
+      "pages. <code>.verify-logs/08-views.log</code> names which view failed and why, and the two " +
+      "screenshots are side by side in <code>screenshots/verify-outside.png</code> and " +
+      "<code>screenshots/verify-inside.png</code>. This is the check that catches addressing faults " +
+      "every other check misses, so do not skip past it — raise your hand.",
+  },
+  {
     check: "Check 6",
+    only: ["windows-windows"],
     symptom: "Playwright reported success but screenshots/verify.png was not written",
     fix:
       "The browser rendered the page; the container then could not write the file back out to your " +
@@ -392,6 +476,7 @@ const TROUBLESHOOTING = [
   },
   {
     check: "Check 6",
+    only: ["windows-windows"],
     symptom: "the headless browser could not render and capture the page",
     fix:
       "Read <code>.verify-logs/06-screenshot.log</code> and re-run. This one is rare, and on a machine " +
@@ -552,7 +637,7 @@ const TERMINALS = {
     command: {
       label: "Check the site is up — open this in your browser",
       code: "http://localhost:5173",
-      where: "host",
+      where: "browser",
     },
   },
   // The flag on terminal 3's command, explained where the reader first meets it.
@@ -637,7 +722,7 @@ const activities = [
       'On Windows, "do you have Docker?" is not enough of a question. Docker Desktop runs either Linux containers or Windows containers, and it cannot do both at once. Every image the standard check uses is a Linux image, so running it in Windows-container mode fails at the build step — and it used to blame your network while doing it.',
       "Both checks now notice when you have run the wrong one and point you at the other, so a wrong guess costs you one command. But it is faster to just ask.",
     ],
-    // The thirteen failure-by-failure fixes, also absorbed. They render after the
+    // The failure-by-failure fixes, also absorbed. They render after the
     // success line, which is where somebody whose check just failed is looking.
     troubleshooting: true,
     // NO `steps` HERE, on purpose. The four "Step N" headings on this page are the
@@ -645,7 +730,7 @@ const activities = [
     // summary above them could only restate that in less detail, and the page was
     // telling its sequence twice over.
     success:
-      "The last line reads <strong>ALL CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof. Six checks on a cold machine; a seventh appears if the workshop stack is already running, because there is then a real app to point a browser at.",
+      "The last line reads <strong>ALL CHECKS PASSED</strong>. That is the whole signal — there is no second step. Open <code>screenshots/verify.png</code> if you want to see the proof. The check starts the real workshop stack, asks every question of the container you will work in, and then stops it again — keeping the installed dependencies, so the day's first start takes seconds rather than minutes.",
     note:
       "<strong>The first check clones the app for you.</strong> The application you spend the day on lives in its own repository, and check 1 clones it into <code>app/</code> — so there is no second <code>git clone</code> to remember. That folder is where all your work happens, and it is what <code>./checkpoint.sh</code> moves between checkpoints. If you see <code>no checkpoints published yet</code> beside that check, nothing is wrong: the ladder is published one rung at a time.",
     cheat: [
@@ -755,7 +840,7 @@ const activities = [
         label: "Look at what it built — the site reloads as files change",
         after: true,
         code: "http://localhost:5173",
-        where: "host",
+        where: "browser",
       },
     ],
     prompts: [

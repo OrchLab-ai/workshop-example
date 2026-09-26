@@ -21,8 +21,9 @@
 # The two must agree. Disagreement is the whole point: a pass on one and a failure on
 # the other localises the fault to addressing rather than to the app.
 #
-# Not part of ./verify-setup.sh on purpose. That runs on a cold machine before the app
-# exists; this needs the app up, so it belongs beside the running stack.
+# Run twice on purpose: by ./workshop/up.sh every time the stack starts, and as check 8
+# of ./verify-setup.sh, which starts the stack itself so that it can ask this question
+# the night before rather than at 09:05.
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 

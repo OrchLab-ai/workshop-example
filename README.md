@@ -34,7 +34,7 @@ docker info --format '{{.OSType}}'
 If that prints `linux`, carry on above — nothing changes for you. If it prints
 `windows`, the command above cannot work: every image this check uses is a Linux
 image, and one Docker daemon serves one mode. Run the Windows check instead, which
-proves the same six things and needs no daemon switch:
+checks the same toolchain — Docker, Claude, a browser — and needs no daemon switch:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1
@@ -42,6 +42,23 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1
 
 `./verify-setup.sh` will tell you this too rather than failing confusingly. See
 [`windows/README.md`](windows/README.md) for the detail.
+
+### Sending the setup out before the day
+
+The guide is published to GitHub Pages by `.github/workflows/guide-pages.yml` on
+every push to `main` that touches `guide/`. The link to send attendees ahead of the
+workshop is:
+
+```
+https://orchlab-ai.github.io/workshop-example/before-the-day/
+```
+
+It opens the setup page with "Have you set this machine up already?" answered **No**,
+so they see every step from cloning onwards, whatever their browser remembers. The
+same thing without the redirect is `pages/environment-setup.html?setup=fresh`.
+
+Pages has to be switched on once by a repo admin: **Settings → Pages → Build and
+deployment → Source: GitHub Actions**.
 
 ### Your credential
 
@@ -73,14 +90,16 @@ at once, so nobody reads the half that is not theirs.
    ORCHLAB WORKSHOP - ENVIRONMENT CHECK
 ============================================================
 
-   [1/6]  Workshop app cloned ......................  PASS   mars-mission-fund, cloned in 12s, 1 checkpoint
-   [2/6]  Docker daemon reachable ..................  PASS   27.3.1
-   [3/6]  Workshop image builds ....................  PASS   58s
-   [4/6]  Claude Code CLI + auth ...................  PASS   claude 2.0.14, credential present
-   [5/6]  Workshop site responds ...................  PASS   HTTP 200 on :5173, 4s
-   [6/6]  Playwright screenshot captured ...........  PASS   verify.png, 184 KB
+   [1/8]  Workshop app cloned ......................  PASS   mars-mission-fund, cloned in 12s, 1 checkpoint
+   [2/8]  Docker daemon reachable ..................  PASS   27.3.1
+   [3/8]  Workshop image builds ....................  PASS   workshop + checker + agent, 58s
+   [4/8]  Claude credential in .env ................  PASS   CLAUDE_CODE_OAUTH_TOKEN, sk-ant-oat01-
+   [5/8]  Workshop app up and serving ..............  PASS   http://localhost:5173, 214s
+   [6/8]  Claude Code CLI + auth ...................  PASS   claude 2.0.14, credential authenticated
+   [7/8]  Playwright screenshot captured ...........  PASS   verify.png, 184 KB
+   [8/8]  Agent sees the same app you do ...........  PASS   both vantages agree
 
-   ALL 6 CHECKS PASSED
+   ALL 8 CHECKS PASSED
 
    Your environment is ready. There is nothing else to do.
    Open screenshots/verify.png to see the proof - it should read
@@ -89,17 +108,27 @@ at once, so nobody reads the half that is not theirs.
        Container:  4f2a9c1e88b3
        Taken at:   2026-09-17 08:41:02 UTC
 
+   The workshop stack has been stopped again, with its dependencies
+   kept. On the day, ./workshop/up.sh brings it back.
+
 ============================================================
 ```
 
-If you see `ALL 6 CHECKS PASSED`, **you are done.** There is no second step, no
+If you see `ALL 8 CHECKS PASSED`, **you are done.** There is no second step, no
 extra setup, and nothing to prepare. Close the terminal.
 
-Open `screenshots/verify.png` if you want to see it for yourself — a real
-headless browser rendered that page and captured it from inside your container.
+Open `screenshots/verify.png` if you want to see it for yourself — the browser
+inside the workshop container, the one your agent drives all day, rendered that page
+and captured it.
+
+The check runs against **the real workshop stack**: it starts it with
+`./workshop/up.sh`, exactly as the day does, asks every question of the container you
+will be working in, and stops it again at the end. Stopping keeps the installed
+dependencies, so the morning's start takes seconds. If the stack was already running
+when you ran the check, it is left running.
 
 The container name and timestamp are printed **because the container is gone by the
-time you read them.** It is created for the check and destroyed at the end of it, so
+time you read them.** The check stops the stack at the end, so
 its hostname cannot be looked up afterwards — and an instruction to check the
 screenshot shows "your container name" is not one anybody can follow against a name
 they were never told. They land in `verify-report.txt` too, so a pasted report and a
@@ -129,11 +158,11 @@ before that* (needs a new login).
 The run stops at the first failed check and tells you exactly what to do:
 
 ```
-   [4/6]  Claude Code CLI + auth ...................  FAIL
+   [4/8]  Claude credential in .env ................  FAIL
 
    1 CHECK FAILED - this is fixable, and you are not behind.
 
-       Failed check:    Claude Code CLI + auth
+       Failed check:    Claude credential in .env
        What went wrong: no credential found - .env has neither
                         CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY
        Fix it:          if you have a Claude SUBSCRIPTION, on your own
@@ -152,26 +181,30 @@ A plain-text copy lands in `verify-report.txt`. Paste that when you ask for help
 | `./verify-setup.sh` | The normal run |
 | `echo WORKSHOP_PORT=5174 >> .env` then `./verify-setup.sh` | Move the workshop off 5173 if it is taken. One value, used by the check *and* the workshop, so nothing else you type changes |
 | `./verify-setup.sh --quiet` | One-line verdict only (facilitators sweeping a room) |
-| `./verify-setup.sh --keep` | Leave the containers up afterwards |
+| `./verify-setup.sh --keep` | Leave the workshop stack running afterwards |
 
 Detailed output from every step is kept in `.verify-logs/` — you should not need
 it, but it is there when a check fails.
 
-### Check 3 takes the longest, and it tells you why
+### Checks 3 and 5 take the longest, and they tell you why
 
 The first run downloads the Playwright base image — roughly 2 GB — and then builds
-three images on top of it: the check's own, the workshop container you spend the day
-in, and the Part 3 agent. So check 3 can sit there for several minutes. It is not
+three images on top of it: the workshop container you spend the day in, the view
+checker, and the Part 3 agent. So check 3 can sit there for several minutes. It is not
 stuck, and this is the check doing its job: everything it fetches now is something
 the workshop would otherwise fetch while you waited. While it works, that row shows
 what Docker is doing and how long it has been at it:
 
 ```
-   [3/6]  Workshop image builds ... pulling 742.8MB / 1.9GB 96s
+   [3/8]  Workshop image builds ... workshop container: pulling 742.8MB / 1.9GB 96s
 ```
 
 The finished `PASS` line replaces it. Later runs reuse the downloaded image and
-check 3 takes a second or two. Nothing is animated under `--quiet`, when output is
+check 3 takes a second or two.
+
+Check 5 is the other long one on a first run: it starts the workshop stack, and the
+app installs its dependencies inside the container. The row names the phase it is in.
+That also happens only once — the dependencies are kept when the stack is stopped. Nothing is animated under `--quiet`, when output is
 redirected to a file, or in CI, so a pasted report is the same fixed-length
 checklist it always was.
 
@@ -187,19 +220,22 @@ rather than decorative.
 | 1 | Workshop app cloned | The app you work on all day is present, and `./checkpoint.sh` has a ladder to move you along |
 | 2 | Docker daemon reachable | Docker is the safety boundary for every autonomous exercise |
 | 3 | Workshop image builds | **Every image the day needs is on your machine** — the check builds the real workshop container and the Part 3 agent, so nothing downloads mid-exercise |
-| 4 | Claude Code CLI + auth | The agent runs *inside* the container, not on your laptop |
-| 5 | Workshop site responds | **The exact port the workshop runs on** (5173) is free and reachable from your machine |
-| 6 | Playwright screenshot | Your agent can *see* — the basis of self-verification in Part 3 |
+| 4 | Claude credential in .env | A credential is there, on the right line — checked before anything slow runs |
+| 5 | Workshop app up and serving | **The real stack starts**, and the app answers on **the exact port the workshop runs on** (5173) from your machine |
+| 6 | Claude Code CLI + auth | Claude authenticates *inside the workshop container*, where the agent runs all day |
+| 7 | Playwright screenshot | The workshop container's browser can *see* — the basis of self-verification in Part 3 |
+| 8 | Agent sees the same app you do | The app looks the same from inside the container as from your browser — the check that catches addressing faults curl hides |
 
 Check 1 earns its place: the workshop stack bind-mounts `app/`, and an *empty*
 directory bind-mounts perfectly happily — the container would start, report no
 error, and simply have no app inside it.
 
-The check container is built to the same shape as the real workshop container
-(Playwright base image, Claude Code CLI, non-root user) **and on the same base
-image tag**, so a pass here predicts a pass later. That shared tag is load-bearing:
-when the two drifted apart, the check warmed a ~2 GB base that nothing on the day
-used, and the morning downloaded the real one all over again.
+Checks 5 to 8 run in **the workshop container itself**, not in a look-alike built for
+the check, so a pass predicts the day rather than approximating it. The one extra
+image — the view checker behind check 8's outside view — is built **on the same base
+image tag**, and that shared tag is load-bearing: when the two drifted apart, the
+check warmed a ~2 GB base that nothing on the day used, and the morning downloaded
+the real one all over again.
 
 ---
 
@@ -208,11 +244,12 @@ used, and the morning downloaded the real one all over again.
 ```
 verify-setup.sh                    # The environment check — start here
 checkpoint.sh                # Jump between checkpoints; parks your work safely
-docker-compose.verify.yml    # Two-service check stack (site + agent)
+docker-compose.workshop.yml  # The workshop stack — the check runs against it too
 verify/
-  Dockerfile                 # Playwright base + Claude Code CLI
-  screenshot.mjs             # Check 5 — drives the browser, captures proof
-  site/index.html            # The "ENVIRONMENT OK" page
+  Dockerfile                 # View checker for check 8's outside vantage
+  screenshot.mjs             # Check 7 — the workshop container's browser, captures proof
+  app-views.mjs              # Check 8 — the real app, from inside and outside
+  site/index.html            # The "ENVIRONMENT OK" page, served by verify-web
 app/                         # The application, cloned by check 1. Gitignored —
                              # it is a separate repository and carries the cp-* tags
 workshop/
