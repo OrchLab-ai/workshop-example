@@ -1,13 +1,43 @@
-// Check 5 of the environment check: drive a real headless browser against the
-// workshop site and capture a self-evidencing screenshot.
+// Check 7 of the environment check: drive a real headless browser against the
+// verify-web page and capture a self-evidencing screenshot. It runs inside
+// claude-container, the container attendees work in all day, so the browser it
+// proves is the one the agent will drive.
 //
 // "Self-evidencing" is the point — the captured page literally reads
 // "ENVIRONMENT OK" and carries the container hostname, timestamp and checkpoint.
 // An attendee who opens verify.png needs nobody to interpret it for them, and it
 // is the single artefact worth showing a facilitator when something looks wrong.
-import { chromium } from "playwright";
+import { createRequire } from "node:module";
 import { hostname } from "node:os";
 import { mkdirSync } from "node:fs";
+
+// THE AGENT'S BROWSER, resolved the same way app-views.mjs resolves it. The workshop
+// image installs chromium for @playwright/mcp's bundled playwright-core and for
+// nothing else, so a bare `import "playwright"` either fails to resolve or finds a
+// build whose browser was never downloaded. See app-views.mjs for the full story.
+const require = createRequire(import.meta.url);
+const CANDIDATES = [
+  process.env.VERIFY_MODULE,
+  "/usr/lib/node_modules/@playwright/mcp/node_modules/playwright-core",
+  "playwright",
+  "playwright-core",
+].filter(Boolean);
+
+let chromium;
+const tried = [];
+for (const candidate of CANDIDATES) {
+  try {
+    ({ chromium } = require(candidate));
+    break;
+  } catch (err) {
+    tried.push(`${candidate}: ${err.code || err.message}`);
+  }
+}
+if (!chromium) {
+  console.error("no usable playwright module");
+  tried.forEach((t) => console.error(`  tried ${t}`));
+  process.exit(2);
+}
 
 const URL = process.env.VERIFY_URL || "http://verify-web/";
 const OUT = process.env.VERIFY_OUT || "/screenshots/verify.png";
@@ -52,8 +82,8 @@ await page.screenshot({ path: OUT });
 await browser.close();
 
 // Report the two facts that were stamped INTO the image, so the caller can print
-// them beside the file path. The container these ran in is destroyed the moment the
-// check finishes (--rm, then compose down), so its hostname is otherwise unknowable
+// them beside the file path. The container these ran in is stopped the moment the
+// check finishes (compose down), so its hostname is otherwise unknowable
 // — and "check the screenshot shows your container name" is not a check anybody can
 // perform against a name they were never told.
 console.log(`VERIFY_HOST=${HOST}`);

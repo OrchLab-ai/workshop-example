@@ -22,7 +22,7 @@
 //
 // WHAT IT DOES NOT COVER, and no green run here should be read as covering:
 //   * that either image builds (needs Docker, and the right daemon mode)
-//   * that a browser actually renders (that IS check 5; run verify-setup.sh / verify.ps1)
+//   * that a browser actually renders (that IS checks 7 and 8; run verify-setup.sh / verify.ps1)
 //   * anything about credentials or the network
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { join, dirname, resolve, extname } from "node:path";
@@ -182,6 +182,34 @@ test("the guide names the three terminals before the first command", null, () =>
 // room that has just been walked through it, so it lives on one page now. Two things
 // have to hold for that to be an improvement rather than a hiding place: the page has
 // to carry the whole story, and every page has to be one click from it.
+// The deck numbers setup and the morning start as 01a and 01b. The index used to
+// carry them as two unnumbered callouts above the cards, which left the slides'
+// numbers pointing at nothing.
+test("the index numbers setup and the morning start as cards 01a and 01b", null, () => {
+  const home = read("guide/start-here.html");
+  ok(!/class="before"/.test(home), "start-here.html still has the unnumbered setup/start-your-day callouts above the cards");
+  const nums = [...home.matchAll(/<span class="num">([^<]+)<\/span>/g)].map((m) => m[1]);
+  ok(nums.slice(0, 3).join(",") === "01a,01b,02", `cards should open 01a, 01b, 02 — found ${nums.slice(0, 3).join(", ")}`);
+  ok(/href="pages\/environment-setup\.html\?ask"/.test(home), "card 01a must carry ?ask, so the page asks whether the machine is set up");
+  ok(/href="pages\/start-your-day\.html"[^>]*>\s*<span class="num">01b</, "card 01b must open start-your-day.html");
+  // Everything under the question waits for the answer.
+  const setup = read("guide/pages/environment-setup.html");
+  const ask = setup.indexOf("data-setup-empty");
+  const gate = setup.indexOf('<div data-setup="done fresh">', ask);
+  ok(ask > 0 && gate > ask, "the setup page must wrap everything below its question in a data-setup gate");
+});
+
+// The pre-workshop link. Sent to people who do not have the repo yet, so it has to be
+// hosted, and it has to show the FULL setup whatever the viewer's browser remembers.
+test("there is a hosted pre-workshop link that opens the full setup", null, () => {
+  const wf = read(".github/workflows/guide-pages.yml");
+  ok(/environment-setup\.html\?setup=fresh/.test(wf), "guide-pages.yml must publish a before-the-day redirect to environment-setup.html?setup=fresh");
+  ok(/actions\/deploy-pages@/.test(wf), "guide-pages.yml must deploy to GitHub Pages");
+  ok(!/cp -r guide\/src|cp -r guide\s/.test(wf), "publish the rendered guide only — guide/src is the generator, not the site");
+  const setup = read("guide/pages/environment-setup.html");
+  ok(/setup=\(fresh\|done\)/.test(setup), "the setup page must honour ?setup=fresh, or a browser that once answered 'already set up' forwards the short version");
+});
+
 test("the daily start lives on exactly one page, reachable from every page", null, () => {
   const explainer = read("guide/pages/start-your-day.html");
   ok(
@@ -331,7 +359,7 @@ test("a check that runs several commands still shows one clock and one story", n
   // The collision that produced the flickering: run_logged truncates its log on
   // entry, so two sub-steps sharing a log wipe each other's output while the note
   // reader is mid-read.
-  const check3 = sh.slice(sh.indexOf('start_check "Workshop image builds"'), sh.indexOf('start_check "Claude Code CLI'));
+  const check3 = sh.slice(sh.indexOf('start_check "Workshop image builds"'), sh.indexOf('start_check "Claude credential'));
   const logs = [...check3.matchAll(/run_logged "\$LOG_DIR\/([a-z0-9.-]+\.log)"/g)].map((m) => m[1]);
   ok(logs.length > 1, "check 3 should run more than one logged command");
   ok(
@@ -404,7 +432,7 @@ test("check 3 warms the images the workshop morning needs", null, () => {
     "check 3 must build claude-container from docker-compose.workshop.yml — that is the container every attendee lives in all day, and if the check does not build it, `docker compose up -d` downloads it while the room waits"
   );
   ok(
-    /workshop_compose\s+pull\s+.*\bdb\b/.test(sh),
+    /workshop_compose\s+(--profile\s+\S+\s+)?pull\s+.*\bdb\b/.test(sh),
     "check 3 must pull the postgres image too"
   );
   ok(
@@ -419,11 +447,11 @@ test("check 3 warms the images the workshop morning needs", null, () => {
 // Vite's default. One variable now governs both, which is also what lets an attendee
 // who has to move the port set it ONCE and leave every command in the guide alone.
 test("the check and the workshop claim the same port, from the same variable", null, () => {
-  const verify = read("docker-compose.verify.yml");
   const workshop = read("docker-compose.workshop.yml");
   const windows = read("windows/docker-compose.windows.yml");
   const PORT = /\$\{WORKSHOP_PORT:-5173\}/;
-  ok(PORT.test(verify), "docker-compose.verify.yml must publish ${WORKSHOP_PORT:-5173} — the check must claim the port the workshop needs, not a stand-in");
+  // The Linux check no longer has a port of its own to get wrong: check 5 starts the
+  // workshop stack itself, so the port it proves IS the workshop's.
   ok(PORT.test(workshop), "docker-compose.workshop.yml must publish ${WORKSHOP_PORT:-5173}");
   ok(PORT.test(windows), "windows/docker-compose.windows.yml must publish ${WORKSHOP_PORT:-5173} — the two checks must stay in step");
   ok(
@@ -431,7 +459,7 @@ test("the check and the workshop claim the same port, from the same variable", n
     "the workshop stack must map the SAME value on both sides of the colon. Vite's HMR websocket infers its port from the page URL, so 5174:5173 serves a page whose live reload silently never connects"
   );
   ok(
-    !/\bVERIFY_PORT\b/.test(verify + workshop + windows),
+    !/\bVERIFY_PORT\b/.test(workshop + windows),
     "VERIFY_PORT is gone — two names for one port is how the check and the workshop drifted apart in the first place"
   );
   for (const [f, sh] of [["verify-setup.sh", codeOf("verify-setup.sh")], ["windows/verify.ps1", codeOf("windows/verify.ps1")]]) {
@@ -519,19 +547,23 @@ test("the Linux image puts playwright on the ESM resolution path", "WIN-012", ()
   );
 });
 
-test("the Linux screenshot script is reachable from its own image", "WIN-012", () => {
-  // Guard the pairing rather than either half: the script is ESM (bare import) and
-  // the image must therefore provide a real node_modules. If someone converts the
-  // script to CommonJS the symlink stops being load-bearing, and that is fine — but
-  // it must not be possible to have ESM WITHOUT the resolution fix.
-  const script = read("verify/screenshot.mjs");
-  const isEsm = /^\s*import\s+.*\bfrom\s+["']playwright["']/m.test(script);
-  if (isEsm) {
-    ok(
-      /\/work\/node_modules/.test(codeOf("verify/Dockerfile")),
-      "verify/screenshot.mjs imports playwright as ESM, so verify/Dockerfile must provide /work/node_modules"
-    );
-  }
+// The screenshot now runs in claude-container, whose image installs a browser for
+// @playwright/mcp's playwright-core and for nothing else. A bare ESM import of
+// "playwright" there either fails to resolve or finds a build with no browser.
+test("the Linux screenshot drives the agent's own browser", "WIN-012", () => {
+  const script = codeOf("verify/screenshot.mjs");
+  ok(
+    !/^\s*import\s+.*\bfrom\s+["']playwright["']/m.test(script),
+    "verify/screenshot.mjs must not import playwright by bare ESM specifier — in claude-container that resolves to nothing, or to a build whose browser was never downloaded"
+  );
+  ok(
+    /@playwright\/mcp\/node_modules\/playwright-core/.test(script),
+    "verify/screenshot.mjs must try @playwright/mcp's playwright-core — that is the only copy the workshop image downloads a chromium for"
+  );
+  ok(
+    /\/usr\/local\/bin\/screenshot\.mjs/.test(read("docker-compose.workshop.yml")),
+    "claude-container must mount verify/screenshot.mjs, or check 7 has nothing to run"
+  );
 });
 
 // ------------------------------------------------ regression guards, Windows
@@ -668,45 +700,87 @@ test("every COPY source in the Windows Dockerfile exists", null, () => {
 
 test("both stacks serve the same site, rather than duplicating it", null, () => {
   ok(exists("verify/site/index.html"), "verify/site/index.html is missing");
-  ok(/verify\/site/.test(read("docker-compose.verify.yml")), "the Linux stack should serve verify/site");
+  ok(/verify\/site/.test(read("docker-compose.workshop.yml")), "the workshop stack's verify-web should serve verify/site");
   ok(
     /verify\/site/.test(read("windows/docker-compose.windows.yml")),
     "the Windows stack must serve the SAME verify/site, not a copy — two copies of the proof page will drift"
   );
 });
 
-test("verify-setup.sh and verify.ps1 present the same six checks", null, () => {
-  const labels = [
+// The two scripts no longer run the same checklist. The Linux check starts the real
+// workshop stack and asks its questions there; the Windows-container check has no
+// workshop stack to start (the app's images are Linux images), so it keeps its own
+// stand-in stack. What must still hold for EACH is that its labels, its declared
+// total and its skipped-row map agree — the fixed-length checklist is the one
+// property the whole design rests on.
+const CHECKLISTS = {
+  "verify-setup.sh": [
+    "Workshop app cloned",
+    "Docker daemon reachable",
+    "Workshop image builds",
+    "Claude credential in .env",
+    "Workshop app up and serving",
+    "Claude Code CLI + auth",
+    "Playwright screenshot captured",
+    "Agent sees the same app you do",
+  ],
+  "windows/verify.ps1": [
     "Workshop app cloned",
     "Docker daemon reachable",
     "Workshop image builds",
     "Claude Code CLI + auth",
     "Workshop site responds",
     "Playwright screenshot captured",
-  ];
+  ],
+};
+
+test("each check's labels, total and skipped-row map agree", null, () => {
   const sh = read("verify-setup.sh");
   const ps = read("windows/verify.ps1");
-  for (const label of labels) {
-    ok(sh.includes(label), `verify-setup.sh is missing the check labelled "${label}"`);
-    ok(ps.includes(label), `windows/verify.ps1 is missing the check labelled "${label}" — the two must stay in step or a Windows attendee cannot compare notes with the room`);
-  }
-  // The counter in every row is "[n/TOTAL]", so a label added to one script without
-  // bumping its total prints a checklist that counts past its own length.
-  // Read the declared total rather than matching against a literal: the assertion is
-  // that the two scripts agree with each other AND with this list, so the list stays
-  // the single place a sixth check has to be registered.
+  const shLabels = CHECKLISTS["verify-setup.sh"];
+  const psLabels = CHECKLISTS["windows/verify.ps1"];
+  for (const label of shLabels) ok(sh.includes(label), `verify-setup.sh is missing the check labelled "${label}"`);
+  for (const label of psLabels) ok(ps.includes(label), `windows/verify.ps1 is missing the check labelled "${label}"`);
+  // The counter in every row is "[n/TOTAL]", so a label added without bumping the
+  // total prints a checklist that counts past its own length.
   const shTotal = sh.match(/^TOTAL=(\d+)/m);
   const psTotal = ps.match(/^\$Total\s*=\s*(\d+)/m);
-  ok(shTotal && Number(shTotal[1]) === labels.length, `verify-setup.sh sets TOTAL=${shTotal ? shTotal[1] : "?"}, expected ${labels.length}`);
-  ok(psTotal && Number(psTotal[1]) === labels.length, `windows/verify.ps1 sets $Total = ${psTotal ? psTotal[1] : "?"}, expected ${labels.length}`);
+  ok(shTotal && Number(shTotal[1]) === shLabels.length, `verify-setup.sh sets TOTAL=${shTotal ? shTotal[1] : "?"}, expected ${shLabels.length}`);
+  ok(psTotal && Number(psTotal[1]) === psLabels.length, `windows/verify.ps1 sets $Total = ${psTotal ? psTotal[1] : "?"}, expected ${psLabels.length}`);
   // Every check but the first is skipped on an earlier failure, and the skipped rows
   // are printed from a hard-coded map. If that map is short, the checklist silently
-  // loses its fixed length — which is the one property the whole design rests on.
-  // Plain substring matches, deliberately: these needles contain regex metacharacters.
-  for (let n = 2; n <= labels.length; n++) {
-    ok(sh.includes(`${n}) start_check "${labels[n - 1]}"`), `verify-setup.sh's skipped-row map is missing ${n}) ${labels[n - 1]}`);
-    ok(ps.includes(`${n} = '${labels[n - 1]}'`), `windows/verify.ps1's $remaining map is missing ${n} = ${labels[n - 1]}`);
+  // loses its fixed length. Plain substring matches: these needles contain regex
+  // metacharacters.
+  for (let n = 2; n <= shLabels.length; n++) {
+    ok(sh.includes(`${n}) start_check "${shLabels[n - 1]}"`), `verify-setup.sh's skipped-row map is missing ${n}) ${shLabels[n - 1]}`);
   }
+  for (let n = 2; n <= psLabels.length; n++) {
+    ok(ps.includes(`${n} = '${psLabels[n - 1]}'`), `windows/verify.ps1's $remaining map is missing ${n} = ${psLabels[n - 1]}`);
+  }
+});
+
+// The reason verify-setup.sh exists in this shape. A check stack that LOOKED like the
+// workshop's proved that a container shaped like claude-container worked — and the
+// faults that cost real runs lived in exactly the differences: the image, its user,
+// its mounts, its /etc/hosts.
+test("the Linux check asks its questions of the real workshop container", null, () => {
+  const sh = codeOf("verify-setup.sh");
+  ok(!exists("docker-compose.verify.yml"), "docker-compose.verify.yml is back — the Linux check runs against the workshop stack, not a stand-in");
+  ok(!/docker-compose\.verify\.yml|verify-agent/.test(sh), "verify-setup.sh still refers to the retired check stack");
+  ok(/run_logged\s+"\$LOG_DIR\/05-up\.log"\s+\.\/workshop\/up\.sh/.test(sh), "check 5 must start the stack through workshop/up.sh, the same way the day starts it");
+  ok(
+    /workshop_compose exec -T claude-container claude -p /.test(sh),
+    "the authentication round trip must run in claude-container — the container an attendee's own `claude` runs in"
+  );
+  ok(
+    /claude-container node \/usr\/local\/bin\/screenshot\.mjs/.test(sh),
+    "the screenshot must be taken by claude-container's browser"
+  );
+  ok(/\.\/workshop\/verify-views\.sh/.test(sh), "the two-vantage check must run on every pass, not only when the stack happened to be up");
+  // Teardown keeps the dependency volumes: they are most of what a night-before run buys.
+  const cleanup = sh.slice(sh.indexOf("cleanup()"), sh.indexOf("trap cleanup EXIT"));
+  ok(!/(\s-v\b|--volumes)/.test(cleanup), "teardown must not remove volumes — the installed dependencies are what makes the morning's up.sh fast");
+  ok(/WORKSHOP_RUNNING/.test(cleanup), "teardown must leave alone a stack that was already running when the check began");
 });
 
 // ------------------------------------------------------------- the app clone
@@ -1679,7 +1753,6 @@ test("both checks catch a credential pasted into the wrong line", null, () => {
 // do was broken. env_file omits what .env does not define.
 const COMPOSE_FILES = [
   "docker-compose.workshop.yml",
-  "docker-compose.verify.yml",
   "windows/docker-compose.windows.yml",
 ];
 
@@ -1731,7 +1804,7 @@ test("the credential check authenticates, not just exists", null, () => {
       `${name} must make a real Claude call — --version proves the CLI exists, which is not the thing that fails`
     );
     ok(
-      /04-auth\.log/.test(src),
+      /\d\d-auth\.log/.test(src),
       `${name} must keep the authentication attempt in its own log, so the failure message can point at the actual error`
     );
     ok(

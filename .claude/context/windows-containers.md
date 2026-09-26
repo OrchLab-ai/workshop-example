@@ -28,11 +28,11 @@ So `windows/` is a genuine second implementation rather than a compatibility shi
 | | Linux stack | Windows stack |
 |---|---|---|
 | Entry point | `./verify-setup.sh` | `windows\verify.ps1` |
-| Compose | `docker-compose.verify.yml` | `windows/docker-compose.windows.yml` |
+| Compose | `docker-compose.workshop.yml` — the real stack, started via `workshop/up.sh` | `windows/docker-compose.windows.yml` — a stand-in stack |
 | Web service | `nginx:alpine` | the same image, running `src/serve.mjs` |
 | Browser | Chromium | **Firefox** (Chromium cannot work — see below) |
 | Site page | `verify/site/index.html` | the same file, shared not duplicated |
-| Checks | 5 | the same 5, same output format |
+| Checks | 8, asked of the workshop container itself | 6, same output format |
 
 Both entry points now detect the wrong mode and point at the other one, so an attendee
 cannot get stuck in the gap between them.

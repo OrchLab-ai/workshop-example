@@ -28,7 +28,8 @@ COMPOSE_FILE="docker-compose.workshop.yml"
 PORT="${WORKSHOP_PORT:-5173}"
 SERVICE="claude-container"
 # Generous: a first run downloads nothing (check 3 warmed the images) but still
-# installs a monorepo's dependencies. Ten minutes is comfortably past the worst
+# installs a monorepo's dependencies - once, and normally during ./verify-setup.sh,
+# whose check 5 runs this script. Ten minutes is comfortably past the worst
 # observed, and hitting it means something is wrong rather than slow.
 TIMEOUT="${WORKSHOP_UP_TIMEOUT:-600}"
 

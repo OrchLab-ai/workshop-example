@@ -78,6 +78,7 @@ const CSS = `
   --strong:      #111111;
   --accent:      #3f6b2b;  /* deep green — 6.3:1 on white */
   --amber:       #7a5200;
+  --blue:        #1f5fa8;  /* 6.4:1 on white */
   --danger:      #a02e1a;  /* red — 7.2:1 on white */
 }
 /* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
@@ -97,6 +98,7 @@ const CSS = `
   --strong:      #ffffff;
   --accent:      #8cc26c;
   --amber:       #ffbd2e;
+  --blue:        #6cb4ff;
   --danger:      #ff9580;
 }
 :root {
@@ -557,25 +559,12 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 /* Outlined rather than filled: it is a container shell like the one above it, so it
    keeps that colour, and the difference between them stays visible at a glance. */
 .loc.claude    { background: none; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* Not a terminal at all. A URL badged "host terminal" read as a command to type into
+   one, so it gets a colour none of the three windows use. */
+.loc.browser   { background: var(--blue);   color: var(--bg); }
 .shellreq .not { color: var(--amber); font-weight: 700; }
 
 /* nav */
-div.before {
-  display: grid; gap: 10px; margin: 0 0 26px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
-a.b-step {
-  display: block; text-decoration: none; padding: 13px 15px;
-  background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
-}
-a.b-step:hover { background: var(--surface-alt); }
-a.b-step .b-n {
-  display: block; font-size: 10.5px; letter-spacing: .12em;
-  color: var(--muted); margin-bottom: 5px;
-}
-a.b-step b { color: var(--accent); font-size: 15px; }
-a.b-step p { margin: 5px 0 0; color: var(--text); font-size: 13px; line-height: 1.5; }
-
 p.dailylink {
   margin: 0 0 14px; font-size: 13px; color: var(--muted);
 }
@@ -737,6 +726,12 @@ function setPlatform(state) {
   var setup = '';
   try { setup = localStorage.getItem(SETUP_KEY) || ''; } catch (err) {}
   if (!setup && !/[?&]ask(=|&|$)/.test(location.search)) setup = 'fresh';
+  // THE PRE-WORKSHOP LINK: ?setup=fresh. Sent out before the day, so it must show the
+  // whole setup whatever this browser answered last time - a facilitator who clicked
+  // "just run the check" while testing would otherwise see, and forward, the short
+  // version. Like the default above it is NOT stored: it answers for this visit only.
+  var forced = /[?&]setup=(fresh|done)(&|$)/.exec(location.search);
+  if (forced) setup = forced[1];
   applySetup(setup);
 
   // "Windows — not sure which" on any pathway bar sends people here with the OS
@@ -852,6 +847,7 @@ const LOCATIONS = {
   host: { cls: "host", text: "host terminal" },
   container: { cls: "container", text: "work terminal" },
   claude: { cls: "claude", text: "claude terminal" },
+  browser: { cls: "browser", text: "your browser" },
 };
 
 function copyBlock(label, body, isPrompt, where) {
@@ -888,6 +884,13 @@ ${body}
 // deck's ACTIVITY eyebrow, so "we're on activity four" resolves to exactly one
 // card here. Keep the two in step if the running order ever changes.
 const actNum = i => String(i + 1).padStart(2, "0");
+// What the reader SEES as the number, which is not always the file's. The environment
+// check and the morning start are two halves of activity 01 in the deck - 01a once
+// ever, 01b every day - so they are numbered as a pair, and the next activity is
+// still 02. File names keep actNum: renaming files breaks every link already sent out.
+const shownNum = (a, i) => (a.platformSetup ? `${actNum(i)}a` : actNum(i));
+// start-your-day.html is not an activity, but it is card 01b and it says so.
+const DAILY_NUM = "01b";
 
 // Normally NN-slug.html. The environment check overrides it to environment-setup.html
 // because that page is BOTH activity 1 and the pre-workshop setup instructions, and it
@@ -1153,15 +1156,28 @@ ${HELP.steps.map(s => `        <li>${s}</li>`).join("\n")}
 
 // ------------------------------------------------------------------- index
 
+// ONE LIST, NUMBERED LIKE THE DECK. Setup and the morning start used to sit above the
+// cards as two unnumbered callouts, which gave the slides' "01a" and "01b" nothing to
+// point at. They are now cards 01a and 01b, in the order they are done.
+//
+// 01a carries ?ask: somebody arriving from the index may or may not be set up, so the
+// page asks before it shows anything. The SETUP link in the header is for people who
+// are setting up, and goes straight to the full guide.
+const dailyCard = `      <a class="card" href="${FROM_ROOT.daily}">
+        <span class="num">${DAILY_NUM}</span>
+        <span class="want">I want to start my day</span>
+        <span class="meta">Start Your Day &middot; every morning, before any activity</span>
+      </a>`;
+
 const cards = activities
   .map(
     (a, i) => `      <a class="card" href="${FROM_ROOT.page(fileFor(a, i))}${a.platformSetup ? "?ask" : ""}">
-        <span class="num">${actNum(i)}</span>
+        <span class="num">${shownNum(a, i)}</span>
         <span class="want">${esc(a.intent)}</span>
         <span class="meta">${esc(a.title)} &middot; ${esc(a.part)}${
       a.to ? ` &middot; <span class="tag">${esc(a.to)}</span>` : ""
     }</span>
-      </a>`
+      </a>${a.platformSetup ? `\n${dailyCard}` : ""}`
   )
   .join("\n");
 
@@ -1181,24 +1197,6 @@ fs.writeFileSync(
   <p class="lede">Every activity runs in this one container. Pick the thing you
   are trying to achieve — each page has the steps, every command and prompt as a
   one-click copy, and a way to catch up if you fall behind.</p>
-
-  <!-- TWO THINGS, IN ORDER, BEFORE ANY ACTIVITY. Setup is once ever; the morning
-       start is once a day. They used to be one callout pointing only at setup, and
-       the morning routine was instead pasted above all ten activities — which made
-       it look like part of each activity rather than the thing you do before them. -->
-  <div class="before">
-    <a class="b-step" href="${FROM_ROOT.platform}">
-      <span class="b-n">ONCE</span>
-      <b>Set up your machine &rarr;</b>
-      <p>The setup command depends on your machine — and on Windows, on which
-      Docker you have. Ends with <strong>ALL 6 CHECKS PASSED</strong>.</p>
-    </a>
-    <a class="b-step" href="${FROM_ROOT.daily}">
-      <b>Start your day &rarr;</b>
-      <p>Three terminals and three commands. Takes a minute after the first day,
-      and every activity below assumes you have done it.</p>
-    </a>
-  </div>
 
   <div class="cards">
 ${cards}
@@ -1290,6 +1288,7 @@ fs.writeFileSync(
     body: `${siteHeader("← ALL ACTIVITIES", FROM_PAGES)}
 ${platformStrip()}
   <div data-needs-pathway>
+  <span class="actnum">ACTIVITY ${DAILY_NUM}</span>
   <h1>Start your day</h1>
   <p class="lede">Three windows, one command each. Do this once every morning and
   leave all three open — every activity assumes it.</p>
@@ -1308,7 +1307,8 @@ ${recoverBlock()}
   <p>Every command block in this guide carries the badge of the window it belongs in:
   <span class="loc host">host terminal</span>, <span class="loc container">work terminal</span>
   or <span class="loc claude">claude terminal</span>. There is nothing to work out —
-  match the badge to the window and run it there.</p>
+  match the badge to the window and run it there. A web address carries
+  <span class="loc browser">your browser</span> instead: open it there, not in a terminal.</p>
   <p>The badges used to say <em>your machine</em> and <em>in the container</em>, which
   named the two container shells identically. That answered the question nobody gets
   wrong and stayed silent on the one that costs something: the Claude terminal is the
@@ -1420,16 +1420,23 @@ activities.forEach((a, i) => {
   // The bar is filled in at the end, once there is a page to ask about - see below.
   const body = `${siteHeader("← ALL ACTIVITIES", FROM_PAGES)}
 ${a.platformSetup ? "" : "<!--PATHBAR-->"}
-  <span class="actnum">ACTIVITY ${actNum(i)}</span>
+  <span class="actnum">ACTIVITY ${shownNum(a, i)}</span>
   <p class="eyebrow">${esc(a.part)}</p>
   <h1>${esc(a.title)}</h1>
   <p class="lede">${a.summary}</p>
 
-  <div class="cp">
+  <div class="cp"${a.platformSetup ? ' data-setup="done fresh"' : ""}>
     ${cp}
   </div>
 
 ${a.platformSetup ? setupAsk() : ""}
+${
+  // NOTHING BELOW THE QUESTION UNTIL IT IS ANSWERED. Arriving from card 01a, the page
+  // is the question and nothing else: the success line, the troubleshooting and the
+  // help below it all assume an answer, and showing them first made the question look
+  // like one section among many. Closed just above the pager.
+  a.platformSetup ? '  <div data-setup="done fresh">' : ""
+}
 ${a.platformSetup ? "" : '  <div data-needs-pathway>'}
 ${
   // WHAT TO DO IS NOT HERE, on purpose. Every page used to open with a numbered
@@ -1467,8 +1474,8 @@ ${credentials()}
   <h2 data-setup="done">Run the check</h2>
   <p data-setup="fresh">This reads <code>.env</code>, so do step 3 first — check 4 is
   the credential check, and it fails if that line is still empty.</p>
-  <p data-setup="done">Six checks, one command, and a straight answer. It is safe to
-  run as often as you like.</p>
+  <p data-setup="done">One command, and a straight answer. It is safe to run as often
+  as you like.</p>
 ${runTheCheck()}
 ${
   a.why
@@ -1499,10 +1506,16 @@ ${a.cheat.map(c => `      <p>${c}</p>`).join("\n")}
     </div>
   </details>
   </div>
+${a.platformSetup ? "  </div>" : ""}
 
   <nav class="pager">
     ${
-      prev
+      // start-your-day.html sits between the setup page and the first activity: the
+      // setup page's "next" goes there, so the page after setup must come back to it,
+      // not skip past it to the environment check.
+      prev && prev.platformSetup
+        ? `<a href="${FROM_PAGES.daily}">&larr; Start your day</a>`
+        : prev
         ? `<a href="${fileFor(prev, i - 1)}">&larr; ${esc(prev.title)}</a>`
         // This page is also the pre-workshop setup instructions, reached directly from
         // a link in the invite rather than by paging through. A dead "Back" span is the

@@ -30,6 +30,7 @@
   --strong:      #111111;
   --accent:      #3f6b2b;  /* deep green — 6.3:1 on white */
   --amber:       #7a5200;
+  --blue:        #1f5fa8;  /* 6.4:1 on white */
   --danger:      #a02e1a;  /* red — 7.2:1 on white */
 }
 /* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
@@ -49,6 +50,7 @@
   --strong:      #ffffff;
   --accent:      #8cc26c;
   --amber:       #ffbd2e;
+  --blue:        #6cb4ff;
   --danger:      #ff9580;
 }
 :root {
@@ -509,25 +511,12 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 /* Outlined rather than filled: it is a container shell like the one above it, so it
    keeps that colour, and the difference between them stays visible at a glance. */
 .loc.claude    { background: none; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* Not a terminal at all. A URL badged "host terminal" read as a command to type into
+   one, so it gets a colour none of the three windows use. */
+.loc.browser   { background: var(--blue);   color: var(--bg); }
 .shellreq .not { color: var(--amber); font-weight: 700; }
 
 /* nav */
-div.before {
-  display: grid; gap: 10px; margin: 0 0 26px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-}
-a.b-step {
-  display: block; text-decoration: none; padding: 13px 15px;
-  background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
-}
-a.b-step:hover { background: var(--surface-alt); }
-a.b-step .b-n {
-  display: block; font-size: 10.5px; letter-spacing: .12em;
-  color: var(--muted); margin-bottom: 5px;
-}
-a.b-step b { color: var(--accent); font-size: 15px; }
-a.b-step p { margin: 5px 0 0; color: var(--text); font-size: 13px; line-height: 1.5; }
-
 p.dailylink {
   margin: 0 0 14px; font-size: 13px; color: var(--muted);
 }
@@ -579,6 +568,7 @@ nav.pager a:hover { background: var(--surface); }
     </span>
   </div>
   <div data-needs-pathway>
+  <span class="actnum">ACTIVITY 01b</span>
   <h1>Start your day</h1>
   <p class="lede">Three windows, one command each. Do this once every morning and
   leave all three open — every activity assumes it.</p>
@@ -628,7 +618,7 @@ nav.pager a:hover { background: var(--surface); }
     <div>
       <p>That is the whole morning. You will know it worked when the app loads:</p>
   <div class="copyblock">
-    <div class="cb-head"><span>Check the site is up — open this in your browser</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Check the site is up — open this in your browser</span><span class="loc browser">your browser</span><button type="button">Copy</button></div>
     <pre>http://localhost:5173</pre>
   </div>
     </div>
@@ -657,7 +647,8 @@ nav.pager a:hover { background: var(--surface); }
   <p>Every command block in this guide carries the badge of the window it belongs in:
   <span class="loc host">host terminal</span>, <span class="loc container">work terminal</span>
   or <span class="loc claude">claude terminal</span>. There is nothing to work out —
-  match the badge to the window and run it there.</p>
+  match the badge to the window and run it there. A web address carries
+  <span class="loc browser">your browser</span> instead: open it there, not in a terminal.</p>
   <p>The badges used to say <em>your machine</em> and <em>in the container</em>, which
   named the two container shells identically. That answered the question nobody gets
   wrong and stayed silent on the one that costs something: the Claude terminal is the
@@ -797,6 +788,12 @@ function setPlatform(state) {
   var setup = '';
   try { setup = localStorage.getItem(SETUP_KEY) || ''; } catch (err) {}
   if (!setup && !/[?&]ask(=|&|$)/.test(location.search)) setup = 'fresh';
+  // THE PRE-WORKSHOP LINK: ?setup=fresh. Sent out before the day, so it must show the
+  // whole setup whatever this browser answered last time - a facilitator who clicked
+  // "just run the check" while testing would otherwise see, and forward, the short
+  // version. Like the default above it is NOT stored: it answers for this visit only.
+  var forced = /[?&]setup=(fresh|done)(&|$)/.exec(location.search);
+  if (forced) setup = forced[1];
   applySetup(setup);
 
   // "Windows — not sure which" on any pathway bar sends people here with the OS
