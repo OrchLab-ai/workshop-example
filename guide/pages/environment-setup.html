@@ -186,6 +186,20 @@ li { margin: 8px 0; }
 .copyblock.is-prompt button { border-color: var(--on-brand); color: var(--on-brand); }
 .copyblock.is-prompt button:hover { background: var(--on-brand); color: var(--brand); }
 
+/* look-at-it checks: a copy block's header over a numbered list, not a dark well */
+.checkblock { margin: 0 0 16px; }
+.checkblock .cb-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 8px 12px; background: var(--surface);
+  border: 1px solid var(--border); border-bottom: 0;
+  border-radius: 6px 6px 0 0; font-size: 13px; color: var(--text);
+}
+.checkblock > ol {
+  margin: 0; padding: 12px 18px 12px 38px;
+  border: 1px solid var(--border); border-radius: 0 0 6px 6px;
+}
+.checkblock li .copyblock { margin: 8px 0 4px; }
+
 /* link list */
 .links { list-style: none; padding: 0; margin: 0; }
 .links li { margin: 0 0 12px; }
@@ -506,14 +520,73 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   font: 700 10.5px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
   text-transform: uppercase; white-space: nowrap;
 }
+/* The badge's colour, as a variable, so a block can be framed in the colour of the
+   window it belongs in: the badge says which window, the frame says how far the
+   instruction reaches. */
+.in-host      { --win: var(--amber); }
+.in-container { --win: var(--accent); }
+.in-claude    { --win: #d97757; }
+.in-browser   { --win: var(--blue); }
+.copyblock[class*=" in-"], .checkblock[class*=" in-"] {
+  border: 2px solid var(--win); border-radius: 8px;
+}
+.copyblock[class*=" in-"] .cb-head, .checkblock[class*=" in-"] .cb-head { border: 0; }
+.copyblock[class*=" in-"] pre { border-radius: 0 0 6px 6px; }
+.checkblock[class*=" in-"] > ol { border: 0; }
 .loc.host      { background: var(--amber);  color: var(--bg); }
 .loc.container { background: var(--accent); color: var(--bg); }
-/* Outlined rather than filled: it is a container shell like the one above it, so it
-   keeps that colour, and the difference between them stays visible at a glance. */
-.loc.claude    { background: none; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* Claude's own orange, so the window Claude lives in is the one badge nobody has to
+   read. Constant in both themes, like --brand. Dark text, not white: white on this
+   orange is about 3:1, too faint at 10.5px; #222 is about 6:1. */
+.loc.claude    { background: #d97757; color: #222222; }
 /* Not a terminal at all. A URL badged "host terminal" read as a command to type into
    one, so it gets a colour none of the three windows use. */
 .loc.browser   { background: var(--blue);   color: var(--bg); }
+/* The same badge inside a sentence: "Back in the WORK TERMINAL, press Ctrl+C". Prose
+   names a window with this rather than bold text, so the word on the page looks
+   exactly like the label on the block it refers to. */
+.loc.inline { margin: 0 2px; vertical-align: 1px; }
+
+/* The badge's tooltip. CSS only, so it works with JavaScript off; :focus makes it
+   reachable from the keyboard and opens it on a tap. Anchored to the badge's right
+   edge, because block badges sit at the right of their header; inline ones sit
+   anywhere in a sentence, so they open from the left instead. */
+.loc { position: relative; cursor: help; }
+.loc:focus { outline: 2px solid var(--win, var(--accent)); outline-offset: 2px; }
+.loc .tip {
+  display: none; position: absolute; z-index: 20; top: calc(100% + 8px); right: 0;
+  width: max-content; max-width: min(300px, 80vw);
+  padding: 10px 12px; border-radius: 6px;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  font: 400 13.5px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0; text-transform: none; white-space: normal; text-align: left;
+}
+.loc .tip code { font-size: 12.5px; }
+.loc.inline .tip { right: auto; left: 0; }
+/* :focus-within, not :focus - clicking the tip's Copy button moves focus onto it,
+   and the tip must stay open while it does. */
+.loc:hover .tip, .loc:focus-within .tip { display: block; }
+/* Bridges the gap between badge and tip, so the pointer can travel down into the tip
+   to reach Copy without crossing empty space and closing it. */
+.loc .tip::before { content: ""; position: absolute; left: 0; right: 0; top: -10px; height: 10px; }
+.loc .tip-cmd { display: block; margin-top: 9px; }
+.loc .tip-cmd-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  font-size: 12px; color: var(--muted); margin-bottom: 4px;
+}
+.loc .tip-copy {
+  flex: none; cursor: pointer; border: 1px solid var(--accent); background: transparent;
+  color: var(--accent); font: 600 11px/1 inherit; padding: 4px 9px; border-radius: 4px;
+}
+.loc .tip-copy:hover { background: var(--accent); color: var(--bg); }
+.loc .tip-copy.copied { background: var(--accent); color: var(--bg); }
+.loc .tip .tip-code {
+  display: block; padding: 8px 10px; border: 0; border-radius: 4px;
+  background: var(--well); color: var(--well-text);
+  font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: pre-wrap; word-break: break-word;
+}
 .shellreq .not { color: var(--amber); font-weight: 700; }
 
 /* nav */
@@ -695,8 +768,8 @@ cd workshop-example</pre>
     </summary>
     <div class="cred-body">
       <p>Run this on <strong>your own machine</strong>, never inside the container. It needs Claude Code installed locally — <code>npm install -g @anthropic-ai/claude-code</code> — and it opens a browser for you to sign in. It then prints a long-lived token.</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>On your own machine</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>On your own machine</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>claude setup-token</pre>
   </div>
       <p>The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> and leave <code>ANTHROPIC_API_KEY</code> commented out.</p>
@@ -723,34 +796,34 @@ cd workshop-example</pre>
   <p data-setup="done">One command, and a straight answer. It is safe to run as often
   as you like.</p>
     <div class="pathway" data-pathway="macos">
-  <div class="copyblock">
-    <div class="cb-head"><span>Run the check</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Run the check</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>./verify-setup.sh</pre>
   </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Only if the check says 5173 is taken</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Only if the check says 5173 is taken</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>echo WORKSHOP_PORT=5174 &gt;&gt; .env
 ./verify-setup.sh</pre>
   </div>
     </div>
     <div class="pathway" data-pathway="windows-linux">
-  <div class="copyblock">
-    <div class="cb-head"><span>Run the check</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Run the check</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>./verify-setup.sh</pre>
   </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Only if the check says 5173 is taken</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Only if the check says 5173 is taken</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>echo WORKSHOP_PORT=5174 &gt;&gt; .env
 ./verify-setup.sh</pre>
   </div>
     </div>
     <div class="pathway" data-pathway="windows-windows">
-  <div class="copyblock">
-    <div class="cb-head"><span>Run the check</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Run the check</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
-  <div class="copyblock">
-    <div class="cb-head"><span>Only if the check says 5173 is taken</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Only if the check says 5173 is taken</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>$env:WORKSHOP_PORT=5174
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
@@ -784,8 +857,8 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <summary><span class="fx-check">Before check 1</span>Docker is in Windows-container mode — run windows\verify.ps1 instead</summary>
       <div class="fx-body">
         <p>Not a failure, and nothing is broken. Every image <code>./verify-setup.sh</code> uses is a Linux image, and one Docker daemon serves one mode. You do <strong>not</strong> need to switch modes — there is a Windows-container check that tests the same toolchain: Docker, Claude and a browser.</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>Run this instead</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Run this instead</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
       </div>
@@ -801,15 +874,15 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <div class="fx-body">
         <p>You almost certainly downloaded the app as a ZIP rather than cloning it. A copy of the files is not enough: the checkpoint ladder <em>is</em> the git tags, so <code>./checkpoint.sh</code> has nothing to move you between. The check will not delete that folder for you — you may have put work in it — so move it aside yourself and let the check clone it properly.</p>
   <div data-only="macos windows-linux">
-  <div class="copyblock">
-    <div class="cb-head"><span>Move it aside, then re-run</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Move it aside, then re-run</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>mv app app-old
 ./verify-setup.sh</pre>
   </div>
   </div>
   <div data-only="windows-windows">
-  <div class="copyblock">
-    <div class="cb-head"><span>Move it aside, then re-run</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Move it aside, then re-run</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>move app app-old
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
@@ -832,13 +905,13 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <summary><span class="fx-check">Check 2</span>you do not have permission to reach Docker / the Docker socket</summary>
       <div class="fx-body">
         <p><strong>The daemon is running fine.</strong> It simply will not talk to you, and restarting it cannot change that — this is the one failure that sends people into a loop they can never win. It needs an administrator once, and then a <strong>new login session</strong>: group rights are granted at logon, so nothing changes until you sign out and back in.</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>In an ELEVATED PowerShell, then sign out of Windows and back in</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>In an ELEVATED PowerShell, then sign out of Windows and back in</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</pre>
   </div>
   <div data-only="">
-  <div class="copyblock">
-    <div class="cb-head"><span>On a Linux host instead — then log out and back in</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>On a Linux host instead — then log out and back in</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>sudo usermod -aG docker $USER</pre>
   </div>
   </div>
@@ -861,14 +934,14 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <div class="fx-body">
         <p>The most common failure of them all, and it is usually one of two things: <code>.env</code> was never created from <code>.env.example</code>, or the credential was pasted into the example file instead of into <code>.env</code>. Then open <em>Your credential</em> above and follow whichever of the two sections describes you — one of them, not both.</p>
   <div data-only="macos windows-linux">
-  <div class="copyblock">
-    <div class="cb-head"><span>Create .env if you have not already</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Create .env if you have not already</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>cp .env.example .env</pre>
   </div>
   </div>
   <div data-only="windows-windows">
-  <div class="copyblock">
-    <div class="cb-head"><span>Create .env if you have not already</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Create .env if you have not already</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>copy .env.example .env</pre>
   </div>
   </div>
@@ -890,8 +963,8 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <summary><span class="fx-check">Check 5</span>port 5173 is already in use — this is the port the workshop needs</summary>
       <div class="fx-body">
         <p>Check 5 starts the workshop on <strong>the port it runs on all day</strong>, so a pass means the day will work rather than merely that some port was free. 5173 is Vite's default, so the usual culprit is another project of yours already running. Stop it, or move the workshop to another port — put it in <code>.env</code> and it is picked up by the check <em>and</em> the stack, so every other command in this guide stays exactly as written.</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>Move the workshop to another port, once</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Move the workshop to another port, once</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>echo WORKSHOP_PORT=5174 &gt;&gt; .env
 ./verify-setup.sh</pre>
   </div>
@@ -901,8 +974,8 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <summary><span class="fx-check">Check 5</span>the workshop container started, but the app inside it did not / the workshop app did not start answering</summary>
       <div class="fx-body">
         <p>Docker and the images are fine; the app itself did not come up. The reason is at the end of <code>.verify-logs/05-up.log</code>, and the container's own output has the rest. Re-run once — if it fails the same way twice, that is the point to ask rather than keep re-running.</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>The container's full output</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>The container's full output</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>docker compose -f docker-compose.workshop.yml logs claude-container</pre>
   </div>
       </div>
@@ -923,8 +996,8 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <summary><span class="fx-check">Check 5</span>port 5173 is already in use — this is the port the workshop needs</summary>
       <div class="fx-body">
         <p>Check 5 deliberately claims <strong>the port the workshop itself runs on</strong>, not a spare one, so a pass means the day will work rather than merely that some port was free. 5173 is Vite's default, so the usual culprit is another project of yours already running. Otherwise move the workshop to another port, and it is picked up by the check <em>and</em> the stack.</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>Move the workshop to another port, once</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Move the workshop to another port, once</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>$env:WORKSHOP_PORT=5174
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
@@ -1195,9 +1268,13 @@ document.addEventListener('click', function (e) {
     return;
   }
 
-  var btn = e.target.closest('.copyblock button');
+  // A badge tooltip's Copy first: it sits INSIDE a copy block's header, so the
+  // general selector below would match it too and copy the block's command instead.
+  var btn = e.target.closest('.tip-copy') || e.target.closest('.copyblock button');
   if (!btn) return;
-  var text = btn.closest('.copyblock').querySelector('pre').textContent;
+  var text = btn.classList.contains('tip-copy')
+    ? btn.closest('.tip').querySelector('.tip-code').textContent
+    : btn.closest('.copyblock').querySelector('pre').textContent;
   var flash = function () {
     var was = btn.textContent;
     btn.textContent = 'Copied';

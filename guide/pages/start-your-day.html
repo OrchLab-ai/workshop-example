@@ -186,6 +186,20 @@ li { margin: 8px 0; }
 .copyblock.is-prompt button { border-color: var(--on-brand); color: var(--on-brand); }
 .copyblock.is-prompt button:hover { background: var(--on-brand); color: var(--brand); }
 
+/* look-at-it checks: a copy block's header over a numbered list, not a dark well */
+.checkblock { margin: 0 0 16px; }
+.checkblock .cb-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 8px 12px; background: var(--surface);
+  border: 1px solid var(--border); border-bottom: 0;
+  border-radius: 6px 6px 0 0; font-size: 13px; color: var(--text);
+}
+.checkblock > ol {
+  margin: 0; padding: 12px 18px 12px 38px;
+  border: 1px solid var(--border); border-radius: 0 0 6px 6px;
+}
+.checkblock li .copyblock { margin: 8px 0 4px; }
+
 /* link list */
 .links { list-style: none; padding: 0; margin: 0; }
 .links li { margin: 0 0 12px; }
@@ -506,14 +520,73 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   font: 700 10.5px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
   text-transform: uppercase; white-space: nowrap;
 }
+/* The badge's colour, as a variable, so a block can be framed in the colour of the
+   window it belongs in: the badge says which window, the frame says how far the
+   instruction reaches. */
+.in-host      { --win: var(--amber); }
+.in-container { --win: var(--accent); }
+.in-claude    { --win: #d97757; }
+.in-browser   { --win: var(--blue); }
+.copyblock[class*=" in-"], .checkblock[class*=" in-"] {
+  border: 2px solid var(--win); border-radius: 8px;
+}
+.copyblock[class*=" in-"] .cb-head, .checkblock[class*=" in-"] .cb-head { border: 0; }
+.copyblock[class*=" in-"] pre { border-radius: 0 0 6px 6px; }
+.checkblock[class*=" in-"] > ol { border: 0; }
 .loc.host      { background: var(--amber);  color: var(--bg); }
 .loc.container { background: var(--accent); color: var(--bg); }
-/* Outlined rather than filled: it is a container shell like the one above it, so it
-   keeps that colour, and the difference between them stays visible at a glance. */
-.loc.claude    { background: none; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* Claude's own orange, so the window Claude lives in is the one badge nobody has to
+   read. Constant in both themes, like --brand. Dark text, not white: white on this
+   orange is about 3:1, too faint at 10.5px; #222 is about 6:1. */
+.loc.claude    { background: #d97757; color: #222222; }
 /* Not a terminal at all. A URL badged "host terminal" read as a command to type into
    one, so it gets a colour none of the three windows use. */
 .loc.browser   { background: var(--blue);   color: var(--bg); }
+/* The same badge inside a sentence: "Back in the WORK TERMINAL, press Ctrl+C". Prose
+   names a window with this rather than bold text, so the word on the page looks
+   exactly like the label on the block it refers to. */
+.loc.inline { margin: 0 2px; vertical-align: 1px; }
+
+/* The badge's tooltip. CSS only, so it works with JavaScript off; :focus makes it
+   reachable from the keyboard and opens it on a tap. Anchored to the badge's right
+   edge, because block badges sit at the right of their header; inline ones sit
+   anywhere in a sentence, so they open from the left instead. */
+.loc { position: relative; cursor: help; }
+.loc:focus { outline: 2px solid var(--win, var(--accent)); outline-offset: 2px; }
+.loc .tip {
+  display: none; position: absolute; z-index: 20; top: calc(100% + 8px); right: 0;
+  width: max-content; max-width: min(300px, 80vw);
+  padding: 10px 12px; border-radius: 6px;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  font: 400 13.5px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0; text-transform: none; white-space: normal; text-align: left;
+}
+.loc .tip code { font-size: 12.5px; }
+.loc.inline .tip { right: auto; left: 0; }
+/* :focus-within, not :focus - clicking the tip's Copy button moves focus onto it,
+   and the tip must stay open while it does. */
+.loc:hover .tip, .loc:focus-within .tip { display: block; }
+/* Bridges the gap between badge and tip, so the pointer can travel down into the tip
+   to reach Copy without crossing empty space and closing it. */
+.loc .tip::before { content: ""; position: absolute; left: 0; right: 0; top: -10px; height: 10px; }
+.loc .tip-cmd { display: block; margin-top: 9px; }
+.loc .tip-cmd-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  font-size: 12px; color: var(--muted); margin-bottom: 4px;
+}
+.loc .tip-copy {
+  flex: none; cursor: pointer; border: 1px solid var(--accent); background: transparent;
+  color: var(--accent); font: 600 11px/1 inherit; padding: 4px 9px; border-radius: 4px;
+}
+.loc .tip-copy:hover { background: var(--accent); color: var(--bg); }
+.loc .tip-copy.copied { background: var(--accent); color: var(--bg); }
+.loc .tip .tip-code {
+  display: block; padding: 8px 10px; border: 0; border-radius: 4px;
+  background: var(--well); color: var(--well-text);
+  font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: pre-wrap; word-break: break-word;
+}
 .shellreq .not { color: var(--amber); font-weight: 700; }
 
 /* nav */
@@ -579,10 +652,10 @@ nav.pager a:hover { background: var(--surface); }
     <div class="tm">
     <span class="tm-n">1</span>
     <div>
-      <b>The host terminal</b> <span class="loc host tm-loc">host terminal</span>
+      <b>The host terminal</b> <span class="loc host tm-loc" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span>
       <p>A <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> window in your <code>workshop-example</code> folder — the only one of the three that is <em>not</em> inside the container. Only two kinds of command run here: <code>docker</code> and <code>./checkpoint.sh</code>. Nothing you type here touches the app.</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>Start the stack, and wait until the app is really up</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Start the stack, and wait until the app is really up</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>./workshop/up.sh</pre>
   </div>
     </div>
@@ -590,10 +663,10 @@ nav.pager a:hover { background: var(--surface); }
     <div class="tm">
     <span class="tm-n">2</span>
     <div>
-      <b>The work terminal</b> <span class="loc container tm-loc">work terminal</span>
-      <p>Open a second <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> window and run this. You are then <em>inside</em> the container: this is where you run tests, <code>./scripts/ci-check.sh</code>, git commands against the app, and anything else that needs to see the code. Everything badged <em>work terminal</em> goes here.</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>Get a shell inside the container</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+      <b>The work terminal</b> <span class="loc container tm-loc" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span>
+      <p>Open a second <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> window and run this. You are then <em>inside</em> the container: this is where you run tests, <code>./scripts/ci-check.sh</code>, git commands against the app, and anything else that needs to see the code. Everything badged <span class="loc container inline" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span> goes here.</p>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Get a shell inside the container</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>docker compose -f docker-compose.workshop.yml exec claude-container bash</pre>
   </div>
     </div>
@@ -601,10 +674,10 @@ nav.pager a:hover { background: var(--surface); }
     <div class="tm">
     <span class="tm-n">3</span>
     <div>
-      <b>The Claude terminal</b> <span class="loc claude tm-loc">claude terminal</span>
+      <b>The Claude terminal</b> <span class="loc claude tm-loc" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span>
       <p>Open a third <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> window and run this — it drops you straight into Claude, inside the container. Also a container shell, but it gets its own badge and its own window for one reason: <strong>keep it separate.</strong> Claude holds its conversation in that session — exiting it to run one command throws the context away, and that context is most of what you are paying for.</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>Open a third window and start Claude in it</span><span class="loc host">host terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Open a third window and start Claude in it</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</pre>
   </div>
       <div class="note"><strong>About that flag.</strong> <code>--dangerously-skip-permissions</code> turns off every approval prompt — the deck calls it YOLO mode, and on its own it is exactly as reckless as it sounds. What makes it reasonable <em>here</em> is the layer underneath it: this window is a shell inside the container, with its own filesystem and its own network, and nothing Claude does in it can reach the rest of your machine. That is the isolation the <em>Levels of Safety</em> slide puts first, and it is the only reason the speed is worth having. <strong>Do not take the flag home</strong>, where nothing is containing it.</div>
@@ -617,8 +690,8 @@ nav.pager a:hover { background: var(--surface); }
     <span class="tm-n tm-check">&#10003;</span>
     <div>
       <p>That is the whole morning. You will know it worked when the app loads:</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>Check the site is up — open this in your browser</span><span class="loc browser">your browser</span><button type="button">Copy</button></div>
+  <div class="copyblock in-browser">
+    <div class="cb-head"><span>Check the site is up — open this in your browser</span><span class="loc browser" tabindex="0">your browser<span class="tip" role="tooltip">Not a terminal. Open this in your web browser.</span></span><button type="button">Copy</button></div>
     <pre>http://localhost:5173</pre>
   </div>
     </div>
@@ -636,8 +709,8 @@ nav.pager a:hover { background: var(--surface); }
   </summary>
   <div class="tr-body">
     <p>Only if <code>http://localhost:5173</code> has stopped answering. This restarts the API and the site <em>inside</em> the running container — you do not lose your shell, your Claude session, or any uncommitted work, and it does not reinstall anything. Give it a few seconds, then reload the page. If it still will not come up, the script prints which log to read.</p>
-  <div class="copyblock">
-    <div class="cb-head"><span>Restart the app inside the container</span><span class="loc container">work terminal</span><button type="button">Copy</button></div>
+  <div class="copyblock in-container">
+    <div class="cb-head"><span>Restart the app inside the container</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
     <pre>start-app.sh --restart</pre>
   </div>
   </div>
@@ -861,9 +934,13 @@ document.addEventListener('click', function (e) {
     return;
   }
 
-  var btn = e.target.closest('.copyblock button');
+  // A badge tooltip's Copy first: it sits INSIDE a copy block's header, so the
+  // general selector below would match it too and copy the block's command instead.
+  var btn = e.target.closest('.tip-copy') || e.target.closest('.copyblock button');
   if (!btn) return;
-  var text = btn.closest('.copyblock').querySelector('pre').textContent;
+  var text = btn.classList.contains('tip-copy')
+    ? btn.closest('.tip').querySelector('.tip-code').textContent
+    : btn.closest('.copyblock').querySelector('pre').textContent;
   var flash = function () {
     var was = btn.textContent;
     btn.textContent = 'Copied';

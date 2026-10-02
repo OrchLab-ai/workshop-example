@@ -521,24 +521,6 @@ const HELP = {
 const FIRST_RUN_NOTE =
   "<strong>The first start of the day takes a few minutes, and only the first.</strong> The container installs the app's dependencies before it can serve anything. <code>./workshop/up.sh</code> is the reason step 1 is not a plain <code>docker compose up -d</code>: compose would report the <em>container</em> started — true within seconds — and hand you back a prompt while the app was still minutes away, so opening the URL then looks broken when it is merely early. The script waits, prints each phase as it happens, and tells you <strong>READY</strong> when the site actually answers. If it fails it says so, and names the log to read.";
 
-// The one line above an activity page's commands.
-//
-// NO `shell` KEY, on purpose. This used to open "Run these in two places - your
-// machine, and the container", which described the day's setup rather than the page's
-// commands, and stopped being true the moment the terminal-opening commands left
-// these pages: activity 02 now has exactly one command, in one window. By the time
-// anybody reads an activity page the three windows are open and every block is badged
-// with the one it belongs in, so this only has to say what a badge means.
-const WHERE = {
-  // {shell} is replaced with the terminal application for the chosen pathway, from
-  // PLATFORMS. It used to read "Git Bash (Windows) or Terminal (macOS)", which names
-  // both and is therefore wrong for whoever is reading it - the leak that the
-  // platform-visibility test now catches.
-  cwd:
-    'Each block is badged with the window it belongs in, and the host terminal is ' +
-    '{shell} in your <code>workshop-example</code> folder. Not set up yet? ' +
-    '<a href="start-your-day.html">Start your day</a>.',
-}
 
 // The morning start: three windows, and the command that opens each one. It renders
 // on start-your-day.html and NOWHERE ELSE.
@@ -592,7 +574,7 @@ const TERMINALS = {
       where: "container",
       title: "The work terminal",
       body:
-        "Open a second {shell} window and run this. You are then <em>inside</em> the container: this is where you run tests, <code>./scripts/ci-check.sh</code>, git commands against the app, and anything else that needs to see the code. Everything badged <em>work terminal</em> goes here.",
+        "Open a second {shell} window and run this. You are then <em>inside</em> the container: this is where you run tests, <code>./scripts/ci-check.sh</code>, git commands against the app, and anything else that needs to see the code. Everything badged {loc:container} goes here.",
       commands: [
         {
           label: "Get a shell inside the container",
@@ -748,7 +730,6 @@ const activities = [
     to: "cp-01",
     summary:
       "Pick one of two cross-cutting changes that would take half a day by hand. Twenty minutes with an agent that can see the whole repo.",
-    where: WHERE,
     // `after: true` puts a command BELOW the prompts rather than above them, under
     // its own heading. The order on the page is then the order of the activity: here
     // is the window, here is what to paste, here is how you check it. Before this,
@@ -759,6 +740,50 @@ const activities = [
         after: true,
         code: "./scripts/ci-check.sh",
         where: "container",
+      },
+    ],
+    // Rendered above the prompts: what the app does NOW, so the checks below have
+    // something to be compared against. Same shape as `checks`.
+    baseline: [
+      {
+        label: "Challenge 1 — in the browser",
+        where: "browser",
+        steps: [
+          "Click <strong>Explore Missions</strong>. The address bar ends in <code>/campaigns</code>.",
+          "Log in as <strong>Demo Creator</strong> and open <strong>Dashboard</strong>. The button reads <strong>+ New Campaign</strong>.",
+        ],
+      },
+      {
+        label: "Challenge 2 — read the API's logs",
+        where: "container",
+        steps: [
+          { text: "Start following the API's log. It keeps running and prints each new line as it arrives:", code: "tail -f /workspace/logs/server.log" },
+          "Click around the app in {loc:browser}. Each request prints a block several lines long, formatted for a person to read — not one line of JSON that a log tool could parse.",
+          "Back in the {loc:container}, press <strong>Ctrl+C</strong> to stop following the log.",
+        ],
+      },
+    ],
+    // Rendered under "Check your work", after the commands. Green CI is the floor,
+    // not the proof: these are what the change looks like from the outside.
+    checks: [
+      {
+        label: "Challenge 1 — in the browser",
+        where: "browser",
+        steps: [
+          "Click <strong>Explore Missions</strong>. The address bar should now end in <code>/proposals</code>, not <code>/campaigns</code>.",
+          "Log in as <strong>Demo Creator</strong> and open <strong>Dashboard</strong>. The button should now read <strong>+ New Proposal</strong>.",
+        ],
+      },
+      {
+        label: "Challenge 2 — read the API's logs",
+        where: "container",
+        steps: [
+          { text: "Start following the API's log again:", code: "tail -f /workspace/logs/server.log" },
+          "Click around the app in {loc:browser}. Every request should now add <strong>exactly one line of JSON</strong>, and that line should carry the method, the path, the status code, the duration in milliseconds and a correlation ID.",
+          "Back in the {loc:container}, press <strong>Ctrl+C</strong> to stop following the log.",
+          { text: "Send a request carrying a correlation ID you chose:", code: "curl -s -o /dev/null -H 'x-correlation-id: my-test-123' http://localhost:3001/v1/auth/me" },
+          { text: "Look for that ID in the log. If a line comes back, the ID followed the request through:", code: "grep my-test-123 /workspace/logs/server.log" },
+        ],
       },
     ],
     prompts: [
@@ -788,7 +813,6 @@ const activities = [
     to: "cp-02",
     summary:
       "Your container already has Playwright. The skill is asking the agent to use it — to capture the page <em>before</em> it builds, then prove with a second screenshot that the thing it claims to have built is actually on screen.",
-    where: WHERE,
     commands: [
       {
         label: "Confirm the agent has a browser to drive",
@@ -834,7 +858,6 @@ const activities = [
     to: "cp-03",
     summary:
       "Build Mission Updates twice — once from a one-line prompt, once from a long one. This is the baseline everything later is measured against.",
-    where: WHERE,
     commands: [
       {
         label: "Look at what it built — the site reloads as files change",
@@ -869,7 +892,6 @@ const activities = [
     to: "cp-04",
     summary:
       "Write <code>mission-updates.spec.md</code> — role, context, standards, acceptance criteria — then build from it and compare.",
-    where: WHERE,
     commands: [
       {
         label: "The spec you are writing lives here",
@@ -922,7 +944,6 @@ You are a senior full-stack engineer working in this codebase.
     to: "cp-05",
     summary:
       "Invent a brand, write it down, and have the agent regenerate the app's design tokens from it. Everyone's screen ends up different.",
-    where: WHERE,
     commands: [
       {
         label: "Your brand, and the tokens generated from it",
@@ -958,7 +979,6 @@ You are a senior full-stack engineer working in this codebase.
     to: "cp-06",
     summary:
       "Spec plus brand, through a Socratic interview, all the way to working code — and it renders in your colours.",
-    where: WHERE,
     commands: [
       {
         label: "Prove it works before you believe it",
@@ -990,7 +1010,6 @@ You are a senior full-stack engineer working in this codebase.
     to: "cp-07",
     summary:
       "Hand the same feature to an agent that loops without you. The container is the safety boundary; the guardrails are the actual lesson.",
-    where: WHERE,
     commands: [
       {
         label: "Read what it is about to do",
@@ -1024,7 +1043,7 @@ You are a senior full-stack engineer working in this codebase.
   {
     slug: "plan-first",
     note:
-      "<strong>Permission prompts are off in here.</strong> Your Claude terminal has been running <code>--dangerously-skip-permissions</code> since this morning — <a href=\"start-your-day.html\">why that is defensible in there, and nowhere else</a>.",
+      "<strong>Permission prompts are off in here.</strong> Your {loc:claude} has been running <code>--dangerously-skip-permissions</code> since this morning — <a href=\"start-your-day.html\">why that is defensible in there, and nowhere else</a>.",
     title: "Plan-First Orchestration",
     intent: "I want one agent to plan and another to execute",
     part: "Part 3 — Orchestration",
@@ -1032,7 +1051,6 @@ You are a senior full-stack engineer working in this codebase.
     to: "cp-08",
     summary:
       "Split the work. A planning agent produces the plan; a separate coding agent executes it and nothing else.",
-    where: WHERE,
     commands: [
     ],
     prompts: [
@@ -1055,7 +1073,7 @@ You are a senior full-stack engineer working in this codebase.
   {
     slug: "automated-review",
     note:
-      "<strong>Permission prompts are off in here.</strong> Your Claude terminal has been running <code>--dangerously-skip-permissions</code> since this morning — <a href=\"start-your-day.html\">why that is defensible in there, and nowhere else</a>.",
+      "<strong>Permission prompts are off in here.</strong> Your {loc:claude} has been running <code>--dangerously-skip-permissions</code> since this morning — <a href=\"start-your-day.html\">why that is defensible in there, and nowhere else</a>.",
     title: "Automated Code Review",
     intent: "I want the agent to review the work and report up",
     part: "Part 3 — Orchestration",
@@ -1063,7 +1081,6 @@ You are a senior full-stack engineer working in this codebase.
     to: null,
     summary:
       "A third specialist reads the diff, summarises the tests, and writes something a non-technical stakeholder could act on.",
-    where: WHERE,
     commands: [
       {
         label: "Collect the diff the reviewer will read",
