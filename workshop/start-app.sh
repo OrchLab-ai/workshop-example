@@ -87,14 +87,36 @@ cd "$REPO" || { echo "workshop: $REPO is not mounted — check the app/ bind mou
 # rather than two. Existing servers are killed first: --strictPort means a second
 # Vite on a taken port would fail rather than quietly move, which is right at boot
 # and unhelpful when somebody is trying to recover.
+#
+# ONLY THE DEV SERVERS, NOT EVERY VITE AND EVERY API. This used to pkill anything
+# matching 'vite' or 'packages/server', which also caught the app's E2E run
+# (scripts/run-e2e.sh starts its own API and Vite on spare ports, 3101 and 5273, so it
+# never touches these). So: the process trees this script started, recorded in
+# $LOGS/*.pid, and then whatever still listens on the two dev ports - that covers a
+# container started before the pid files existed, and a dev server an agent started
+# by hand on one of them.
+kill_tree() {
+  local child
+  for child in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$child"; done
+  kill "$1" 2>/dev/null || true
+}
 if [ "${1:-}" = "--restart" ]; then
   echo "stopping the running app…"
   # Clear the sentinel FIRST. The API runs under a restart supervisor (see below), so
   # killing the server without this just gets it started again two seconds later.
   rm -f "$LOGS/.api-supervisor" 2>/dev/null || true
-  pkill -f 'vite' 2>/dev/null || true
-  pkill -f 'dev:server' 2>/dev/null || true
-  pkill -f 'packages/server' 2>/dev/null || true
+  for f in "$LOGS/api.pid" "$LOGS/vite.pid"; do
+    [ -f "$f" ] && kill_tree "$(cat "$f")"
+    rm -f "$f"
+  done
+  # Anchored: an unanchored -f pattern also matches any shell whose command line merely
+  # mentions it - an agent running `start-app.sh --restart; tail vite.log` would kill itself.
+  pkill -f '^npm run dev:server' 2>/dev/null || true
+  if command -v lsof >/dev/null 2>&1; then
+    for pid in $(lsof -t -iTCP:"$API_PORT" -iTCP:"$PORT" -sTCP:LISTEN 2>/dev/null); do
+      kill_tree "$pid"
+    done
+  fi
   sleep 2
 fi
 
@@ -198,6 +220,7 @@ step "API on :${API_PORT}"
     sleep 2
   done
 ) >"$LOGS/server.log" 2>&1 &
+echo $! > "$LOGS/api.pid"
 
 # Poll rather than sleep-and-hope. The API not being up yet is not fatal — Vite
 # proxies to it lazily — so this waits a bounded time and carries on either way.
@@ -230,6 +253,7 @@ step "Site on :${PORT}"
   cd packages/client || exit 1
   npx vite --host 0.0.0.0 --port "$PORT" --strictPort
 ) >"$LOGS/vite.log" 2>&1 &
+echo $! > "$LOGS/vite.pid"
 
 SITE_UP=0
 for _ in $(seq 1 30); do
