@@ -119,6 +119,22 @@ test("start-app.sh can write its dependency volumes, and says so if it cannot", 
   );
 });
 
+// --restart used to pkill anything matching 'vite' or 'packages/server', which also
+// killed the app's E2E run (its own API and Vite on 3101/5273), and any shell whose
+// command line merely mentioned vite. It must stop the dev servers and nothing else.
+test("start-app.sh --restart stops only the dev servers", null, () => {
+  const start = codeOf("workshop/start-app.sh");
+
+  ok(
+    !/pkill -f '(vite|packages\/server|dev:server)'/.test(start),
+    "--restart must not pkill by a bare substring like 'vite' or 'packages/server': that kills the E2E run on its spare ports, and the agent's own shell if its command mentions the word"
+  );
+  ok(
+    /echo \$! > "\$LOGS\/api\.pid"/.test(start) && /echo \$! > "\$LOGS\/vite\.pid"/.test(start),
+    "the dev servers' process trees must be recorded, so --restart can stop exactly what this script started"
+  );
+});
+
 // The recovery command read as step 4 of starting your day, so people ran it every
 // morning on a healthy container. It is conditional, so it is presented as one.
 test("the restart is a collapsed recovery, not a step in the daily sequence", null, () => {
