@@ -103,5 +103,14 @@ Two things to hold to:
 
 - **Tags must be reachable from the default branch**, otherwise a fresh clone
   won't have the history behind them.
+
+  *One deliberate exception: `cp-00`.* It was re-cut on 2026-10-05 (mars-mission-fund
+  #221) to drop the unused swagger packages and stop the server tests collecting
+  `dist/`. By then `cp-01` was already on `main` above the original, and `main`
+  only allows squash merges, so the fixed `cp-00` commit could not land there.
+  It is safe off `main`: `git clone` fetches every tag and the history behind it,
+  and `checkpoint.sh` fetches with `--tags --force`. The tag itself keeps the
+  commit from being garbage-collected. Don't "fix" it by re-pointing `cp-00` at
+  a commit on `main`, because none of those is the pre-challenge state.
 - **Never move a published tag mid-workshop.** An attendee who jumped to `cp-04`
   an hour ago and one who jumps now must land on identical code.
