@@ -46,7 +46,7 @@ services:
     # the API and the site, and then it holds itself open so attendees can exec in.
     # start-app.sh comes from THIS repo rather than from app/, because ./checkpoint.sh
     # rewinds app/ and the thing that boots the container must not move with it.
-    entrypoint: ['/usr/local/bin/start-app.sh']
+    entrypoint: ['/opt/workshop/start-app.sh']
     # GIVE localhost AN IPv4 ADDRESS.
     #
     # The base image ships an /etc/hosts with `::1 localhost` and NO IPv4 entry, so
@@ -103,7 +103,19 @@ services:
       # Screenshots the agent takes land on the host, where they can be looked at.
       - ./screenshots:/screenshots
       # How the app is started. Read-only: it is infrastructure, not an exercise.
-      - ./workshop/start-app.sh:/usr/local/bin/start-app.sh:ro
+      #
+      # A FOLDER, NOT THE FILE. A single-file bind mount is pinned to the file as it was
+      # when the container started, and git never edits a file in place - a pull or a
+      # checkout that changes start-app.sh writes a new one. The running container then
+      # finds nothing at the mount ("start-app.sh: executable file not found"), and the
+      # two commands people reach for when something is wrong, --restart and the reset
+      # ./checkpoint.sh runs after a jump, both fail. A folder mount sees the new file.
+      #
+      # workshop/container/ and not workshop/: that also holds up.sh and
+      # verify-views.sh, which run on the HOST and call docker. Mounted in here they are
+      # something for an agent to find and run, and fail. Only container-side files go
+      # in this folder. start-app.sh puts itself on PATH at boot, as start-app.sh.
+      - ./workshop/container:/opt/workshop:ro
       # The two-vantage browser check. See workshop/verify-views.sh.
       - ./verify/app-views.mjs:/usr/local/bin/app-views.mjs:ro
       # The environment check's screenshot of verify-web. It runs HERE, in the

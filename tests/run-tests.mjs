@@ -88,7 +88,7 @@ test("verify.ps1 is saved with a UTF-8 BOM", "WIN-011", () => {
 // with EACCES, and both servers then failed on ERR_MODULE_NOT_FOUND — while the
 // script printed "Workshop app is up" regardless. Four guards, one per link.
 test("start-app.sh can write its dependency volumes, and says so if it cannot", null, () => {
-  const start = codeOf("workshop/start-app.sh");
+  const start = codeOf("workshop/container/start-app.sh");
 
   ok(
     /sudo chown/.test(start),
@@ -123,7 +123,7 @@ test("start-app.sh can write its dependency volumes, and says so if it cannot", 
 // killed the app's E2E run (its own API and Vite on 3101/5273), and any shell whose
 // command line merely mentioned vite. It must stop the dev servers and nothing else.
 test("start-app.sh --restart stops only the dev servers", null, () => {
-  const start = codeOf("workshop/start-app.sh");
+  const start = codeOf("workshop/container/start-app.sh");
 
   ok(
     !/pkill -f '(vite|packages\/server|dev:server)'/.test(start),
@@ -157,7 +157,7 @@ test("a checkpoint jump resets the database to the rung", null, () => {
     "a reset that fails must be reported — a jump that says nothing leaves the attendee debugging pages, not the database"
   );
 
-  const start = codeOf("workshop/start-app.sh");
+  const start = codeOf("workshop/container/start-app.sh");
   ok(
     /--reset-db\) RESTART=1; RESET_DB=1/.test(start),
     "--reset-db must imply --restart: the servers have to stop before their database is dropped, and start again on the new one"
@@ -531,15 +531,37 @@ test("the check and the workshop claim the same port, from the same variable", n
 test("the workshop container starts the app, and survives the app dying", null, () => {
   const workshop = read("docker-compose.workshop.yml");
   ok(
-    /entrypoint:\s*\['\/usr\/local\/bin\/start-app\.sh'\]/.test(workshop),
+    /entrypoint:\s*\['\/opt\/workshop\/start-app\.sh'\]/.test(workshop),
     "the workshop container must boot start-app.sh. With `sleep infinity` nothing serves the app, and every activity that says 'open http://localhost:5173' is a dead end"
   );
   ok(
-    /\.\/workshop\/start-app\.sh:\/usr\/local\/bin\/start-app\.sh:ro/.test(workshop),
+    /- \.\/workshop\/container:\/opt\/workshop:ro/.test(workshop),
     "start-app.sh must be mounted from THIS repo. ./checkpoint.sh rewinds app/, so a boot script living in app/ would be rewound with it"
   );
-  ok(exists("workshop/start-app.sh"), "workshop/start-app.sh is missing");
-  const start = codeOf("workshop/start-app.sh");
+  // A single-file mount goes stale the moment git replaces the file: after a pull,
+  // `exec claude-container start-app.sh` found nothing, and the restart and the
+  // post-jump database reset both failed with "executable file not found".
+  ok(
+    !/\.\/workshop\/[^:\s]+\.sh:/.test(workshop),
+    "mount the workshop/container FOLDER, never a single script: a single-file bind mount is pinned to the file git replaces on the next pull"
+  );
+  ok(
+    !/\.\/workshop:/.test(workshop),
+    "mount workshop/container, not all of workshop/ - up.sh and verify-views.sh are host scripts, and inside the container they are only something for an agent to run and fail"
+  );
+  const inContainer = readdirSync(join(ROOT, "workshop/container"));
+  for (const host of ["up.sh", "verify-views.sh"]) {
+    ok(
+      !inContainer.includes(host) && exists(`workshop/${host}`),
+      `${host} runs on the host and calls docker; it belongs in workshop/, not workshop/container/ - the folder the container sees`
+    );
+  }
+  ok(
+    /ln -sfn "\$SELF" "\$LINK"/.test(codeOf("workshop/container/start-app.sh")),
+    "start-app.sh must link itself onto PATH at boot: the guide, the banner and checkpoint.sh all call it by bare name"
+  );
+  ok(exists("workshop/container/start-app.sh"), "workshop/container/start-app.sh is missing");
+  const start = codeOf("workshop/container/start-app.sh");
   ok(
     /--host\s+0\.0\.0\.0/.test(start),
     "vite must bind 0.0.0.0. It binds loopback by default, and a loopback bind inside a container cannot be reached through a published port however the ports are mapped"
@@ -1880,7 +1902,7 @@ test("the credential check authenticates, not just exists", null, () => {
 // `exec ... claude` stopped at a screen that reads as a login prompt. No check can
 // catch this one: the two code paths differ.
 test("the workshop container does not stop at Claude's first-run onboarding", null, () => {
-  const sh = codeOf("workshop/start-app.sh");
+  const sh = codeOf("workshop/container/start-app.sh");
   ok(
     /\.claude\.json/.test(sh) && /hasCompletedOnboarding/.test(sh),
     "start-app.sh must seed ~/.claude.json with hasCompletedOnboarding - that flag is the only thing standing between an attendee with a valid token and a login screen"
@@ -1899,7 +1921,7 @@ test("the workshop container does not stop at Claude's first-run onboarding", nu
   // The variable that looks like the fix and is not. It appears nowhere in the CLI
   // binary, which carries seventeen real CLAUDE_CODE_SKIP_* names; setting it buys
   // nothing and, worse, reads like the problem is already handled.
-  for (const f of [...COMPOSE_FILES, "workshop/start-app.sh", "verify-setup.sh", "windows/verify.ps1"]) {
+  for (const f of [...COMPOSE_FILES, "workshop/container/start-app.sh", "verify-setup.sh", "windows/verify.ps1"]) {
     ok(
       !/CLAUDE_CODE_SKIP_ONBOARDING/.test(codeOf(f)),
       `${f} sets CLAUDE_CODE_SKIP_ONBOARDING, which is not a Claude Code variable - the gate is hasCompletedOnboarding in ~/.claude.json`
@@ -2057,7 +2079,7 @@ test("the Claude terminal opens in the mode the day is actually run in", null, (
   // DOWNGRADES to default mode without it. A workshop that seeds the flag and not
   // the answer gets neither the dialog it expected nor the mode it asked for.
   ok(
-    /bypassPermissionsModeAccepted/.test(codeOf("workshop/start-app.sh")),
+    /bypassPermissionsModeAccepted/.test(codeOf("workshop/container/start-app.sh")),
     "the container asks for bypass mode but never answers the disclaimer that gates it — Claude quietly falls back to asking for permission on every edit"
   );
 });
