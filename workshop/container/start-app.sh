@@ -27,6 +27,19 @@ mkdir -p "$LOGS"
 
 step() { printf '\n=== %s\n' "$1"; }
 
+# ON PATH, AS start-app.sh. The compose file mounts the folder this lives in at
+# /opt/workshop rather than the file itself (see why there), so nothing puts it on
+# PATH - and every recovery command in the guide, the banner below and
+# ./checkpoint.sh's database reset call it by bare name. A symlink, not a copy: a copy
+# would go stale on the next pull, which is the problem the folder mount exists to
+# fix. `agent` has passwordless sudo in the image.
+SELF=/opt/workshop/start-app.sh
+LINK=/usr/local/bin/start-app.sh
+if [ -e "$SELF" ] && [ "$(readlink "$LINK" 2>/dev/null)" != "$SELF" ]; then
+  sudo ln -sfn "$SELF" "$LINK" 2>/dev/null ||
+    echo "could not link $LINK - run it as $SELF instead" >&2
+fi
+
 # ------------------------------------------------- Claude's first-run onboarding
 #
 # WHY THIS IS HERE AND NOT AN ENVIRONMENT VARIABLE
