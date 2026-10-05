@@ -135,6 +135,47 @@ test("start-app.sh --restart stops only the dev servers", null, () => {
   );
 });
 
+// A jump moves app/; the database is in another container and stayed on the previous
+// rung. Back from cp-01 to cp-00, every API call failed on campaigns tables that
+// cp-01's migration had renamed to proposals.
+test("a checkpoint jump resets the database to the rung", null, () => {
+  const cp = codeOf("checkpoint.sh");
+  ok(
+    /exec -T "\$SERVICE" start-app\.sh --reset-db/.test(cp),
+    "checkpoint.sh must run start-app.sh --reset-db in the container after a jump — the database otherwise stays on the previous rung's migrations"
+  );
+  ok(
+    cp.indexOf("--reset-db") > cp.indexOf('rm -rf "$APP_DIR"/packages/*/dist'),
+    "the reset must come after the checkout and the dist/ clear, so it migrates the NEW rung's code"
+  );
+  ok(
+    /ps --status running --services/.test(cp) && /not reset — the workshop stack is not running/.test(cp),
+    "with the stack down, checkpoint.sh must say the database was NOT reset and how to do it, rather than skip it silently"
+  );
+  ok(
+    /the reset did not finish/.test(cp),
+    "a reset that fails must be reported — a jump that says nothing leaves the attendee debugging pages, not the database"
+  );
+
+  const start = codeOf("workshop/start-app.sh");
+  ok(
+    /--reset-db\) RESTART=1; RESET_DB=1/.test(start),
+    "--reset-db must imply --restart: the servers have to stop before their database is dropped, and start again on the new one"
+  );
+  ok(
+    /WITH \(FORCE\)/.test(start),
+    "the drop must use WITH (FORCE); a plain DROP DATABASE (or dbmate drop) refuses while any connection is open"
+  );
+  ok(
+    /MIGRATE_STATUS=\$\{PIPESTATUS\[0\]\}/.test(start),
+    "dbmate's exit status must be captured straight after the pipe, or a failed migration reads as a successful reset"
+  );
+  ok(
+    /\[ "\$\{DB_OK:-1\}" -eq 1 \] && exit 0/.test(start),
+    "run by hand, start-app.sh must exit non-zero when the reset failed, so checkpoint.sh can report it"
+  );
+});
+
 // The recovery command read as step 4 of starting your day, so people ran it every
 // morning on a healthy container. It is conditional, so it is presented as one.
 test("the restart is a collapsed recovery, not a step in the daily sequence", null, () => {
