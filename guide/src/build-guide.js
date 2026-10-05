@@ -234,6 +234,20 @@ li { margin: 8px 0; }
 .copyblock.is-prompt button { border-color: var(--on-brand); color: var(--on-brand); }
 .copyblock.is-prompt button:hover { background: var(--on-brand); color: var(--brand); }
 
+/* look-at-it checks: a copy block's header over a numbered list, not a dark well */
+.checkblock { margin: 0 0 16px; }
+.checkblock .cb-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 8px 12px; background: var(--surface);
+  border: 1px solid var(--border); border-bottom: 0;
+  border-radius: 6px 6px 0 0; font-size: 13px; color: var(--text);
+}
+.checkblock > ol {
+  margin: 0; padding: 12px 18px 12px 38px;
+  border: 1px solid var(--border); border-radius: 0 0 6px 6px;
+}
+.checkblock li .copyblock { margin: 8px 0 4px; }
+
 /* link list */
 .links { list-style: none; padding: 0; margin: 0; }
 .links li { margin: 0 0 12px; }
@@ -554,14 +568,73 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   font: 700 10.5px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
   text-transform: uppercase; white-space: nowrap;
 }
+/* The badge's colour, as a variable, so a block can be framed in the colour of the
+   window it belongs in: the badge says which window, the frame says how far the
+   instruction reaches. */
+.in-host      { --win: var(--amber); }
+.in-container { --win: var(--accent); }
+.in-claude    { --win: #d97757; }
+.in-browser   { --win: var(--blue); }
+.copyblock[class*=" in-"], .checkblock[class*=" in-"] {
+  border: 2px solid var(--win); border-radius: 8px;
+}
+.copyblock[class*=" in-"] .cb-head, .checkblock[class*=" in-"] .cb-head { border: 0; }
+.copyblock[class*=" in-"] pre { border-radius: 0 0 6px 6px; }
+.checkblock[class*=" in-"] > ol { border: 0; }
 .loc.host      { background: var(--amber);  color: var(--bg); }
 .loc.container { background: var(--accent); color: var(--bg); }
-/* Outlined rather than filled: it is a container shell like the one above it, so it
-   keeps that colour, and the difference between them stays visible at a glance. */
-.loc.claude    { background: none; color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* Claude's own orange, so the window Claude lives in is the one badge nobody has to
+   read. Constant in both themes, like --brand. Dark text, not white: white on this
+   orange is about 3:1, too faint at 10.5px; #222 is about 6:1. */
+.loc.claude    { background: #d97757; color: #222222; }
 /* Not a terminal at all. A URL badged "host terminal" read as a command to type into
    one, so it gets a colour none of the three windows use. */
 .loc.browser   { background: var(--blue);   color: var(--bg); }
+/* The same badge inside a sentence: "Back in the WORK TERMINAL, press Ctrl+C". Prose
+   names a window with this rather than bold text, so the word on the page looks
+   exactly like the label on the block it refers to. */
+.loc.inline { margin: 0 2px; vertical-align: 1px; }
+
+/* The badge's tooltip. CSS only, so it works with JavaScript off; :focus makes it
+   reachable from the keyboard and opens it on a tap. Anchored to the badge's right
+   edge, because block badges sit at the right of their header; inline ones sit
+   anywhere in a sentence, so they open from the left instead. */
+.loc { position: relative; cursor: help; }
+.loc:focus { outline: 2px solid var(--win, var(--accent)); outline-offset: 2px; }
+.loc .tip {
+  display: none; position: absolute; z-index: 20; top: calc(100% + 8px); right: 0;
+  width: max-content; max-width: min(300px, 80vw);
+  padding: 10px 12px; border-radius: 6px;
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  font: 400 13.5px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 0; text-transform: none; white-space: normal; text-align: left;
+}
+.loc .tip code { font-size: 12.5px; }
+.loc.inline .tip { right: auto; left: 0; }
+/* :focus-within, not :focus - clicking the tip's Copy button moves focus onto it,
+   and the tip must stay open while it does. */
+.loc:hover .tip, .loc:focus-within .tip { display: block; }
+/* Bridges the gap between badge and tip, so the pointer can travel down into the tip
+   to reach Copy without crossing empty space and closing it. */
+.loc .tip::before { content: ""; position: absolute; left: 0; right: 0; top: -10px; height: 10px; }
+.loc .tip-cmd { display: block; margin-top: 9px; }
+.loc .tip-cmd-head {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  font-size: 12px; color: var(--muted); margin-bottom: 4px;
+}
+.loc .tip-copy {
+  flex: none; cursor: pointer; border: 1px solid var(--accent); background: transparent;
+  color: var(--accent); font: 600 11px/1 inherit; padding: 4px 9px; border-radius: 4px;
+}
+.loc .tip-copy:hover { background: var(--accent); color: var(--bg); }
+.loc .tip-copy.copied { background: var(--accent); color: var(--bg); }
+.loc .tip .tip-code {
+  display: block; padding: 8px 10px; border: 0; border-radius: 4px;
+  background: var(--well); color: var(--well-text);
+  font: 12px/1.5 ui-monospace, "SF Mono", Menlo, monospace;
+  white-space: pre-wrap; word-break: break-word;
+}
 .shellreq .not { color: var(--amber); font-weight: 700; }
 
 /* nav */
@@ -799,9 +872,13 @@ document.addEventListener('click', function (e) {
     return;
   }
 
-  var btn = e.target.closest('.copyblock button');
+  // A badge tooltip's Copy first: it sits INSIDE a copy block's header, so the
+  // general selector below would match it too and copy the block's command instead.
+  var btn = e.target.closest('.tip-copy') || e.target.closest('.copyblock button');
   if (!btn) return;
-  var text = btn.closest('.copyblock').querySelector('pre').textContent;
+  var text = btn.classList.contains('tip-copy')
+    ? btn.closest('.tip').querySelector('.tip-code').textContent
+    : btn.closest('.copyblock').querySelector('pre').textContent;
   var flash = function () {
     var was = btn.textContent;
     btn.textContent = 'Copied';
@@ -843,21 +920,86 @@ function esc(s) {
 // `where` marks which shell a command belongs in. It is the single most common
 // thing a first-timer gets wrong once there is a container involved, and a label on
 // the block itself is harder to miss than a sentence of prose above it.
+//
+// `tip` is what the badge says when you hover or tap it. It replaced a "Where" callout
+// at the top of every activity: the badge is where the eye already is when the
+// question comes up, and a paragraph at the top of the page had scrolled away by then.
+// No per-pathway shell name in a tip: badges appear on pages with no pathway bar
+// (start-here.html), where there is nothing to pick the variant.
 const LOCATIONS = {
-  host: { cls: "host", text: "host terminal" },
-  container: { cls: "container", text: "work terminal" },
-  claude: { cls: "claude", text: "claude terminal" },
-  browser: { cls: "browser", text: "your browser" },
+  host: {
+    cls: "host",
+    text: "host terminal",
+    tip: "Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.",
+  },
+  container: {
+    cls: "container",
+    text: "work terminal",
+    tip: "Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.",
+  },
+  claude: {
+    cls: "claude",
+    text: "claude terminal",
+    tip: "Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.",
+  },
+  browser: {
+    cls: "browser",
+    text: "your browser",
+    tip: "Not a terminal. Open this in your web browser.",
+  },
+};
+
+// The command that opens a window, for its tooltip - so somebody who closed the work
+// or Claude terminal gets it back from the badge in front of them. Read from TERMINALS
+// rather than written again here, so the tip cannot drift from start-your-day. Only
+// windows 2 and 3: window 1 is a plain terminal, and its listed command (up.sh)
+// starts the stack rather than opening the window.
+const openCommand = where =>
+  where === "host" ? null : ((TERMINALS.list.find(t => t.where === where) || {}).commands || [])[0];
+
+// Every badge on every page comes from here, so every badge has its tooltip. It is
+// focusable, so the tip also opens from the keyboard and on a tap on a phone.
+const badge = (where, extra = "") => {
+  const loc = LOCATIONS[where];
+  if (!loc) throw new Error(`unknown window badge "${where}"`);
+  const open = openCommand(where);
+  const cmd = open
+    ? `<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">${esc(open.code)}</code></span>`
+    : "";
+  return `<span class="loc ${loc.cls}${extra ? ` ${extra}` : ""}" tabindex="0">${loc.text}<span class="tip" role="tooltip">${loc.tip}${cmd}</span></span>`;
 };
 
 function copyBlock(label, body, isPrompt, where) {
   const loc = where ? LOCATIONS[where] : null;
-  const badge = loc ? `<span class="loc ${loc.cls}">${loc.text}</span>` : "";
-  return `  <div class="copyblock${isPrompt ? " is-prompt" : ""}">
-    <div class="cb-head"><span>${esc(label)}</span>${badge}<button type="button">Copy</button></div>
+  return `  <div class="copyblock${isPrompt ? " is-prompt" : ""}${loc ? ` in-${loc.cls}` : ""}">
+    <div class="cb-head"><span>${esc(label)}</span>${loc ? badge(where) : ""}<button type="button">Copy</button></div>
     <pre>${esc(body)}</pre>
   </div>`;
 }
+
+// A check that is something to LOOK at rather than something to run: numbered steps
+// under the same badged header a copy block has. A step that needs a command carries
+// it as { text, code }, and the command renders INSIDE that step - a list of steps
+// with the commands collected underneath left the reader matching them up.
+function checkBlock(c) {
+  const loc = c.where ? LOCATIONS[c.where] : null;
+  const step = s =>
+    typeof s === "string"
+      ? `      <li>${s}</li>`
+      : `      <li>${s.text}\n${copyBlock(s.label || "", s.code, false, s.where || c.where)}\n      </li>`;
+  return `  <div class="checkblock${loc ? ` in-${loc.cls}` : ""}">
+    <div class="cb-head"><span>${esc(c.label)}</span>${loc ? badge(c.where) : ""}</div>
+    <ol>
+${c.steps.map(step).join("\n")}
+    </ol>
+  </div>`;
+}
+
+// {loc:host|container|claude|browser} in any prose becomes that window's badge,
+// inline. Expanded once over the whole page, so a token works in every data field
+// without each renderer having to know about it.
+const inlineBadges = html =>
+  html.replace(/\{loc:(\w+)\}/g, (m, k) => badge(k, "inline"));
 
 function page({ title, body }) {
   return `<!doctype html>
@@ -871,7 +1013,7 @@ function page({ title, body }) {
 </head>
 <body>
 <div class="wrap">
-${body}
+${inlineBadges(body)}
 </div>
 <script>${JS}</script>
 </body>
@@ -1228,7 +1370,7 @@ ${TERMINALS.list
   t => `    <div class="tm">
     <span class="tm-n">${esc(t.n)}</span>
     <div>
-      <b>${esc(t.title)}</b> <span class="loc ${LOCATIONS[t.where].cls} tm-loc">${LOCATIONS[t.where].text}</span>
+      <b>${esc(t.title)}</b> ${badge(t.where, "tm-loc")}
       <p>${t.body.replace("{shell}", shellName())}</p>
 ${(t.commands || []).map(c => onlyWrap(c.only, copyBlock(c.label, c.code, false, c.where))).join("\n")}${
   // Terminal 3 carries the flag, so terminal 3 carries the explanation. Attached to
@@ -1406,16 +1548,16 @@ activities.forEach((a, i) => {
     const render = c => copyBlock(c.label, c.code, false, c.where);
     const before = all.filter(c => !c.after).map(render);
     const after = all.filter(c => c.after).map(render);
-    // The "what the badges mean" line goes on whichever group appears first. Most
-    // activities are now ALL after-commands — there is nothing to run before the
-    // prompt — so pinning it to `before` would put it on a section that is not there.
-    const callout = a.where ? [shellCallout(a.where)] : [];
-    return before.length
-      ? { before: [...callout, ...before], after }
-      : { before: [], after: after.length ? [...callout, ...after] : [] };
+    // No "what the badges mean" line above them any more: each badge explains itself
+    // on hover - see LOCATIONS.
+    return { before, after };
   };
 
   const cmds = commandBlocks(a);
+
+  // "See it before you change it": the same kind of look-at-it check as below the
+  // prompts, but of the code as it stands, so it sits above them.
+  const baseline = (a.baseline || []).map(checkBlock);
 
   // The bar is filled in at the end, once there is a page to ask about - see below.
   const body = `${siteHeader("← ALL ACTIVITIES", FROM_PAGES)}
@@ -1485,16 +1627,13 @@ ${
       )
     : ""
 }
-` : ""}${section("Commands", cmds.before)}${a.note ? `  <div class="note">${a.note}</div>
+` : ""}${section("Commands", cmds.before)}${section("See it before you change it", baseline)}${a.note ? `  <div class="note">${a.note}</div>
 ` : ""}${section(
     "Prompts — copy, don't retype",
     (a.prompts || []).length
-      ? [
-          `      <div class="shellreq"><span class="where">Where</span>Inside the <strong>Claude terminal</strong> — the third window, with Claude already running in it.</div>`,
-          ...a.prompts.map(p => copyBlock(p.label, p.text, true)),
-        ]
+      ? a.prompts.map(p => copyBlock(p.label, p.text, true, "claude"))
       : []
-  )}${section("Check your work", cmds.after)}${section("Links", (a.links || []).map(l => copyBlock(l.label, l.url, false)))}
+  )}${section("Check your work", [...cmds.after, ...(a.checks || []).map(checkBlock)])}${section("Links", (a.links || []).map(l => copyBlock(l.label, l.url, false)))}
   <h2>You are done when</h2>
   <div class="success">${a.success}</div>
 ${a.troubleshooting ? `
@@ -1538,11 +1677,14 @@ ${a.platformSetup ? "  </div>" : ""}
   // some pages are prompts and nothing else. Derived from the rendered page rather
   // than from a property, so an activity that grows its first platform-specific
   // command gets the bar without anybody remembering to add it.
+  //
+  // The gate goes with the bar. Content held back until a pathway is chosen, on a page
+  // with no bar to choose one, is a blank page for anybody who has not picked one yet.
   const gated = /data-only="|data-pathway="/.test(body);
-  fs.writeFileSync(
-    path.join(PAGES, fileFor(a, i)),
-    page({ title: a.title, body: body.replace("<!--PATHBAR-->", gated ? platformStrip() : "") })
-  );
+  const out = gated
+    ? body.replace("<!--PATHBAR-->", platformStrip())
+    : body.replace("<!--PATHBAR-->", "").replace("<div data-needs-pathway>", "<div>");
+  fs.writeFileSync(path.join(PAGES, fileFor(a, i)), page({ title: a.title, body: out }));
 });
 
 console.log(

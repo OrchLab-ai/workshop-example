@@ -159,7 +159,7 @@ test("the restart is a collapsed recovery, not a step in the daily sequence", nu
     "the restart must render inside a collapsed red details, so it cannot be mistaken for a step"
   );
   ok(
-    /start-app\.sh --restart/.test(block.slice(0, 1200)),
+    /start-app\.sh --restart/.test(block.slice(0, block.indexOf("</details>"))),
     "the restart command must be inside that collapsed block"
   );
 });
@@ -171,7 +171,7 @@ test("the restart is a collapsed recovery, not a step in the daily sequence", nu
 test("the guide names the three terminals before the first command", null, () => {
   const page = read("guide/pages/start-your-day.html");
   const callout = page.indexOf('class="terminals"');
-  const firstCmd = page.indexOf('class="copyblock"');
+  const firstCmd = page.indexOf('class="copyblock');
   ok(callout >= 0, "the three-terminal callout is missing from start-your-day.html");
   ok(
     callout < firstCmd,
@@ -1407,11 +1407,11 @@ test("the pathway bar is on every page that needs it, and only those", null, () 
   // Three buttons, not two. "Windows" alone is the half-answered state, which is not
   // a pathway: the bar would have nothing to show and would look broken to the person
   // who just clicked it.
-  const onActivity = read("guide/pages/02-coding-challenges.html");
+  const onPage = read("guide/pages/start-your-day.html");
   for (const id of ["macos", "windows-linux", "windows-windows"]) {
-    ok(new RegExp(`data-pick="${id}"`).test(onActivity), `the pathway bar is missing the ${id} option`);
+    ok(new RegExp(`data-pick="${id}"`).test(onPage), `the pathway bar is missing the ${id} option`);
   }
-  ok(!/data-pick="windows"/.test(onActivity), 'the bar must not offer bare "windows" — that is the half-answered state, and it resolves to no pathway at all');
+  ok(!/data-pick="windows"/.test(onPage), 'the bar must not offer bare "windows" — that is the half-answered state, and it resolves to no pathway at all');
 });
 
 
@@ -1685,7 +1685,7 @@ test("the setup page defaults by how it was reached", null, () => {
 // offered only the two answers was asking them to guess, and a wrong guess makes
 // every command on the page wrong.
 test("the pathway bar offers Windows users a way out instead of a guess", null, () => {
-  const html = read("guide/pages/02-coding-challenges.html");
+  const html = read("guide/pages/start-your-day.html");
   ok(/class="pb-idk"/.test(html), "the bar must offer a not-sure option for Windows");
   ok(
     /href="environment-setup\.html\?os=windows#docker-mode"/.test(html),
@@ -1927,7 +1927,7 @@ test("an activity page asks nothing of a reader who is keeping up", null, () => 
     // the host terminal is bash trying to run an English sentence.
     if (/Prompts &mdash; copy|Prompts — copy/.test(html)) {
       ok(
-        /Inside the <strong>Claude terminal<\/strong>/.test(html),
+        /class="copyblock is-prompt in-claude"/.test(html) && !/class="copyblock is-prompt"/.test(html),
         `${f} offers prompts without saying which window they are pasted into`
       );
     }
