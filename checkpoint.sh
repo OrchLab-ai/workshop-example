@@ -310,12 +310,55 @@ fi
 app_git rev-parse --show-toplevel >/dev/null 2>&1 &&
   rm -rf "$APP_DIR"/packages/*/dist "$APP_DIR"/dist 2>/dev/null || true
 
+# RESET THE DATABASE TO THE RUNG. The same problem as dist/, one container over: a
+# jump moves app/, and the database is in the db container, so it stays on whatever
+# migrations the PREVIOUS rung ran. Back from cp-01, the cp-00 API asks for campaigns
+# tables that cp-01's migration renamed to proposals, and every page fails. Forward
+# over an unfinished rename, cp-01's migration lands on top of the attendee's own.
+#
+# So every jump rebuilds it: start-app.sh --reset-db, inside the container, drops the
+# database, runs this rung's migrations (the seed data is migrations too) and restarts
+# the dev servers on the new code. Rows somebody created by hand go with it - the jump
+# has just replaced their code with the rung's, and that code is parked, not lost.
+#
+# Only when the stack is up. The database is not reachable from the host (no
+# published port, on purpose - see docker-compose.workshop.yml), and starting the
+# stack is up.sh's job, not this script's.
+COMPOSE_FILE="docker-compose.workshop.yml"
+SERVICE="claude-container"
+DB_LOG=".verify-logs/checkpoint-db.log"
+DB_STATE="down"
+if command -v docker >/dev/null 2>&1 &&
+  docker compose -f "$COMPOSE_FILE" ps --status running --services 2>/dev/null | grep -qx "$SERVICE"; then
+  printf '\n   %s\n' "${DIM}Resetting the database to ${TARGET} and restarting the app…${RESET}"
+  mkdir -p "$(dirname "$DB_LOG")"
+  # -T: no TTY, so it works from a script and the output can go to the log.
+  if docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE" start-app.sh --reset-db >"$DB_LOG" 2>&1; then
+    DB_STATE="reset"
+  else
+    DB_STATE="failed"
+  fi
+fi
+
 printf '\n   %s  %s\n' "${GREEN}${BOLD}${TARGET}${RESET}" "${TITLES[$idx]}"
 printf '   %s%s%s\n\n' "$DIM" "${STATES[$idx]}" "$RESET"
 printf '   Branch:   %s  %s\n' "${BOLD}${WORK}${RESET}" "${DIM}(${ACTION})${RESET}"
 if [ -n "$PARKED" ]; then
   printf '   Parked:   %s %s\n' "${BOLD}${PARKED}${RESET}" "${DIM}— your previous work is committed there, nothing lost${RESET}"
 fi
+case "$DB_STATE" in
+  reset) printf '   Database: %s\n' "${DIM}reset to ${TARGET}'s data, and the app restarted on the new code${RESET}" ;;
+  failed)
+    printf '   Database: %s\n' "${RED}${BOLD}the reset did not finish — the app may be on the old rung's data${RESET}"
+    printf '             %s\n' "${DIM}What happened: ${DB_LOG}. Try again from here with:${RESET}"
+    printf '             %s\n' "${BOLD}docker compose -f ${COMPOSE_FILE} exec ${SERVICE} start-app.sh --reset-db${RESET}"
+    ;;
+  down)
+    printf '   Database: %s\n' "${AMBER}not reset — the workshop stack is not running${RESET}"
+    printf '             %s\n' "${DIM}Once ./workshop/up.sh says READY, bring the data in line with this checkpoint:${RESET}"
+    printf '             %s\n' "${BOLD}docker compose -f ${COMPOSE_FILE} exec ${SERVICE} start-app.sh --reset-db${RESET}"
+    ;;
+esac
 printf '   Next up:  %s\n' "${BOLD}${NEXTS[$idx]}${RESET}"
 if [ "${STALE_WORK:-0}" -eq 1 ]; then
   printf '\n   %sThis branch was made from an older %s.%s\n' "$BOLD" "$TARGET" "$RESET"

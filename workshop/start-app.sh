@@ -100,7 +100,16 @@ kill_tree() {
   for child in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$child"; done
   kill "$1" 2>/dev/null || true
 }
-if [ "${1:-}" = "--restart" ]; then
+# --reset-db is --restart plus a database rebuilt from scratch: see "migrations" below.
+RESTART=0
+RESET_DB=0
+for arg in "$@"; do
+  case "$arg" in
+    --restart) RESTART=1 ;;
+    --reset-db) RESTART=1; RESET_DB=1 ;;
+  esac
+done
+if [ "$RESTART" -eq 1 ]; then
   echo "stopping the running app…"
   # Clear the sentinel FIRST. The API runs under a restart supervisor (see below), so
   # killing the server without this just gets it started again two seconds later.
@@ -178,9 +187,42 @@ fi
 # report and let it say what happened.
 if [ "$APP_OK" -eq 1 ]; then
 step "Database"
+# --reset-db: DROP THE DATABASE AND MIGRATE IT FROM NOTHING. This is what
+# ./checkpoint.sh runs after every jump. The database lives in its own container and
+# a jump only moves app/, so without this the database stays on the PREVIOUS rung:
+# jump back from cp-01 and the cp-00 API queries campaigns tables that cp-01's
+# migration renamed; jump forward over a half-done rename and cp-01's migration runs
+# on top of the attendee's own, and fails. Every rung's seed data is itself a
+# migration, so `dbmate up` on an empty database is exactly that rung's data.
+#
+# Dropped from node, not `dbmate drop`: that refuses while anything is still
+# connected, and WITH (FORCE) does not leave the reset at the mercy of a stray
+# connection. There is no psql in this image; pg is already an app dependency.
+DB_OK=1
+if [ "$RESET_DB" -eq 1 ]; then
+  if node -e '
+    const { Client } = require("pg")
+    const url = new URL(process.env.DATABASE_URL)
+    const name = decodeURIComponent(url.pathname.slice(1))
+    url.pathname = "/postgres"
+    const c = new Client({ connectionString: url.toString() })
+    c.connect()
+      .then(() => c.query(`DROP DATABASE IF EXISTS "${name.replace(/"/g, "\"\"")}" WITH (FORCE)`))
+      .then(() => { console.log(`dropped ${name} - rebuilding it from the migrations in this checkout`); return c.end() })
+      .catch((e) => { console.error(`could not drop the database: ${e.message}`); process.exit(1) })
+  '; then
+    :
+  else
+    DB_OK=0
+  fi
+fi
 if command -v dbmate >/dev/null 2>&1; then
+  # dbmate's own status, read at once - the next command overwrites PIPESTATUS.
   dbmate -d ./packages/server/db/migrations -s ./packages/server/db/schema.sql up 2>&1 | tail -5
+  MIGRATE_STATUS=${PIPESTATUS[0]}
+  [ "$RESET_DB" -eq 1 ] && [ "$MIGRATE_STATUS" -ne 0 ] && DB_OK=0
 else
+  [ "$RESET_DB" -eq 1 ] && DB_OK=0
   echo "dbmate not found — skipping migrations" >&2
 fi
 
@@ -282,6 +324,7 @@ if [ "${SITE_UP:-0}" -eq 1 ]; then
    API    ${API_STATE}
    Logs   ${LOGS}/vite.log , ${LOGS}/server.log
    Restart it       start-app.sh --restart
+   Fresh database   start-app.sh --reset-db
 ============================================================
 
 BANNER
@@ -304,7 +347,21 @@ else
 BANNER
 fi
 
+if [ "${DB_OK:-1}" -eq 0 ]; then
+  cat >&2 <<BANNER
+============================================================
+   DATABASE RESET FAILED - the app is on the old data, or none.
+   The lines under "=== Database" above say why.
+============================================================
+
+BANNER
+fi
+
 # PID 1 has to stay alive or the container exits and takes everyone's shell with
-# it. Run by hand as a restart, there is nothing to hold open — just leave.
-[ "$$" -eq 1 ] || exit 0
+# it. Run by hand as a restart, there is nothing to hold open — just leave, saying
+# whether it worked: ./checkpoint.sh reads this to report a reset that did not land.
+if [ "$$" -ne 1 ]; then
+  [ "${SITE_UP:-0}" -eq 1 ] && [ "${DB_OK:-1}" -eq 1 ] && exit 0
+  exit 1
+fi
 exec sleep infinity
