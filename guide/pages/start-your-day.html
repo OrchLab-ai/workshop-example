@@ -653,7 +653,11 @@ nav.pager a:hover { background: var(--surface); }
     <span class="tm-n">1</span>
     <div>
       <b>The host terminal</b> <span class="loc host tm-loc" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span>
-      <p>A <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> window in your <code>workshop-example</code> folder — the only one of the three that is <em>not</em> inside the container. Only two kinds of command run here: <code>docker</code> and <code>./checkpoint.sh</code>. Nothing you type here touches the app.</p>
+      <p>A <span class="shellname" data-only="macos"><strong>Terminal</strong></span><span class="shellname" data-only="windows-linux"><strong>Git Bash</strong></span><span class="shellname" data-only="windows-windows"><strong>PowerShell</strong></span> window in your <code>workshop-example</code> folder — the only one of the three that is <em>not</em> inside the container. Only a few commands run here: <code>git pull</code> for this folder, <code>docker</code> and <code>./checkpoint.sh</code>. Nothing you type here touches the app.</p>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Get the latest workshop fixes</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <pre>git pull</pre>
+  </div>
   <div class="copyblock in-host">
     <div class="cb-head"><span>Start the stack, and wait until the app is really up</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>./workshop/up.sh</pre>

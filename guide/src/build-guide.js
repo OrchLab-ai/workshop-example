@@ -1317,7 +1317,7 @@ const cards = activities
         <span class="num">${shownNum(a, i)}</span>
         <span class="want">${esc(a.intent)}</span>
         <span class="meta">${esc(a.title)} &middot; ${esc(a.part)}${
-      a.to ? ` &middot; <span class="tag">${esc(a.to)}</span>` : ""
+      a.to && !a.noCode ? ` &middot; <span class="tag">${esc(a.to)}</span>` : ""
     }</span>
       </a>${a.platformSetup ? `\n${dailyCard}` : ""}`
   )
@@ -1396,7 +1396,7 @@ ${copyBlock(TERMINALS.after.command.label, TERMINALS.after.command.code, false, 
 // activity already declares which checkpoint it starts from, and a hand-written
 // command beside it is a second copy waiting to drift.
 const catchUpBlock = a => {
-  if (!a.from) return "";
+  if (!a.from || a.noCode) return "";
   const rung = Number(a.from.replace("cp-", ""));
   if (!Number.isInteger(rung)) throw new Error(`${a.slug}: cannot read a rung out of from: "${a.from}"`);
   return `  <details class="trouble compact">
@@ -1517,7 +1517,13 @@ activities.forEach((a, i) => {
   const prev = i > 0 ? activities[i - 1] : null;
   const next = i < activities.length - 1 ? activities[i + 1] : null;
 
-  const cp = [
+  // noCode: an activity that changes nothing in app/ (Blog Engine is pen and paper).
+  // Its rungs stay in the data so the ladder reads straight through, but telling the
+  // room it "produces cp-03" - or offering a catch-up jump - describes code that does
+  // not exist.
+  const cp = a.noCode
+    ? [`<span>no code — pen and paper</span>`]
+    : [
     a.from ? `<span>start from <b>${esc(a.from)}</b></span>` : `<span>start of the day</span>`,
     a.to ? `<span>produces <b>${esc(a.to)}</b></span>` : `<span>final activity</span>`,
     // The catch-up command is NOT repeated here. This strip is read by everybody, and
@@ -1627,24 +1633,27 @@ ${
       )
     : ""
 }
-` : ""}${section("Commands", cmds.before)}${section("See it before you change it", baseline)}${a.note ? `  <div class="note">${a.note}</div>
+` : ""}${section("Commands", cmds.before)}${a.exercise ? section("The exercise", [checkBlock(a.exercise)]) : ""}${section("See it before you change it", baseline)}${a.note ? `  <div class="note">${a.note}</div>
 ` : ""}${section(
     "Prompts — copy, don't retype",
     (a.prompts || []).length
-      ? a.prompts.map(p => copyBlock(p.label, p.text, true, "claude"))
+      ? [
+          ...(a.promptsNote ? [`  <p>${a.promptsNote}</p>`] : []),
+          ...a.prompts.map(p => copyBlock(p.label, p.text, true, "claude")),
+        ]
       : []
   )}${section("Check your work", [...cmds.after, ...(a.checks || []).map(checkBlock)])}${section("Links", (a.links || []).map(l => copyBlock(l.label, l.url, false)))}
   <h2>You are done when</h2>
   <div class="success">${a.success}</div>
 ${a.troubleshooting ? `
 ${troubleshooting()}` : ""}
-  <details class="cheat">
+${(a.cheat || []).length ? `  <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
 ${a.cheat.map(c => `      <p>${c}</p>`).join("\n")}
     </div>
   </details>
-  </div>
+` : ""}  </div>
 ${a.platformSetup ? "  </div>" : ""}
 
   <nav class="pager">

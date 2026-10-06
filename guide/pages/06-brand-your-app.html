@@ -649,18 +649,19 @@ nav.pager a:hover { background: var(--surface); }
   <h2>Prompts — copy, don't retype</h2>
   <div class="copyblock is-prompt in-claude">
     <div class="cb-head"><span>1. Let it interview you</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Interview me to produce brand guidelines for this product. Ask me about the audience, what I want them to feel, the voice and tone, and what I am not willing to look like. Ask one question at a time and push back if my answers are vague. When we're done, write the result to specs/standards/brand.md.</pre>
+    <pre>Conduct a socratic interview with at least 5 questions. The goal is to produce brand guidelines for this product that we can turn into design tokens. Start from a blank page and treat this as a rebrand. Ask me about the audience and what I want them to feel, then spend most of the questions on the visual identity: colour palette, typography, and what I am not willing for the site to look like. Ask one question at a time and push back if my answers are vague. When we're done, write the result to specs/standards/brand.md, including concrete colour values and font choices.</pre>
   </div>
   <div class="copyblock is-prompt in-claude">
     <div class="cb-head"><span>2. Make the app wear it</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Read specs/standards/brand.md and regenerate packages/client/src/tokens.css from it. Change only the Tier 1 identity tokens — the semantic tokens and the components must not be edited. Then use Playwright to screenshot the campaign page so I can see the result.</pre>
+    <pre>Read specs/standards/brand.md and regenerate packages/client/src/tokens.css from it. Change only the Tier 1 identity tokens — the semantic tokens and the components must not be edited. If the brand changes the fonts, load them the way specs/tech/frontend.md section 9.1 describes: self-hosted WOFF2 files in packages/client/src/assets/fonts/, @font-face rules in packages/client/src/fonts.css, and the preload in packages/client/index.html. Remove the font files that are no longer used, and update the font table in that section to match. Then use Playwright to screenshot the proposal page so I can see the result.</pre>
   </div>
 
   <h2>Check your work</h2>
   <div class="copyblock in-container">
     <div class="cb-head"><span>Your brand, and the tokens generated from it</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
     <pre>specs/standards/brand.md
-packages/client/src/tokens.css</pre>
+packages/client/src/tokens.css
+packages/client/src/fonts.css</pre>
   </div>
 
   <h2>You are done when</h2>

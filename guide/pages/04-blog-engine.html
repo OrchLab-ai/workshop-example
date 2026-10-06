@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mission Updates, by Prompt — OrchLab Workshop Guide</title>
+<title>Blog Engine — OrchLab Workshop Guide</title>
 <script>
 (function () {
   try {
@@ -622,56 +622,30 @@ nav.pager a:hover { background: var(--surface); }
 
   <span class="actnum">ACTIVITY 04</span>
   <p class="eyebrow">Part 2 — Prompt Engineering</p>
-  <h1>Mission Updates, by Prompt</h1>
-  <p class="lede">Build Mission Updates twice — once from a one-line prompt, once from a long one. This is the baseline everything later is measured against.</p>
+  <h1>Blog Engine</h1>
+  <p class="lede">Five minutes, pen and paper, no code. Write down what you would expect if somebody asked you to “build a Blog engine” — then find out how differently the people around you read the same five words.</p>
 
   <div class="cp">
-    <span>start from <b>cp-02</b></span>
-    <span>produces <b>cp-03</b></span>
+    <span>no code — pen and paper</span>
   </div>
 
 
 
   <div>
-  <details class="trouble compact">
-  <summary>Didn't finish the last activity?
-    <span class="cta">Click here to catch up</span>
-  </summary>
-  <div class="tr-body">
-    <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
-  <div class="copyblock in-host">
-    <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>./checkpoint.sh 2</pre>
-  </div>
-  </div>
-</details>
 
-  <h2>Prompts — copy, don't retype</h2>
-  <div class="copyblock is-prompt in-claude">
-    <div class="cb-head"><span>The micro-prompt — use exactly this, resist improving it</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Add Mission Updates to the app.</pre>
-  </div>
-  <div class="copyblock is-prompt in-claude">
-    <div class="cb-head"><span>The mega-prompt — starting point, make it yours</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Add a Mission Updates feature to the app. Campaign owners should be able to post updates to their campaign, and backers should be able to read them on the campaign page. Updates need a title, a body, and a timestamp. Only the campaign owner can post. Show the most recent updates first. Add API endpoints for creating and listing updates, a database migration, React components for the campaign page, and tests for all of it. Follow the existing patterns in the campaigns feature folder.</pre>
-  </div>
-
-  <h2>Check your work</h2>
-  <div class="copyblock in-browser">
-    <div class="cb-head"><span>Look at what it built — the site reloads as files change</span><span class="loc browser" tabindex="0">your browser<span class="tip" role="tooltip">Not a terminal. Open this in your web browser.</span></span><button type="button">Copy</button></div>
-    <pre>http://localhost:5173</pre>
+  <h2>The exercise</h2>
+  <div class="checkblock">
+    <div class="cb-head"><span>Five minutes, pen and paper</span></div>
+    <ol>
+      <li>Write down what you would expect if asked to <strong>“build a Blog engine”</strong>. Be as detailed or as brief as you naturally would. Don't ask for clarification — the ambiguity is the point.</li>
+      <li>Compare with the people around you: <strong>volume of detail</strong> — how much did you write? <strong>Level of detail</strong> — how specific were the requirements? <strong>Divergence</strong> — how different are your interpretations?</li>
+      <li>Keep what you wrote. Mission Updates is a blog inside this app, and next you specify it properly — then see how close your note would have landed.</li>
+    </ol>
   </div>
 
   <h2>You are done when</h2>
-  <div class="success">Two working-ish attempts and a clear sense of what neither prompt managed to pin down.</div>
+  <div class="success">A page of your own expectations, and the discovery that the person next to you expected something different from the same five words.</div>
 
-  <details class="cheat">
-    <summary>Stuck? Open this</summary>
-    <div class="body">
-      <p><code>./checkpoint.sh 3</code> has both attempts already made.</p>
-      <p>Do not polish these. They are meant to be mediocre — that is the point of the comparison later.</p>
-    </div>
-  </details>
   </div>
 
 

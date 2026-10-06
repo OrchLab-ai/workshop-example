@@ -68,10 +68,10 @@ ahead and then want your half-finished attempt back, it is there.
 | `cp-00` | Clean clone, environment check passing | Part 1 — Coding Challenges |
 | `cp-01` | A Part 1 challenge applied | Part 1 — Give Your Agent Sight |
 | `cp-02` | Playwright wired in; the agent can see | Part 2 — Blog Engine exercise |
-| `cp-03` | Mission Updates from micro/mega prompts | Part 2 — Create the spec |
+| `cp-03` | Same code as `cp-02` — the Blog Engine exercise is pen and paper | Part 2 — Create the Spec |
 | `cp-04` | `mission-updates.spec.md` written | Part 2 — Brand Your Mission Updates |
-| `cp-05` | Your `brand.md`, with `tokens.css` regenerated from it | Part 2 — Socratic build |
-| `cp-06` | Spec-driven Mission Updates in your brand, tests passing | Part 3 — Autonomous agent |
+| `cp-05` | Your `brand.md`, with `tokens.css` regenerated from it | Part 2 — Build It Properly |
+| `cp-06` | Spec-driven Mission Updates in your brand, tests passing | Part 3 — Build an Autonomous Agent |
 | `cp-07` | Autonomous agent run with guardrails | Part 3 — Plan-First Orchestration |
 | `cp-08` | Plan → code handoff complete | Part 3 — Automated Code Review |
 

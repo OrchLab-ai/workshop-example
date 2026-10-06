@@ -1244,12 +1244,23 @@ test("each terminal carries the command that opens it", null, () => {
   const block = html.slice(html.indexOf('class="terminals"'), html.indexOf("</div>\n\n  <div class=\"note\""));
   ok(block.length > 500, "could not find the terminals block");
 
-  // Each numbered window, then its command, in that order and interleaved — not
-  // three windows followed by three commands.
-  const order = [...block.matchAll(/tm-n[^>]*>(\d|&#10003;)<|class="copyblock/g)].map((m) => m[1] || "cmd");
+  // Each numbered window, then its commands, in that order and interleaved — not
+  // three windows followed by three commands. A window may have more than one
+  // (window 1 pulls, then starts the stack), so consecutive commands count as one.
+  const order = [...block.matchAll(/tm-n[^>]*>(\d|&#10003;)<|class="copyblock/g)]
+    .map((m) => m[1] || "cmd")
+    .filter((x, i, a) => !(x === "cmd" && a[i - 1] === "cmd"));
   ok(
     JSON.stringify(order) === JSON.stringify(["1", "cmd", "2", "cmd", "3", "cmd", "&#10003;", "cmd"]),
-    `each window must be immediately followed by its own command; got ${JSON.stringify(order)}`
+    `each window must be immediately followed by its own commands; got ${JSON.stringify(order)}`
+  );
+
+  // The pull comes first. A compose change only reaches the container when up.sh
+  // recreates it, so pulling after up.sh starts the day on yesterday's container.
+  const pull = block.indexOf("<pre>git pull</pre>");
+  ok(
+    pull > -1 && pull < block.indexOf("<pre>./workshop/up.sh</pre>"),
+    "window 1 must pull workshop-example BEFORE ./workshop/up.sh"
   );
 
   // Terminal 3 lands the reader in Claude, in ONE command. It was two lines —
@@ -1952,6 +1963,13 @@ test("an activity page asks nothing of a reader who is keeping up", null, () => 
     // the first thing the room reads, and phrased as a question, so the one person
     // it is for recognises themselves in it.
     const detail = html.match(/<details class="trouble compact"[^>]*>[\s\S]*?<\/details>/);
+    // A pen-and-paper activity has no code to fall behind on, so no catch-up.
+    const noCode = /<span>no code — pen and paper<\/span>/.test(html);
+    if (noCode) {
+      ok(!detail, `${f} changes no code, so a catch-up jump has nothing to catch up to`);
+      ok(!/produces <b>cp-/.test(html), `${f} changes no code, so it must not claim to produce a checkpoint`);
+      continue;
+    }
     ok(detail, `${f} has no catch-up block — a reader who fell behind has no way back to the room's code`);
     ok(
       !/<details class="trouble compact" open/.test(html),
@@ -1969,8 +1987,15 @@ test("an activity page asks nothing of a reader who is keeping up", null, () => 
     // The cheat sheet is the other direction - skipping AHEAD past an activity you
     // ran out of time on - and that is a different command to a different rung.
     const outsideCheat = withoutCatchUp.replace(/<details class="cheat">[\s\S]*?<\/details>/, "");
+    // One exception: `--fresh` back to the rung the activity STARTS from is a reset,
+    // not a jump - an activity that runs two attempts can have everyone park the
+    // first so the second starts from the same code. Parking is the point there.
+    const startRung = (html.match(/start from <b>cp-0?(\d+)<\/b>/) || [])[1];
+    const jumps = [...outsideCheat.matchAll(/checkpoint\.sh (\d+)( --fresh)?/g)].filter(
+      (m) => !(m[2] && m[1] === startRung)
+    );
     ok(
-      !/checkpoint\.sh \d/.test(outsideCheat),
+      jumps.length === 0,
       `${f} offers a checkpoint jump outside the catch-up — most of the room is already on that rung, and running it parks their work`
     );
 
