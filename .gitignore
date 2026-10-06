@@ -1,7 +1,10 @@
 .env
 .verify-logs/
 verify-report.txt
-screenshots/*.png
+# Everything the agent's browser writes there - screenshots, and also the console
+# logs (.log) and page snapshots (.yml) Playwright MCP saves alongside them.
+screenshots/*
+!screenshots/.gitkeep
 node_modules/
 .DS_Store
 

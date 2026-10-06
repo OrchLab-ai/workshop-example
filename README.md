@@ -383,7 +383,7 @@ invalidate a checkpoint.
 | `cp-00` | Clean clone, environment verified ← **you are here** |
 | `cp-01` | Warm-up challenge complete |
 | `cp-02` | Playwright sight wired up |
-| `cp-03` | Micro/mega-prompt Mission Updates |
+| `cp-03` | Same code as `cp-02` (Blog Engine is pen and paper) |
 | `cp-04` | `mission-updates.spec.md` written |
 | `cp-05` | Your own brand written and applied to the app |
 | `cp-06` | Spec-driven Mission Updates built, in your brand |

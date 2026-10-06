@@ -623,7 +623,7 @@ nav.pager a:hover { background: var(--surface); }
   <span class="actnum">ACTIVITY 05</span>
   <p class="eyebrow">Part 2 — Prompt Engineering</p>
   <h1>Create the Spec</h1>
-  <p class="lede">Write <code>mission-updates.spec.md</code> — role, context, standards, acceptance criteria — then build from it and compare.</p>
+  <p class="lede">Write <code>mission-updates.spec.md</code> — role, context, standards, acceptance criteria — then build from it, and hold the result up against what you wrote for the Blog Engine.</p>
 
   <div class="cp">
     <span>start from <b>cp-03</b></span>
@@ -647,6 +647,7 @@ nav.pager a:hover { background: var(--surface); }
 </details>
 
   <h2>Prompts — copy, don't retype</h2>
+  <p>You can use this template if you like.</p>
   <div class="copyblock is-prompt in-claude">
     <div class="cb-head"><span>Spec skeleton — fill this in</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
     <pre># Mission Updates — Specification
@@ -684,7 +685,7 @@ You are a senior full-stack engineer working in this codebase.
   </div>
 
   <h2>You are done when</h2>
-  <div class="success">The difference between this and the mega-prompt is visible without being told what to look for.</div>
+  <div class="success">The spec answers the questions your Blog Engine note left open, and what got built is the feature you specified — not one the agent guessed.</div>
 
   <details class="cheat">
     <summary>Stuck? Open this</summary>
@@ -697,7 +698,7 @@ You are a senior full-stack engineer working in this codebase.
 
 
   <nav class="pager">
-    <a href="04-mission-updates-by-prompt.html">&larr; Mission Updates, by Prompt</a>
+    <a href="04-blog-engine.html">&larr; Blog Engine</a>
     <a href="06-brand-your-app.html">Brand Your Mission Updates &rarr;</a>
   </nav>
 </div>

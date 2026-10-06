@@ -548,8 +548,19 @@ const TERMINALS = {
       where: "host",
       title: "The host terminal",
       body:
-        "A {shell} window in your <code>workshop-example</code> folder — the only one of the three that is <em>not</em> inside the container. Only two kinds of command run here: <code>docker</code> and <code>./checkpoint.sh</code>. Nothing you type here touches the app.",
+        "A {shell} window in your <code>workshop-example</code> folder — the only one of the three that is <em>not</em> inside the container. Only a few commands run here: <code>git pull</code> for this folder, <code>docker</code> and <code>./checkpoint.sh</code>. Nothing you type here touches the app.",
       commands: [
+        {
+          // FIRST, every morning: fixes to the workshop itself (the guide, checkpoint.sh,
+          // the scripts that start the container) land on main right up to the day, and
+          // most people set up days before. Pulling BEFORE up.sh matters: a change to the
+          // compose file only reaches a container when `up -d` recreates it, and up.sh
+          // is what runs that. This pulls workshop-example only - the app moves by
+          // ./checkpoint.sh, never by a pull.
+          label: "Get the latest workshop fixes",
+          code: "git pull",
+          where: "host",
+        },
         {
           // Not a bare `docker compose up -d`. That reports the CONTAINER started -
           // true within seconds - and returns, while the app inside is still minutes
@@ -815,11 +826,6 @@ const activities = [
       "Your container already has Playwright. The skill is asking the agent to use it — to capture the page <em>before</em> it builds, then prove with a second screenshot that the thing it claims to have built is actually on screen.",
     commands: [
       {
-        label: "Confirm the agent has a browser to drive",
-        code: "claude mcp list",
-        where: "container",
-      },
-      {
         label: "Screenshots it takes land here, on your machine",
         after: true,
         code: "screenshots/",
@@ -850,38 +856,32 @@ const activities = [
     ],
   },
   {
-    slug: "mission-updates-by-prompt",
-    title: "Mission Updates, by Prompt",
-    intent: "I want to see how far a plain prompt gets me",
+    // PEN AND PAPER, NO CODE. This slot used to build Mission Updates twice, from a
+    // one-line prompt and a long one - the same lesson as the slides' Blog Engine
+    // exercise, at twenty-plus minutes, a mid-activity reset and a deliberately
+    // mediocre feature to throw away. The slides' version makes the point in five
+    // minutes and leads straight into specifying Mission Updates, "the blog feature
+    // inside the app". Kept as activity 04 so no number after it moves, and cp-03 is
+    // kept as a rung on the same commit as cp-02 so no tag moves either.
+    slug: "blog-engine",
+    title: "Blog Engine",
+    noCode: true,
+    intent: "I want to see how much one sentence leaves open",
     part: "Part 2 — Prompt Engineering",
     from: "cp-02",
     to: "cp-03",
     summary:
-      "Build Mission Updates twice — once from a one-line prompt, once from a long one. This is the baseline everything later is measured against.",
-    commands: [
-      {
-        label: "Look at what it built — the site reloads as files change",
-        after: true,
-        code: "http://localhost:5173",
-        where: "browser",
-      },
-    ],
-    prompts: [
-      {
-        label: "The micro-prompt — use exactly this, resist improving it",
-        text: "Add Mission Updates to the app.",
-      },
-      {
-        label: "The mega-prompt — starting point, make it yours",
-        text: "Add a Mission Updates feature to the app. Campaign owners should be able to post updates to their campaign, and backers should be able to read them on the campaign page. Updates need a title, a body, and a timestamp. Only the campaign owner can post. Show the most recent updates first. Add API endpoints for creating and listing updates, a database migration, React components for the campaign page, and tests for all of it. Follow the existing patterns in the campaigns feature folder.",
-      },
-    ],
+      "Five minutes, pen and paper, no code. Write down what you would expect if somebody asked you to “build a Blog engine” — then find out how differently the people around you read the same five words.",
+    exercise: {
+      label: "Five minutes, pen and paper",
+      steps: [
+        "Write down what you would expect if asked to <strong>“build a Blog engine”</strong>. Be as detailed or as brief as you naturally would. Don't ask for clarification — the ambiguity is the point.",
+        "Compare with the people around you: <strong>volume of detail</strong> — how much did you write? <strong>Level of detail</strong> — how specific were the requirements? <strong>Divergence</strong> — how different are your interpretations?",
+        "Keep what you wrote. Mission Updates is a blog inside this app, and next you specify it properly — then see how close your note would have landed.",
+      ],
+    },
     success:
-      "Two working-ish attempts and a clear sense of what neither prompt managed to pin down.",
-    cheat: [
-      "<code>./checkpoint.sh 3</code> has both attempts already made.",
-      "Do not polish these. They are meant to be mediocre — that is the point of the comparison later.",
-    ],
+      "A page of your own expectations, and the discovery that the person next to you expected something different from the same five words.",
   },
   {
     slug: "create-the-spec",
@@ -891,7 +891,7 @@ const activities = [
     from: "cp-03",
     to: "cp-04",
     summary:
-      "Write <code>mission-updates.spec.md</code> — role, context, standards, acceptance criteria — then build from it and compare.",
+      "Write <code>mission-updates.spec.md</code> — role, context, standards, acceptance criteria — then build from it, and hold the result up against what you wrote for the Blog Engine.",
     commands: [
       {
         label: "The spec you are writing lives here",
@@ -900,6 +900,7 @@ const activities = [
         where: "container",
       },
     ],
+    promptsNote: "You can use this template if you like.",
     prompts: [
       {
         label: "Spec skeleton — fill this in",
@@ -929,7 +930,7 @@ You are a senior full-stack engineer working in this codebase.
       { label: "Then build from it", text: "Read mission-updates.spec.md and implement it exactly. Check your work against the acceptance criteria before you tell me it's done." },
     ],
     success:
-      "The difference between this and the mega-prompt is visible without being told what to look for.",
+      "The spec answers the questions your Blog Engine note left open, and what got built is the feature you specified — not one the agent guessed.",
     cheat: [
       "<code>./checkpoint.sh 4</code> has a worked spec if you would rather read a good one than write your first one.",
       "Reading a strong spec before writing your own is a legitimate way to learn this — take it if you are short on time.",
@@ -948,18 +949,18 @@ You are a senior full-stack engineer working in this codebase.
       {
         label: "Your brand, and the tokens generated from it",
         after: true,
-        code: "specs/standards/brand.md\npackages/client/src/tokens.css",
+        code: "specs/standards/brand.md\npackages/client/src/tokens.css\npackages/client/src/fonts.css",
         where: "container",
       },
     ],
     prompts: [
       {
         label: "1. Let it interview you",
-        text: "Interview me to produce brand guidelines for this product. Ask me about the audience, what I want them to feel, the voice and tone, and what I am not willing to look like. Ask one question at a time and push back if my answers are vague. When we're done, write the result to specs/standards/brand.md.",
+        text: "Conduct a socratic interview with at least 5 questions. The goal is to produce brand guidelines for this product that we can turn into design tokens. Start from a blank page and treat this as a rebrand. Ask me about the audience and what I want them to feel, then spend most of the questions on the visual identity: colour palette, typography, and what I am not willing for the site to look like. Ask one question at a time and push back if my answers are vague. When we're done, write the result to specs/standards/brand.md, including concrete colour values and font choices.",
       },
       {
         label: "2. Make the app wear it",
-        text: "Read specs/standards/brand.md and regenerate packages/client/src/tokens.css from it. Change only the Tier 1 identity tokens — the semantic tokens and the components must not be edited. Then use Playwright to screenshot the campaign page so I can see the result.",
+        text: "Read specs/standards/brand.md and regenerate packages/client/src/tokens.css from it. Change only the Tier 1 identity tokens — the semantic tokens and the components must not be edited. If the brand changes the fonts, load them the way specs/tech/frontend.md section 9.1 describes: self-hosted WOFF2 files in packages/client/src/assets/fonts/, @font-face rules in packages/client/src/fonts.css, and the preload in packages/client/index.html. Remove the font files that are no longer used, and update the font table in that section to match. Then use Playwright to screenshot the proposal page so I can see the result.",
       },
     ],
     success:
@@ -978,8 +979,13 @@ You are a senior full-stack engineer working in this codebase.
     from: "cp-05",
     to: "cp-06",
     summary:
-      "Spec plus brand, through a Socratic interview, all the way to working code — and it renders in your colours.",
+      "Spec plus brand, through the <code>/ol-spec-writer</code> skill's Socratic interview, all the way to working code — and it renders in your colours.",
     commands: [
+      {
+        label: "Read the skill before you run it",
+        code: "cat .claude/skills/ol-spec-writer/SKILL.md",
+        where: "container",
+      },
       {
         label: "Prove it works before you believe it",
         after: true,
@@ -987,10 +993,16 @@ You are a senior full-stack engineer working in this codebase.
         where: "container",
       },
     ],
+    promptsNote:
+      "This time you do not write the interview prompt. It is already in the repo as a skill, <code>.claude/skills/ol-spec-writer/SKILL.md</code>. Read it before you run it: it is the prompt you are about to delegate to.",
     prompts: [
       {
-        label: "The Socratic build",
-        text: "Read mission-updates.spec.md and specs/standards/brand.md. Before writing any code, interview me about what the spec leaves ambiguous — the existing campaign routes, the database schema, API conventions, backward compatibility. Ask one question at a time. Then produce a brief, turn the brief into explicit tasks, and only then write the code. Run the tests when you're done.",
+        label: "1. Let the skill interview you, and write the spec",
+        text: "/ol-spec-writer 5 Mission Updates. Start from specs/mission-updates.spec.md and specs/standards/brand.md, and interview me about what they leave ambiguous: the existing proposal routes, the database schema, API conventions, backward compatibility.",
+      },
+      {
+        label: "2. Brief, tasks, then code",
+        text: "Read the updated specs/mission-updates.spec.md. Turn it into a short brief, then a numbered list of explicit tasks grounded in our standards. Show me the tasks before writing any code. Then implement them one at a time, and run ./scripts/ci-check.sh when you're done.",
       },
     ],
     success: "Mission Updates works, tests pass, and it looks like yours.",
