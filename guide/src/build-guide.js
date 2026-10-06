@@ -80,6 +80,8 @@ const CSS = `
   --amber:       #7a5200;
   --blue:        #1f5fa8;  /* 6.4:1 on white */
   --danger:      #a02e1a;  /* red — 7.2:1 on white */
+  --warn-bg:     #fff4c2;  /* .warning: a yellow you can see across a room */
+  --warn-edge:   #e0a800;
 }
 /* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
    whatever the operating system says — this is read on projectors and over
@@ -100,6 +102,8 @@ const CSS = `
   --amber:       #ffbd2e;
   --blue:        #6cb4ff;
   --danger:      #ff9580;
+  --warn-bg:     #3d3415;
+  --warn-edge:   #ffbd2e;
 }
 :root {
   /* Constant in both themes */
@@ -247,6 +251,15 @@ li { margin: 8px 0; }
   border: 1px solid var(--border); border-radius: 0 0 6px 6px;
 }
 .checkblock li .copyblock { margin: 8px 0 4px; }
+/* Where a lettered checkpoint lands, between two steps: a rule with the tag on it. */
+.checkblock .rung {
+  display: flex; align-items: center; gap: 10px; margin: 14px 0;
+  color: var(--muted); font-size: 13px;
+}
+.checkblock .rung::before, .checkblock .rung::after {
+  content: ""; flex: 1; border-top: 1px dashed var(--border);
+}
+.checkblock .rung b { color: var(--accent); }
 
 /* link list */
 .links { list-style: none; padding: 0; margin: 0; }
@@ -536,6 +549,15 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 0 0 12px;
   font-size: 14.5px;
 }
+/* A guard against the one mistake an activity invites - louder than a .note, which
+   is information. Activity 05's: pasting the finished spec into Claude starts a
+   build two activities early. */
+.warning {
+  border: 1px solid var(--warn-edge); border-left-width: 4px; border-radius: 0 6px 6px 0;
+  background: var(--warn-bg);
+  padding: 12px 16px; margin: 0 0 16px; color: var(--strong); font-size: 14.5px;
+}
+.warning strong { color: var(--strong); }
 
 /* "Which window do I type this into, and from where?" is the most common thing a
    first-timer gets wrong, and a list of copyable commands answers neither half of
@@ -575,6 +597,7 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .in-container { --win: var(--accent); }
 .in-claude    { --win: #d97757; }
 .in-browser   { --win: var(--blue); }
+.in-editor    { --win: var(--brand); }
 .copyblock[class*=" in-"], .checkblock[class*=" in-"] {
   border: 2px solid var(--win); border-radius: 8px;
 }
@@ -590,6 +613,12 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 /* Not a terminal at all. A URL badged "host terminal" read as a command to type into
    one, so it gets a colour none of the three windows use. */
 .loc.browser   { background: var(--blue);   color: var(--bg); }
+/* Your own writing - a file to fill in, or a note: the light OrchLab green, frame and header both, so it
+   cannot be mistaken for the orange-framed prompts around it. */
+.loc.editor    { background: var(--brand);  color: var(--on-brand); }
+.copyblock.in-editor .cb-head, .checkblock.in-editor .cb-head {
+  background: color-mix(in srgb, var(--brand) 22%, var(--bg));
+}
 /* The same badge inside a sentence: "Back in the WORK TERMINAL, press Ctrl+C". Prose
    names a window with this rather than bold text, so the word on the page looks
    exactly like the label on the block it refers to. */
@@ -942,6 +971,14 @@ const LOCATIONS = {
     text: "claude terminal",
     tip: "Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.",
   },
+  // Your own writing, not a command: Activity 04's note and Activity 05's spec
+  // template. Badged "claude terminal" the template read as a prompt, and pasting it
+  // starts a build two activities early.
+  editor: {
+    cls: "editor",
+    text: "text editor",
+    tip: "Not a terminal. Your own editor, on your machine — <code>app/</code> in your <code>workshop-example</code> folder is the same folder the container sees.",
+  },
   browser: {
     cls: "browser",
     text: "your browser",
@@ -980,17 +1017,33 @@ function copyBlock(label, body, isPrompt, where) {
 // A check that is something to LOOK at rather than something to run: numbered steps
 // under the same badged header a copy block has. A step that needs a command carries
 // it as { text, code }, and the command renders INSIDE that step - a list of steps
-// with the commands collected underneath left the reader matching them up.
-function checkBlock(c) {
+// with the commands collected underneath left the reader matching them up. A step
+// with prompt: true frames its code as a prompt, so an activity whose prompts and
+// commands alternate (build, run, look, restrict, run again) reads in one order.
+function checkBlock(c, rungs) {
+  rungs = Array.isArray(rungs) ? rungs : []; // also called from .map(), which passes an index
   const loc = c.where ? LOCATIONS[c.where] : null;
   const step = s =>
     typeof s === "string"
       ? `      <li>${s}</li>`
-      : `      <li>${s.text}\n${copyBlock(s.label || "", s.code, false, s.where || c.where)}\n      </li>`;
+      : `      <li>${s.text}\n${copyBlock(s.label || "", s.code, !!s.prompt, s.where || c.where)}\n      </li>`;
   return `  <div class="checkblock${loc ? ` in-${loc.cls}` : ""}">
     <div class="cb-head"><span>${esc(c.label)}</span>${loc ? badge(c.where) : ""}</div>
     <ol>
-${c.steps.map(step).join("\n")}
+${c.steps
+  .map((s, i) => {
+    // A rung that starts at step N splits the list just before it, and the list
+    // carries on numbering from N, so the steps keep their numbers. The tag only: the
+    // command stays in the catch-up, where only someone who fell behind reaches for it.
+    const r = rungs.find(m => m.step === i + 1);
+    return r
+      ? `    </ol>
+    <div class="rung"><span>checkpoint <b>${esc(r.tag)}</b> starts here</span></div>
+    <ol start="${i + 1}">
+${step(s)}`
+      : step(s);
+  })
+  .join("\n")}
     </ol>
   </div>`;
 }
@@ -1025,12 +1078,18 @@ ${inlineBadges(body)}
 // the order of the array in activities.js. The same number is printed on the
 // deck's ACTIVITY eyebrow, so "we're on activity four" resolves to exactly one
 // card here. Keep the two in step if the running order ever changes.
-const actNum = i => String(i + 1).padStart(2, "0");
+// The team activity sits in the running order but takes no number - the deck calls it
+// TEAM ACTIVITY, not ACTIVITY 03 - so numbers count the numbered activities only, and
+// adding it moved nothing after it.
+const numberOf = new Map(
+  activities.filter(a => !a.team).map((a, n) => [a, String(n + 1).padStart(2, "0")])
+);
+const actNum = a => numberOf.get(a);
 // What the reader SEES as the number, which is not always the file's. The environment
 // check and the morning start are two halves of activity 01 in the deck - 01a once
 // ever, 01b every day - so they are numbered as a pair, and the next activity is
 // still 02. File names keep actNum: renaming files breaks every link already sent out.
-const shownNum = (a, i) => (a.platformSetup ? `${actNum(i)}a` : actNum(i));
+const shownNum = a => (a.team ? "TEAM" : a.platformSetup ? `${actNum(a)}a` : actNum(a));
 // start-your-day.html is not an activity, but it is card 01b and it says so.
 const DAILY_NUM = "01b";
 
@@ -1039,7 +1098,7 @@ const DAILY_NUM = "01b";
 // was being generated twice: once as an activity page and once standalone, from the
 // same PLATFORMS data, with a different half of the content on each. Attendees hit
 // whichever one they happened to be linked to and got a different story. One file.
-const fileFor = (a, i) => a.page || `${actNum(i)}-${a.slug}.html`;
+const fileFor = a => a.page || `${actNum(a)}-${a.slug}.html`;
 
 // Both label spans are always in the markup; CSS shows the right one, so the
 // button reads correctly on first paint and without JavaScript running at all.
@@ -1313,8 +1372,8 @@ const dailyCard = `      <a class="card" href="${FROM_ROOT.daily}">
 
 const cards = activities
   .map(
-    (a, i) => `      <a class="card" href="${FROM_ROOT.page(fileFor(a, i))}${a.platformSetup ? "?ask" : ""}">
-        <span class="num">${shownNum(a, i)}</span>
+    (a, i) => `      <a class="card" href="${FROM_ROOT.page(fileFor(a))}${a.platformSetup ? "?ask" : ""}">
+        <span class="num">${shownNum(a)}</span>
         <span class="want">${esc(a.intent)}</span>
         <span class="meta">${esc(a.title)} &middot; ${esc(a.part)}${
       a.to && !a.noCode ? ` &middot; <span class="tag">${esc(a.to)}</span>` : ""
@@ -1395,17 +1454,42 @@ ${copyBlock(TERMINALS.after.command.label, TERMINALS.after.command.code, false, 
 // cp-04 -> `./checkpoint.sh 4`. Derived rather than written down a second time: the
 // activity already declares which checkpoint it starts from, and a hand-written
 // command beside it is a second copy waiting to drift.
+// The lettered rungs inside an activity (cp-08a, cp-08b, cp-08c), read from the manifest -
+// the single source of truth checkpoint.sh also reads - so a rung added there shows
+// up here with no second copy to keep in step. Each becomes "./checkpoint.sh 8a".
+const MANIFEST_ROWS = fs
+  .readFileSync(path.join(__dirname, "..", "..", "checkpoints", "manifest.txt"), "utf8")
+  .split("\n")
+  .filter(l => /^cp-/.test(l))
+  .map(l => l.split("|").map(c => c.trim()))
+  .map(([tag, title, , next]) => ({ tag, title, next }));
+const midRungs = a =>
+  MANIFEST_ROWS.filter(r => a.to && new RegExp(`^${a.to}[a-z]$`).test(r.tag)).map(r => ({
+    ...r,
+    jump: r.tag.replace(/^cp-0?/, ""),
+    // "Activity 08, step 2 — Run it" -> "step 2 — Run it"
+    where: r.next.replace(/^Activity \d+, /, ""),
+    step: Number((r.next.match(/step (\d+)/) || [])[1]),
+  }));
+
 const catchUpBlock = a => {
   if (!a.from || a.noCode) return "";
   const rung = Number(a.from.replace("cp-", ""));
   if (!Number.isInteger(rung)) throw new Error(`${a.slug}: cannot read a rung out of from: "${a.from}"`);
+  const mids = midRungs(a);
   return `  <details class="trouble compact">
-  <summary>${esc(CATCH_UP.summary)}
+  <summary>${esc(mids.length ? CATCH_UP.summaryWithRungs : CATCH_UP.summary)}
     <span class="cta">${esc(CATCH_UP.cta)}</span>
   </summary>
   <div class="tr-body">
     <p>${CATCH_UP.body}</p>
-${copyBlock(CATCH_UP.label, `./checkpoint.sh ${rung}`, false, CATCH_UP.where)}
+${copyBlock(CATCH_UP.label, `./checkpoint.sh ${rung}`, false, CATCH_UP.where)}${
+    mids.length
+      ? `
+    <p>${CATCH_UP.rungsBody}</p>
+${mids.map(m => copyBlock(`${m.title}: start at ${m.where}`, `./checkpoint.sh ${m.jump}`, false, CATCH_UP.where)).join("\n")}`
+      : ""
+  }
   </div>
 </details>
 `;
@@ -1517,15 +1601,17 @@ activities.forEach((a, i) => {
   const prev = i > 0 ? activities[i - 1] : null;
   const next = i < activities.length - 1 ? activities[i + 1] : null;
 
-  // noCode: an activity that changes nothing in app/ (Blog Engine is pen and paper).
-  // Its rungs stay in the data so the ladder reads straight through, but telling the
-  // room it "produces cp-03" - or offering a catch-up jump - describes code that does
-  // not exist.
+  // noCode: an activity that changes nothing in app/ - Blog Engine is pen and paper,
+  // the team activity is in the room. Telling the room it "produces cp-04" - or
+  // offering a catch-up jump - describes code that does not exist.
   const cp = a.noCode
-    ? [`<span>no code — pen and paper</span>`]
+    ? [`<span>${esc(a.noCodeNote || "no code — pen and paper")}</span>`]
     : [
     a.from ? `<span>start from <b>${esc(a.from)}</b></span>` : `<span>start of the day</span>`,
-    a.to ? `<span>produces <b>${esc(a.to)}</b></span>` : `<span>final activity</span>`,
+    // A long activity produces its lettered rungs on the way: cp-08a → cp-08b → cp-08c → cp-08.
+    a.to
+      ? `<span>produces ${[...midRungs(a).map(m => m.tag), a.to].map(t => `<b>${esc(t)}</b>`).join(" &rarr; ")}</span>`
+      : `<span>final activity</span>`,
     // The catch-up command is NOT repeated here. This strip is read by everybody, and
     // running it is right for one person in the room - see catchUpBlock, immediately
     // below, which says so in the one place the reader it is for will look.
@@ -1568,7 +1654,7 @@ activities.forEach((a, i) => {
   // The bar is filled in at the end, once there is a page to ask about - see below.
   const body = `${siteHeader("← ALL ACTIVITIES", FROM_PAGES)}
 ${a.platformSetup ? "" : "<!--PATHBAR-->"}
-  <span class="actnum">ACTIVITY ${shownNum(a, i)}</span>
+  <span class="actnum">${a.team ? "TEAM ACTIVITY" : `ACTIVITY ${shownNum(a)}`}</span>
   <p class="eyebrow">${esc(a.part)}</p>
   <h1>${esc(a.title)}</h1>
   <p class="lede">${a.summary}</p>
@@ -1633,13 +1719,17 @@ ${
       )
     : ""
 }
-` : ""}${section("Commands", cmds.before)}${a.exercise ? section("The exercise", [checkBlock(a.exercise)]) : ""}${section("See it before you change it", baseline)}${a.note ? `  <div class="note">${a.note}</div>
+` : ""}${section("Commands", cmds.before)}${a.exercise ? section("The exercise", [checkBlock(a.exercise, midRungs(a))]) : ""}${section("See it before you change it", baseline)}${a.note ? `  <div class="note">${a.note}</div>
 ` : ""}${section(
-    "Prompts — copy, don't retype",
+    a.promptsHeading || "Prompts — copy, don't retype",
     (a.prompts || []).length
       ? [
           ...(a.promptsNote ? [`  <p>${a.promptsNote}</p>`] : []),
-          ...a.prompts.map(p => copyBlock(p.label, p.text, true, "claude")),
+          // A template is filled in by hand, so it is not framed as a prompt.
+          ...a.prompts.map(p =>
+            copyBlock(p.label, p.text, !p.template, p.template ? "editor" : "claude")
+          ),
+          ...(a.warning ? [`  <div class="warning" role="note">${a.warning}</div>`] : []),
         ]
       : []
   )}${section("Check your work", [...cmds.after, ...(a.checks || []).map(checkBlock)])}${section("Links", (a.links || []).map(l => copyBlock(l.label, l.url, false)))}
@@ -1664,7 +1754,7 @@ ${a.platformSetup ? "  </div>" : ""}
       prev && prev.platformSetup
         ? `<a href="${FROM_PAGES.daily}">&larr; Start your day</a>`
         : prev
-        ? `<a href="${fileFor(prev, i - 1)}">&larr; ${esc(prev.title)}</a>`
+        ? `<a href="${fileFor(prev)}">&larr; ${esc(prev.title)}</a>`
         // This page is also the pre-workshop setup instructions, reached directly from
         // a link in the invite rather than by paging through. A dead "Back" span is the
         // wrong end for it; the standalone page it replaced linked to the index.
@@ -1676,7 +1766,7 @@ ${a.platformSetup ? "  </div>" : ""}
       a.platformSetup
         ? `<a href="${FROM_PAGES.daily}">Start your day &rarr;</a>`
         : next
-          ? `<a href="${fileFor(next, i + 1)}">${esc(next.title)} &rarr;</a>`
+          ? `<a href="${fileFor(next)}">${esc(next.title)} &rarr;</a>`
           : `<span>Next &rarr;</span>`
     }
   </nav>`;
@@ -1693,7 +1783,7 @@ ${a.platformSetup ? "  </div>" : ""}
   const out = gated
     ? body.replace("<!--PATHBAR-->", platformStrip())
     : body.replace("<!--PATHBAR-->", "").replace("<div data-needs-pathway>", "<div>");
-  fs.writeFileSync(path.join(PAGES, fileFor(a, i)), page({ title: a.title, body: out }));
+  fs.writeFileSync(path.join(PAGES, fileFor(a)), page({ title: a.title, body: out }));
 });
 
 console.log(

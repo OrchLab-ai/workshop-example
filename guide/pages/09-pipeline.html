@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Coding Challenges — OrchLab Workshop Guide</title>
+<title>Plan → Do as a Pipeline — OrchLab Workshop Guide</title>
 <script>
 (function () {
   try {
@@ -649,119 +649,123 @@ nav.pager a:hover { background: var(--surface); }
     ><span class="to-dark">☀ LIGHT</span><span class="to-light">☾ DARK</span></button>
   </header>
 
-  <span class="actnum">ACTIVITY 02</span>
-  <p class="eyebrow">Part 1 — AI Coding</p>
-  <h1>Coding Challenges</h1>
-  <p class="lede">Pick one of two cross-cutting changes that would take half a day by hand. Twenty minutes with an agent that can see the whole repo.</p>
+  <span class="actnum">ACTIVITY 09</span>
+  <p class="eyebrow">Part 3 — Orchestration</p>
+  <h1>Plan → Do as a Pipeline</h1>
+  <p class="lede">Split the harness into a planner that can only read and a coder that can only do what the plan says, make it fail closed, then hand it your v2 spec. It writes its own brief and tasks, builds Mission Updates, and the gate decides. Then you merge it.</p>
 
   <div class="cp">
-    <span>start from <b>cp-01</b></span>
-    <span>produces <b>cp-02</b></span>
+    <span>start from <b>cp-08</b></span>
+    <span>produces <b>cp-09a</b> &rarr; <b>cp-09</b></span>
   </div>
 
 
 
   <div>
   <details class="trouble compact">
-  <summary>Didn't finish the last activity?
+  <summary>Didn't finish the last activity, or stuck part-way through this one?
     <span class="cta">Click here to catch up</span>
   </summary>
   <div class="tr-body">
     <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
   <div class="copyblock in-host">
     <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>./checkpoint.sh 1</pre>
+    <pre>./checkpoint.sh 8</pre>
+  </div>
+    <p>Stuck part-way through this one? It has checkpoints inside it too. Each parks your work the same way and puts you at the start of the step it names, with everything before that step done.</p>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Pipeline built, fails closed: start at step 5 — Run the pipeline on your spec</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <pre>./checkpoint.sh 9a</pre>
   </div>
   </div>
 </details>
 
-  <h2>See it before you change it</h2>
-  <div class="checkblock in-browser">
-    <div class="cb-head"><span>Challenge 1 — in the browser</span><span class="loc browser" tabindex="0">your browser<span class="tip" role="tooltip">Not a terminal. Open this in your web browser.</span></span></div>
+  <h2>The exercise</h2>
+  <div class="checkblock">
+    <div class="cb-head"><span>Plan, build, merge</span></div>
     <ol>
-      <li>Click <strong>Explore Missions</strong>. The address bar ends in <code>/campaigns</code>.</li>
-      <li>Log in as <strong>Demo Creator</strong> and open <strong>Dashboard</strong>. The button reads <strong>+ New Campaign</strong>.</li>
-    </ol>
-  </div>
-  <div class="checkblock in-container">
-    <div class="cb-head"><span>Challenge 2 — read the API's logs</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span></div>
-    <ol>
-      <li>Start following the API's log. It keeps running and prints each new line as it arrives:
-  <div class="copyblock in-container">
-    <div class="cb-head"><span></span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>tail -f /workspace/logs/server.log</pre>
-  </div>
-      </li>
-      <li>Click around the app in <span class="loc browser inline" tabindex="0">your browser<span class="tip" role="tooltip">Not a terminal. Open this in your web browser.</span></span>. Each request prints a block several lines long, formatted for a person to read — not one line of JSON that a log tool could parse.</li>
-      <li>Back in the <span class="loc container inline" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span>, press <strong>Ctrl+C</strong> to stop following the log.</li>
-    </ol>
-  </div>
-
-  <h2>Prompts — copy, don't retype</h2>
+      <li>Add a planning stage in front of the coding stage. Different roles get different permissions.
   <div class="copyblock is-prompt in-claude">
-    <div class="cb-head"><span>Challenge 1 — Refactor-Rename</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Rename 'Campaign' to 'Proposal' across the entire codebase, including API endpoints, documentation, and database references. Update the tests to match and make sure they still pass.</pre>
-  </div>
-  <div class="copyblock is-prompt in-claude">
-    <div class="cb-head"><span>Challenge 2 — Observability</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Add structured JSON request logging using the existing pino logger. Each log line should include the method, path, status code, duration in milliseconds, and a correlation ID that follows the request through the system.</pre>
-  </div>
+    <div class="cb-head"><span>1. Build the pipeline</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
+    <pre>Add harness/pipeline.sh &lt;task-file&gt;, reusing run-task.sh rather than copying it.
 
-  <h2>Check your work</h2>
-  <div class="copyblock in-container">
-    <div class="cb-head"><span>Run the same gates CI runs, when you think you are done</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>./scripts/ci-check.sh</pre>
-  </div>
-  <div class="checkblock in-browser">
-    <div class="cb-head"><span>Challenge 1 — in the browser</span><span class="loc browser" tabindex="0">your browser<span class="tip" role="tooltip">Not a terminal. Open this in your web browser.</span></span></div>
-    <ol>
-      <li>Click <strong>Explore Missions</strong>. The address bar should now end in <code>/proposals</code>, not <code>/campaigns</code>.</li>
-      <li>Log in as <strong>Demo Creator</strong> and open <strong>Dashboard</strong>. The button should now read <strong>+ New Proposal</strong>.</li>
-    </ol>
-  </div>
-  <div class="checkblock in-container">
-    <div class="cb-head"><span>Challenge 2 — read the API's logs</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span></div>
-    <ol>
-      <li>Start following the API's log again:
-  <div class="copyblock in-container">
-    <div class="cb-head"><span></span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>tail -f /workspace/logs/server.log</pre>
+Stage 1, plan: claude -p with a read-only permissions file, harness/settings.plan.json (read and search files only: no edits, no shell), told: &quot;You are the planning stage. Do not change anything. Read the task and every spec it names. Output a plan as markdown: a short brief, then numbered tasks, each with the files it touches and the tests that must pass.&quot; The harness, not the agent, saves that output as plan.md in the run folder.
+
+Stage 2, code: claude -p with harness/settings.json and the plan as its whole prompt: &quot;Execute this plan exactly. If a step is wrong, stop and say so rather than improvising.&quot; Then the same gate as before. Print where each stage's output is.
+
+Also write harness/tasks/mission-updates.md, with a # Build Mission Updates heading: &quot;Build Mission Updates exactly as specs/mission-updates.v2.spec.md describes. The spec is the whole requirement. Where it is silent, follow the existing code; where you would have to guess something that matters, stop.&quot;</pre>
   </div>
       </li>
-      <li>Click around the app in <span class="loc browser inline" tabindex="0">your browser<span class="tip" role="tooltip">Not a terminal. Open this in your web browser.</span></span>. Every request should now add <strong>exactly one line of JSON</strong>, and that line should carry the method, the path, the status code, the duration in milliseconds and a correlation ID.</li>
-      <li>Back in the <span class="loc container inline" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span>, press <strong>Ctrl+C</strong> to stop following the log.</li>
-      <li>Send a request carrying a correlation ID you chose:
+      <li>Before you hand it anything real, see what one of this morning's skills does with nobody there. Run an interview skill headless and read what comes back.
   <div class="copyblock in-container">
-    <div class="cb-head"><span></span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>curl -s -o /dev/null -H 'x-correlation-id: my-test-123' http://localhost:3001/v1/auth/me</pre>
+    <div class="cb-head"><span>2. Run an interactive skill headless</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
+    <pre>claude -p &quot;/ol-socratic 3 how mission updates should be moderated&quot;</pre>
   </div>
       </li>
-      <li>Look for that ID in the log. If a line comes back, the ID followed the request through:
+      <li>It asks questions nobody will answer, or answers them itself. Neither is safe in a pipeline. Make it fail closed — and notice that the fix is a change to <code>CLAUDE.md</code>, which every run now reads.
+  <div class="copyblock is-prompt in-claude">
+    <div class="cb-head"><span>3. Fail closed</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
+    <pre>Add a short section to CLAUDE.md for agents running headless, with no human available: never ask a question. Either write your assumptions under an ASSUMPTIONS heading and carry on, or stop with a line starting BLOCKED: and the reason. Then make harness/pipeline.sh stop and print the reason if any stage's output contains BLOCKED:.</pre>
+  </div>
+      </li>
+      <li>Commit before you run. Each run's worktree is cut from your last commit, so an uncommitted <code>CLAUDE.md</code> is a rule the agent never sees.
   <div class="copyblock in-container">
-    <div class="cb-head"><span></span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>grep my-test-123 /workspace/logs/server.log</pre>
+    <div class="cb-head"><span>4. Commit the pipeline</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
+    <pre>git add harness CLAUDE.md &amp;&amp; git commit -m &quot;Harness: plan and code as separate stages; fail closed headless&quot;</pre>
   </div>
       </li>
     </ol>
+    <div class="rung"><span>checkpoint <b>cp-09a</b> starts here</span></div>
+    <ol start="5">
+      <li>Now the real thing: your v2 spec in, Mission Updates out. This is the biggest run of the day, so give it room — the turn cap and timeout are raised for this one. Expect it to take a while.
+  <div class="copyblock in-container">
+    <div class="cb-head"><span>5. Run the pipeline on your spec</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
+    <pre>MAX_TURNS=150 TIMEOUT_SECONDS=3600 ./harness/pipeline.sh harness/tasks/mission-updates.md</pre>
   </div>
+      </li>
+      <li>Read <code>plan.md</code> before you look at the code. Is that how you would have split the work? The coding stage only ever saw the plan — never your spec. If the run stopped with <code>BLOCKED:</code>, that is your spec's gap: settle it in v2, commit, and run again.
+  <div class="copyblock">
+    <div class="cb-head"><span></span><button type="button">Copy</button></div>
+    <pre>undefined</pre>
+  </div>
+      </li>
+      <li>If the gate passed, it is your call. Look at the change, take it, apply its migration to your running database, then run the end-to-end tests — the gate did not run those. Use the branch name the harness printed.
+  <div class="copyblock in-container">
+    <div class="cb-head"><span>6. Review it and merge it</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
+    <pre>git diff --stat HEAD...harness/&lt;id&gt;
+git merge --squash harness/&lt;id&gt; &amp;&amp; git commit -m &quot;Add Mission Updates (built by the harness from the v2 spec)&quot;
+dbmate --no-dump-schema -d packages/server/db/migrations up
+./scripts/run-e2e.sh</pre>
+  </div>
+      </li>
+      <li>Open a proposal page, sign in as its creator and post an update. Mission Updates, built by an agent nobody was watching, from a spec you wrote — in your colours.
+  <div class="copyblock in-browser">
+    <div class="cb-head"><span>7. See it</span><span class="loc browser" tabindex="0">your browser<span class="tip" role="tooltip">Not a terminal. Open this in your web browser.</span></span><button type="button">Copy</button></div>
+    <pre>http://localhost:5173/proposals</pre>
+  </div>
+      </li>
+    </ol>
+  </div>
+  <div class="note"><strong>Your spec is the whole brief now.</strong> <code>CLAUDE.md</code>, <code>specs/</code> and the skills in <code>.claude/skills/</code> are loaded by every <code>claude -p</code> the harness starts. With nobody watching they are configuration — and nobody is there to answer a question. Whatever your v2 spec left open, the agent either guesses or stops.</div>
 
   <h2>You are done when</h2>
-  <div class="success">The change is applied across every file it touches — including the ones you would have forgotten — and the tests still pass.</div>
+  <div class="success">Mission Updates is on your branch, built from your spec by a pipeline where each stage had only the permissions its role needed — and you read its plan and approved its work before it landed.</div>
 
   <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
-      <p>Twenty minutes is deliberately tight. If you run out, that is fine and expected.</p>
-      <p><code>./checkpoint.sh 2</code> lands you on the finished state so you start the next activity level with everyone else.</p>
-      <p>Your unfinished attempt is committed to a <code>wip/</code> branch first — nothing is thrown away.</p>
+      <p><code>./checkpoint.sh 9</code> gives you the pipeline and the finished feature, as this activity leaves them.</p>
+      <p>The planner having broad read access and the coder a narrow brief is the point. Do not merge them back together.</p>
+      <p>This whole build runs on Sonnet. That is the point of the spec: the more it decides, the less the model has to — so a complete spec lets a cheaper, faster model do the work.</p>
+      <p>A run that stops with <code>BLOCKED:</code> has done its job: it found something your spec did not decide. That is cheaper to fix in the spec than in the code.</p>
     </div>
   </details>
   </div>
 
 
   <nav class="pager">
-    <a href="start-your-day.html">&larr; Start your day</a>
-    <a href="team-activity.html">Trace the Request &rarr;</a>
+    <a href="08-headless-run.html">&larr; Your First Headless Run</a>
+    <a href="10-review-gate.html">The Review Gate &rarr;</a>
   </nav>
 </div>
 <script>

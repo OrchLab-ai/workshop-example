@@ -5,7 +5,7 @@
 # thing the workshop needs — not a simpler stand-in that passes when the real
 # container would fail.
 #
-# THE TAG MUST MATCH app/autonomous/Dockerfile, and it is not cosmetic. This base
+# THE TAG MUST MATCH workshop/container/Dockerfile, and it is not cosmetic. This base
 # layer is ~2 GB. When the two drifted (1.49.1 here, 1.58.2 there) an attendee
 # downloaded it TWICE: once the night before for a check that proved nothing about
 # the morning, and again at 09:05 when the workshop stack pulled the one it actually

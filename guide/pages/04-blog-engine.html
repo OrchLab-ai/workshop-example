@@ -32,6 +32,8 @@
   --amber:       #7a5200;
   --blue:        #1f5fa8;  /* 6.4:1 on white */
   --danger:      #a02e1a;  /* red — 7.2:1 on white */
+  --warn-bg:     #fff4c2;  /* .warning: a yellow you can see across a room */
+  --warn-edge:   #e0a800;
 }
 /* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
    whatever the operating system says — this is read on projectors and over
@@ -52,6 +54,8 @@
   --amber:       #ffbd2e;
   --blue:        #6cb4ff;
   --danger:      #ff9580;
+  --warn-bg:     #3d3415;
+  --warn-edge:   #ffbd2e;
 }
 :root {
   /* Constant in both themes */
@@ -199,6 +203,15 @@ li { margin: 8px 0; }
   border: 1px solid var(--border); border-radius: 0 0 6px 6px;
 }
 .checkblock li .copyblock { margin: 8px 0 4px; }
+/* Where a lettered checkpoint lands, between two steps: a rule with the tag on it. */
+.checkblock .rung {
+  display: flex; align-items: center; gap: 10px; margin: 14px 0;
+  color: var(--muted); font-size: 13px;
+}
+.checkblock .rung::before, .checkblock .rung::after {
+  content: ""; flex: 1; border-top: 1px dashed var(--border);
+}
+.checkblock .rung b { color: var(--accent); }
 
 /* link list */
 .links { list-style: none; padding: 0; margin: 0; }
@@ -488,6 +501,15 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 0 0 12px;
   font-size: 14.5px;
 }
+/* A guard against the one mistake an activity invites - louder than a .note, which
+   is information. Activity 05's: pasting the finished spec into Claude starts a
+   build two activities early. */
+.warning {
+  border: 1px solid var(--warn-edge); border-left-width: 4px; border-radius: 0 6px 6px 0;
+  background: var(--warn-bg);
+  padding: 12px 16px; margin: 0 0 16px; color: var(--strong); font-size: 14.5px;
+}
+.warning strong { color: var(--strong); }
 
 /* "Which window do I type this into, and from where?" is the most common thing a
    first-timer gets wrong, and a list of copyable commands answers neither half of
@@ -527,6 +549,7 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .in-container { --win: var(--accent); }
 .in-claude    { --win: #d97757; }
 .in-browser   { --win: var(--blue); }
+.in-editor    { --win: var(--brand); }
 .copyblock[class*=" in-"], .checkblock[class*=" in-"] {
   border: 2px solid var(--win); border-radius: 8px;
 }
@@ -542,6 +565,12 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 /* Not a terminal at all. A URL badged "host terminal" read as a command to type into
    one, so it gets a colour none of the three windows use. */
 .loc.browser   { background: var(--blue);   color: var(--bg); }
+/* Your own writing - a file to fill in, or a note: the light OrchLab green, frame and header both, so it
+   cannot be mistaken for the orange-framed prompts around it. */
+.loc.editor    { background: var(--brand);  color: var(--on-brand); }
+.copyblock.in-editor .cb-head, .checkblock.in-editor .cb-head {
+  background: color-mix(in srgb, var(--brand) 22%, var(--bg));
+}
 /* The same badge inside a sentence: "Back in the WORK TERMINAL, press Ctrl+C". Prose
    names a window with this rather than bold text, so the word on the page looks
    exactly like the label on the block it refers to. */
@@ -623,7 +652,7 @@ nav.pager a:hover { background: var(--surface); }
   <span class="actnum">ACTIVITY 04</span>
   <p class="eyebrow">Part 2 — Prompt Engineering</p>
   <h1>Blog Engine</h1>
-  <p class="lede">Five minutes, pen and paper, no code. Write down what you would expect if somebody asked you to “build a Blog engine” — then find out how differently the people around you read the same five words.</p>
+  <p class="lede">Five minutes, pen and paper, no code. The product owner of Mars Mission Fund asks for “a blog engine”. Write down what you would build — then, in the room, find out how differently the people around you read the same request, in the same app.</p>
 
   <div class="cp">
     <span>no code — pen and paper</span>
@@ -634,17 +663,16 @@ nav.pager a:hover { background: var(--surface); }
   <div>
 
   <h2>The exercise</h2>
-  <div class="checkblock">
-    <div class="cb-head"><span>Five minutes, pen and paper</span></div>
+  <div class="checkblock in-editor">
+    <div class="cb-head"><span>Five minutes, pen and paper</span><span class="loc editor" tabindex="0">text editor<span class="tip" role="tooltip">Not a terminal. Your own editor, on your machine — <code>app/</code> in your <code>workshop-example</code> folder is the same folder the container sees.</span></span></div>
     <ol>
-      <li>Write down what you would expect if asked to <strong>“build a Blog engine”</strong>. Be as detailed or as brief as you naturally would. Don't ask for clarification — the ambiguity is the point.</li>
-      <li>Compare with the people around you: <strong>volume of detail</strong> — how much did you write? <strong>Level of detail</strong> — how specific were the requirements? <strong>Divergence</strong> — how different are your interpretations?</li>
-      <li>Keep what you wrote. Mission Updates is a blog inside this app, and next you specify it properly — then see how close your note would have landed.</li>
+      <li>The product owner of Mars Mission Fund — the app you have been working in — says: <strong>“We need a blog engine.”</strong> Write down what you would build. Be as detailed or as brief as you naturally would. Don't ask for clarification — the ambiguity is the point.</li>
+      <li>Keep what you wrote. The feature the product owner meant is <strong>Mission Updates</strong>: a proposal's creator posting progress to the people backing it. In the next activity you write its spec, and that spec has to settle every question your note left open.</li>
     </ol>
   </div>
 
   <h2>You are done when</h2>
-  <div class="success">A page of your own expectations, and the discovery that the person next to you expected something different from the same five words.</div>
+  <div class="success">When you have a page of your own expectations.</div>
 
   </div>
 

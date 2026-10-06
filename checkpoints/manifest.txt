@@ -1,17 +1,27 @@
 # Checkpoint ladder — single source of truth.
 #
+# Activity N produces cp-N: the tag number is the activity number.
+# A long activity also has lettered rungs part-way through it (cp-08a, cp-08b, cp-08c), between
+# cp-(N-1) and cp-N, so falling behind mid-activity is one jump, not the whole activity.
+# The team activity between 02 and 03 is in the room and produces nothing.
+#
 # Format:  tag | title | what this checkpoint contains | what it unblocks
 #
 # Read by ./checkpoint.sh. Keep the pipes; keep the tags in ascending order.
 # A tag listed here that does not exist yet in git is reported as "not published"
 # rather than failing — that is how a partially-built ladder stays usable.
 
-cp-00 | Environment verified        | Clean clone with the environment check passing. Nothing built yet.                    | Activity 02 — Coding Challenges
-cp-01 | Warm-up challenges complete | Campaign renamed to Proposal, and structured request logging with a correlation ID.  | Activity 03 — Give Your Agent Sight
-cp-02 | Agent has sight             | Trending Missions built, and proved on screen by the agent's own before/after shots. | Activity 04 — Blog Engine
-cp-03 | Blog Engine exercise        | No code change: the same commit as cp-02. The activity is pen and paper.             | Activity 05 — Create the Spec
-cp-04 | Spec written                | mission-updates.spec.md — role, context, standards, acceptance criteria.             | Activity 06 — Brand Your Mission Updates
-cp-05 | Brand written and applied   | Your own specs/standards/brand.md, with tokens.css regenerated from it.               | Activity 07 — Build It Properly
-cp-06 | Mission Updates, by spec    | The L2 reference implementation, built from the spec and wearing your brand.          | Activity 08 — Build an Autonomous Agent
-cp-07 | Autonomous agent run        | Agent loop with guardrails: iteration cap, cost limit, rollback on failing tests.     | Activity 09 — Plan-First Orchestration
-cp-08 | Plan / code handoff         | The feature rebuilt by a planning agent handing off to a separate coding agent.       | Activity 10 — Automated Code Review
+cp-01  | Environment verified         | Clean clone with the environment check passing. Nothing built yet.                      | Activity 02 — Coding Challenges
+cp-02  | Warm-up challenges complete  | Campaign renamed to Proposal, and structured request logging with a correlation ID.     | Activity 03 — Give Your Agent Sight
+cp-03  | Agent has sight              | Trending Missions built, and proved on screen by the agent's own before/after shots.    | Activity 04 — Blog Engine
+cp-04  | Blog Engine exercise         | No code change: the same commit as cp-03. The activity is pen and paper.                | Activity 05 — Create the Spec
+cp-05  | Spec written                 | mission-updates.spec.md — role, context, standards, acceptance criteria. Nothing built. | Activity 06 — Brand The App
+cp-06  | Brand written and applied    | Your own specs/standards/brand.md, with tokens.css and fonts regenerated from it.       | Activity 07 — Spec It Properly
+cp-07  | Spec completed               | The interviewed v2 spec, complete enough to build from headless. Nothing built.         | Activity 08 — Your First Headless Run
+cp-08a | Harness built, no safeguards | harness/run-task.sh runs one task headless in its own worktree, streamed and recorded.  | Activity 08, step 2 — Run it
+cp-08b | Restricted, probe written    | harness/settings.json, and a probe task ready to try to get round it.                   | Activity 08, step 6 — Run the probe, then what it wrote
+cp-08c | Holes closed, limits written | The deny list tightened against the probe, and what a deny list cannot stop.            | Activity 08, step 8 — Gate it, and show it
+cp-08  | Headless harness             | harness/run-task.sh, restricted and gated; its first run defined every missing token.   | Activity 09 — Plan → Do as a Pipeline
+cp-09a | Pipeline built, fails closed | harness/pipeline.sh: read-only planner, coder, BLOCKED: stops the run. Nothing built.   | Activity 09, step 5 — Run the pipeline on your spec
+cp-09  | Mission Updates, by harness  | harness/pipeline.sh plans and codes from the v2 spec; Mission Updates built and merged. | Activity 10 — The Review Gate
+cp-10  | Review gate                  | A review stage that can fail the run, human approval, a summary and learnings.          | End of the workshop

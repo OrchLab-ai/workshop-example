@@ -32,6 +32,8 @@
   --amber:       #7a5200;
   --blue:        #1f5fa8;  /* 6.4:1 on white */
   --danger:      #a02e1a;  /* red — 7.2:1 on white */
+  --warn-bg:     #fff4c2;  /* .warning: a yellow you can see across a room */
+  --warn-edge:   #e0a800;
 }
 /* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
    whatever the operating system says — this is read on projectors and over
@@ -52,6 +54,8 @@
   --amber:       #ffbd2e;
   --blue:        #6cb4ff;
   --danger:      #ff9580;
+  --warn-bg:     #3d3415;
+  --warn-edge:   #ffbd2e;
 }
 :root {
   /* Constant in both themes */
@@ -199,6 +203,15 @@ li { margin: 8px 0; }
   border: 1px solid var(--border); border-radius: 0 0 6px 6px;
 }
 .checkblock li .copyblock { margin: 8px 0 4px; }
+/* Where a lettered checkpoint lands, between two steps: a rule with the tag on it. */
+.checkblock .rung {
+  display: flex; align-items: center; gap: 10px; margin: 14px 0;
+  color: var(--muted); font-size: 13px;
+}
+.checkblock .rung::before, .checkblock .rung::after {
+  content: ""; flex: 1; border-top: 1px dashed var(--border);
+}
+.checkblock .rung b { color: var(--accent); }
 
 /* link list */
 .links { list-style: none; padding: 0; margin: 0; }
@@ -488,6 +501,15 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 0 0 12px;
   font-size: 14.5px;
 }
+/* A guard against the one mistake an activity invites - louder than a .note, which
+   is information. Activity 05's: pasting the finished spec into Claude starts a
+   build two activities early. */
+.warning {
+  border: 1px solid var(--warn-edge); border-left-width: 4px; border-radius: 0 6px 6px 0;
+  background: var(--warn-bg);
+  padding: 12px 16px; margin: 0 0 16px; color: var(--strong); font-size: 14.5px;
+}
+.warning strong { color: var(--strong); }
 
 /* "Which window do I type this into, and from where?" is the most common thing a
    first-timer gets wrong, and a list of copyable commands answers neither half of
@@ -527,6 +549,7 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .in-container { --win: var(--accent); }
 .in-claude    { --win: #d97757; }
 .in-browser   { --win: var(--blue); }
+.in-editor    { --win: var(--brand); }
 .copyblock[class*=" in-"], .checkblock[class*=" in-"] {
   border: 2px solid var(--win); border-radius: 8px;
 }
@@ -542,6 +565,12 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 /* Not a terminal at all. A URL badged "host terminal" read as a command to type into
    one, so it gets a colour none of the three windows use. */
 .loc.browser   { background: var(--blue);   color: var(--bg); }
+/* Your own writing - a file to fill in, or a note: the light OrchLab green, frame and header both, so it
+   cannot be mistaken for the orange-framed prompts around it. */
+.loc.editor    { background: var(--brand);  color: var(--on-brand); }
+.copyblock.in-editor .cb-head, .checkblock.in-editor .cb-head {
+  background: color-mix(in srgb, var(--brand) 22%, var(--bg));
+}
 /* The same badge inside a sentence: "Back in the WORK TERMINAL, press Ctrl+C". Prose
    names a window with this rather than bold text, so the word on the page looks
    exactly like the label on the block it refers to. */
@@ -623,11 +652,11 @@ nav.pager a:hover { background: var(--surface); }
   <span class="actnum">ACTIVITY 05</span>
   <p class="eyebrow">Part 2 — Prompt Engineering</p>
   <h1>Create the Spec</h1>
-  <p class="lede">Write <code>mission-updates.spec.md</code> — role, context, standards, acceptance criteria — then build from it, and hold the result up against what you wrote for the Blog Engine.</p>
+  <p class="lede">Write <code>mission-updates.spec.md</code> — role, context, standards, acceptance criteria — and hold it up against your Blog Engine note. You write the spec here; nothing gets built until Activity 09.</p>
 
   <div class="cp">
-    <span>start from <b>cp-03</b></span>
-    <span>produces <b>cp-04</b></span>
+    <span>start from <b>cp-04</b></span>
+    <span>produces <b>cp-05</b></span>
   </div>
 
 
@@ -641,15 +670,15 @@ nav.pager a:hover { background: var(--surface); }
     <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
   <div class="copyblock in-host">
     <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>./checkpoint.sh 3</pre>
+    <pre>./checkpoint.sh 4</pre>
   </div>
   </div>
 </details>
 
-  <h2>Prompts — copy, don't retype</h2>
+  <h2>Template — copy into your spec file</h2>
   <p>You can use this template if you like.</p>
-  <div class="copyblock is-prompt in-claude">
-    <div class="cb-head"><span>Spec skeleton — fill this in</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
+  <div class="copyblock in-editor">
+    <div class="cb-head"><span>Spec skeleton — fill this in</span><span class="loc editor" tabindex="0">text editor<span class="tip" role="tooltip">Not a terminal. Your own editor, on your machine — <code>app/</code> in your <code>workshop-example</code> folder is the same folder the container sees.</span></span><button type="button">Copy</button></div>
     <pre># Mission Updates — Specification
 
 ## Role
@@ -673,24 +702,29 @@ You are a senior full-stack engineer working in this codebase.
 ## Out of scope
 -</pre>
   </div>
-  <div class="copyblock is-prompt in-claude">
-    <div class="cb-head"><span>Then build from it</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Read mission-updates.spec.md and implement it exactly. Check your work against the acceptance criteria before you tell me it's done.</pre>
-  </div>
+  <div class="warning" role="note"><strong>Do not paste the completed spec into Claude.</strong> Save it as <code>specs/mission-updates.spec.md</code> and leave it there. Hand it to an agent now and it starts building Mission Updates, four activities early — nothing gets built until Activity 09.</div>
 
   <h2>Check your work</h2>
   <div class="copyblock in-container">
     <div class="cb-head"><span>The spec you are writing lives here</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
     <pre>specs/mission-updates.spec.md</pre>
   </div>
+  <div class="checkblock">
+    <div class="cb-head"><span>Compare it with your Blog Engine note</span></div>
+    <ol>
+      <li>Put your spec next to the note you wrote in Activity 04. Both answer the product owner's “we need a blog engine”; only one could be built without guessing.</li>
+      <li>Go through the questions your note left open — who posts, who reads, where it lives, what a post holds, what is left out — and find each one's answer in the spec. Any you cannot find is a gap in the spec, not a detail for the agent to guess.</li>
+      <li>Keep the spec. In Activity 07 you will use it again.</li>
+    </ol>
+  </div>
 
   <h2>You are done when</h2>
-  <div class="success">The spec answers the questions your Blog Engine note left open, and what got built is the feature you specified — not one the agent guessed.</div>
+  <div class="success">Your spec answers the questions your Blog Engine note left open, and you could hand it to an agent without being there to explain it. <strong>(But don't do this yet!)</strong></div>
 
   <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
-      <p><code>./checkpoint.sh 4</code> has a worked spec if you would rather read a good one than write your first one.</p>
+      <p><code>./checkpoint.sh 5</code> has a worked spec if you would rather read a good one than write your first one.</p>
       <p>Reading a strong spec before writing your own is a legitimate way to learn this — take it if you are short on time.</p>
     </div>
   </details>
@@ -699,7 +733,7 @@ You are a senior full-stack engineer working in this codebase.
 
   <nav class="pager">
     <a href="04-blog-engine.html">&larr; Blog Engine</a>
-    <a href="06-brand-your-app.html">Brand Your Mission Updates &rarr;</a>
+    <a href="06-brand-your-app.html">Brand The App &rarr;</a>
   </nav>
 </div>
 <script>

@@ -90,16 +90,17 @@ at once, so nobody reads the half that is not theirs.
    ORCHLAB WORKSHOP - ENVIRONMENT CHECK
 ============================================================
 
-   [1/8]  Workshop app cloned ......................  PASS   mars-mission-fund, cloned in 12s, 1 checkpoint
-   [2/8]  Docker daemon reachable ..................  PASS   27.3.1
-   [3/8]  Workshop image builds ....................  PASS   workshop + checker + agent, 58s
-   [4/8]  Claude credential in .env ................  PASS   CLAUDE_CODE_OAUTH_TOKEN, sk-ant-oat01-
-   [5/8]  Workshop app up and serving ..............  PASS   http://localhost:5173, 214s
-   [6/8]  Claude Code CLI + auth ...................  PASS   claude 2.0.14, credential authenticated
-   [7/8]  Playwright screenshot captured ...........  PASS   verify.png, 184 KB
-   [8/8]  Agent sees the same app you do ...........  PASS   both vantages agree
+   [1/9]  Workshop app cloned ......................  PASS   mars-mission-fund, cloned in 12s, 1 checkpoint
+   [2/9]  Docker daemon reachable ..................  PASS   27.3.1
+   [3/9]  Workshop image builds ....................  PASS   workshop + checker, 58s
+   [4/9]  Claude credential in .env ................  PASS   CLAUDE_CODE_OAUTH_TOKEN, sk-ant-oat01-
+   [5/9]  Workshop app up and serving ..............  PASS   http://localhost:5173, 214s
+   [6/9]  Workshop API answers .....................  PASS   logged in as the demo creator via /v1
+   [7/9]  Claude Code CLI + auth ...................  PASS   claude 2.0.14, credential authenticated
+   [8/9]  Playwright screenshot captured ...........  PASS   verify.png, 184 KB
+   [9/9]  Agent sees the same app you do ...........  PASS   both vantages agree
 
-   ALL 8 CHECKS PASSED
+   ALL 9 CHECKS PASSED
 
    Your environment is ready. There is nothing else to do.
    Open screenshots/verify.png to see the proof - it should read
@@ -114,7 +115,7 @@ at once, so nobody reads the half that is not theirs.
 ============================================================
 ```
 
-If you see `ALL 8 CHECKS PASSED`, **you are done.** There is no second step, no
+If you see `ALL 9 CHECKS PASSED`, **you are done.** There is no second step, no
 extra setup, and nothing to prepare. Close the terminal.
 
 Open `screenshots/verify.png` if you want to see it for yourself — the browser
@@ -158,7 +159,7 @@ before that* (needs a new login).
 The run stops at the first failed check and tells you exactly what to do:
 
 ```
-   [4/8]  Claude credential in .env ................  FAIL
+   [4/9]  Claude credential in .env ................  FAIL
 
    1 CHECK FAILED - this is fixable, and you are not behind.
 
@@ -196,7 +197,7 @@ the workshop would otherwise fetch while you waited. While it works, that row sh
 what Docker is doing and how long it has been at it:
 
 ```
-   [3/8]  Workshop image builds ... workshop container: pulling 742.8MB / 1.9GB 96s
+   [3/9]  Workshop image builds ... workshop container: pulling 742.8MB / 1.9GB 96s
 ```
 
 The finished `PASS` line replaces it. Later runs reuse the downloaded image and
@@ -219,20 +220,21 @@ rather than decorative.
 |---|---|---|
 | 1 | Workshop app cloned | The app you work on all day is present, and `./checkpoint.sh` has a ladder to move you along |
 | 2 | Docker daemon reachable | Docker is the safety boundary for every autonomous exercise |
-| 3 | Workshop image builds | **Every image the day needs is on your machine** — the check builds the real workshop container and the Part 3 agent, so nothing downloads mid-exercise |
+| 3 | Workshop image builds | **Every image the day needs is on your machine** — the check builds the real workshop container and pulls its database, so nothing downloads mid-exercise |
 | 4 | Claude credential in .env | A credential is there, on the right line — checked before anything slow runs |
 | 5 | Workshop app up and serving | **The real stack starts**, and the app answers on **the exact port the workshop runs on** (5173) from your machine |
-| 6 | Claude Code CLI + auth | Claude authenticates *inside the workshop container*, where the agent runs all day |
-| 7 | Playwright screenshot | The workshop container's browser can *see* — the basis of self-verification in Part 3 |
-| 8 | Agent sees the same app you do | The app looks the same from inside the container as from your browser — the check that catches addressing faults curl hides |
+| 6 | Workshop API answers | The API behind the site works — a login as the seeded demo creator through the site's `/v1` proxy proves the API, the database, its migrations and its seed data |
+| 7 | Claude Code CLI + auth | Claude authenticates *inside the workshop container*, where the agent runs all day |
+| 8 | Playwright screenshot | The workshop container's browser can *see* — the basis of self-verification |
+| 9 | Agent sees the same app you do | The app looks the same from inside the container as from your browser — the check that catches addressing faults curl hides |
 
 Check 1 earns its place: the workshop stack bind-mounts `app/`, and an *empty*
 directory bind-mounts perfectly happily — the container would start, report no
 error, and simply have no app inside it.
 
-Checks 5 to 8 run in **the workshop container itself**, not in a look-alike built for
+Checks 5 to 9 run against **the workshop container itself**, not in a look-alike built for
 the check, so a pass predicts the day rather than approximating it. The one extra
-image — the view checker behind check 8's outside view — is built **on the same base
+image — the view checker behind check 9's outside view — is built **on the same base
 image tag**, and that shared tag is load-bearing: when the two drifted apart, the
 check warmed a ~2 GB base that nothing on the day used, and the morning downloaded
 the real one all over again.
@@ -246,7 +248,7 @@ verify-setup.sh                    # The environment check — start here
 checkpoint.sh                # Jump between checkpoints; parks your work safely
 docker-compose.workshop.yml  # The workshop stack — the check runs against it too
 verify/
-  Dockerfile                 # View checker for check 8's outside vantage
+  Dockerfile                 # View checker for check 9's outside vantage
   screenshot.mjs             # Check 7 — the workshop container's browser, captures proof
   app-views.mjs              # Check 8 — the real app, from inside and outside
   site/index.html            # The "ENVIRONMENT OK" page, served by verify-web
@@ -359,8 +361,8 @@ the workshop works.
 
 ## Checkpoints
 
-The workshop builds one feature — **Mission Updates** — four times, once at each
-level. Every activity is bracketed by a git tag, so if an exercise doesn't land
+The workshop specifies one feature — **Mission Updates** — by hand and by
+interview, then builds a harness that builds it. Every activity is bracketed by a git tag, so if an exercise doesn't land
 you are never locked out of the next one.
 
 ```bash
@@ -380,16 +382,19 @@ invalidate a checkpoint.
 
 | Tag | State |
 |---|---|
-| `cp-00` | Clean clone, environment verified ← **you are here** |
-| `cp-01` | Warm-up challenge complete |
-| `cp-02` | Playwright sight wired up |
-| `cp-03` | Same code as `cp-02` (Blog Engine is pen and paper) |
-| `cp-04` | `mission-updates.spec.md` written |
-| `cp-05` | Your own brand written and applied to the app |
-| `cp-06` | Spec-driven Mission Updates built, in your brand |
-| `cp-07` | Autonomous agent run |
-| `cp-08` | Plan → code handoff complete |
+| `cp-01` | Clean clone, environment verified ← **you are here** |
+| `cp-02` | Warm-up challenge complete |
+| `cp-03` | Playwright sight wired up |
+| `cp-04` | Same code as `cp-03` (Blog Engine is pen and paper) |
+| `cp-05` | `mission-updates.spec.md` written |
+| `cp-06` | Your own brand written and applied to the app |
+| `cp-07` | Mission Updates spec completed by interview; nothing built |
+| `cp-08a`, `cp-08b`, `cp-08c` | Activity 08 part-way: harness built; restricted, probe written; holes closed |
+| `cp-08` | Headless harness: run, isolate, restrict, gate — plus its first fix |
+| `cp-09a` | Activity 09 part-way: pipeline built and failing closed |
+| `cp-09` | Harness as a plan → code pipeline; Mission Updates built by it |
+| `cp-10` | Harness with a review gate |
 
-Checkpoints beyond `cp-00` are published as the container is built out;
+Checkpoints beyond `cp-01` are published as the container is built out;
 `--list` shows you which exist. Asking for one that doesn't yet gives you a
 clear "not published yet", not an error.

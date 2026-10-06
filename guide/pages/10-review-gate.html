@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Build an Autonomous Agent — OrchLab Workshop Guide</title>
+<title>The Review Gate — OrchLab Workshop Guide</title>
 <script>
 (function () {
   try {
@@ -32,6 +32,8 @@
   --amber:       #7a5200;
   --blue:        #1f5fa8;  /* 6.4:1 on white */
   --danger:      #a02e1a;  /* red — 7.2:1 on white */
+  --warn-bg:     #fff4c2;  /* .warning: a yellow you can see across a room */
+  --warn-edge:   #e0a800;
 }
 /* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
    whatever the operating system says — this is read on projectors and over
@@ -52,6 +54,8 @@
   --amber:       #ffbd2e;
   --blue:        #6cb4ff;
   --danger:      #ff9580;
+  --warn-bg:     #3d3415;
+  --warn-edge:   #ffbd2e;
 }
 :root {
   /* Constant in both themes */
@@ -199,6 +203,15 @@ li { margin: 8px 0; }
   border: 1px solid var(--border); border-radius: 0 0 6px 6px;
 }
 .checkblock li .copyblock { margin: 8px 0 4px; }
+/* Where a lettered checkpoint lands, between two steps: a rule with the tag on it. */
+.checkblock .rung {
+  display: flex; align-items: center; gap: 10px; margin: 14px 0;
+  color: var(--muted); font-size: 13px;
+}
+.checkblock .rung::before, .checkblock .rung::after {
+  content: ""; flex: 1; border-top: 1px dashed var(--border);
+}
+.checkblock .rung b { color: var(--accent); }
 
 /* link list */
 .links { list-style: none; padding: 0; margin: 0; }
@@ -488,6 +501,15 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 0 0 12px;
   font-size: 14.5px;
 }
+/* A guard against the one mistake an activity invites - louder than a .note, which
+   is information. Activity 05's: pasting the finished spec into Claude starts a
+   build two activities early. */
+.warning {
+  border: 1px solid var(--warn-edge); border-left-width: 4px; border-radius: 0 6px 6px 0;
+  background: var(--warn-bg);
+  padding: 12px 16px; margin: 0 0 16px; color: var(--strong); font-size: 14.5px;
+}
+.warning strong { color: var(--strong); }
 
 /* "Which window do I type this into, and from where?" is the most common thing a
    first-timer gets wrong, and a list of copyable commands answers neither half of
@@ -527,6 +549,7 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .in-container { --win: var(--accent); }
 .in-claude    { --win: #d97757; }
 .in-browser   { --win: var(--blue); }
+.in-editor    { --win: var(--brand); }
 .copyblock[class*=" in-"], .checkblock[class*=" in-"] {
   border: 2px solid var(--win); border-radius: 8px;
 }
@@ -542,6 +565,12 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 /* Not a terminal at all. A URL badged "host terminal" read as a command to type into
    one, so it gets a colour none of the three windows use. */
 .loc.browser   { background: var(--blue);   color: var(--bg); }
+/* Your own writing - a file to fill in, or a note: the light OrchLab green, frame and header both, so it
+   cannot be mistaken for the orange-framed prompts around it. */
+.loc.editor    { background: var(--brand);  color: var(--on-brand); }
+.copyblock.in-editor .cb-head, .checkblock.in-editor .cb-head {
+  background: color-mix(in srgb, var(--brand) 22%, var(--bg));
+}
 /* The same badge inside a sentence: "Back in the WORK TERMINAL, press Ctrl+C". Prose
    names a window with this rather than bold text, so the word on the page looks
    exactly like the label on the block it refers to. */
@@ -620,14 +649,14 @@ nav.pager a:hover { background: var(--surface); }
     ><span class="to-dark">☀ LIGHT</span><span class="to-light">☾ DARK</span></button>
   </header>
 
-  <span class="actnum">ACTIVITY 08</span>
+  <span class="actnum">ACTIVITY 10</span>
   <p class="eyebrow">Part 3 — Orchestration</p>
-  <h1>Build an Autonomous Agent</h1>
-  <p class="lede">Hand the same feature to an agent that loops without you. The container is the safety boundary; the guardrails are the actual lesson.</p>
+  <h1>The Review Gate</h1>
+  <p class="lede">Add a read-only review stage that can fail the run, a human approval step, a summary for stakeholders, and a learnings file the next run reads.</p>
 
   <div class="cp">
-    <span>start from <b>cp-06</b></span>
-    <span>produces <b>cp-07</b></span>
+    <span>start from <b>cp-09</b></span>
+    <span>produces <b>cp-10</b></span>
   </div>
 
 
@@ -641,47 +670,70 @@ nav.pager a:hover { background: var(--surface); }
     <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
   <div class="copyblock in-host">
     <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>./checkpoint.sh 6</pre>
+    <pre>./checkpoint.sh 9</pre>
   </div>
   </div>
 </details>
 
-  <h2>Commands</h2>
-  <div class="copyblock in-host">
-    <div class="cb-head"><span>Read what it is about to do</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>cat app/autonomous-demo/README.md</pre>
+  <h2>The exercise</h2>
+  <div class="checkblock">
+    <div class="cb-head"><span>Review, approve, report, learn</span></div>
+    <ol>
+      <li>Add the last stages: a reviewer that can say no, a report, and a memory.
+  <div class="copyblock is-prompt in-claude">
+    <div class="cb-head"><span>1. Add the review gate</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
+    <pre>Add a review stage to harness/pipeline.sh, after the gate. It runs claude -p on a stronger model than the stages that did the work (--model from REVIEW_MODEL, default opus), with a read-only permissions file, harness/settings.review.json, on the diff between the commit the run started from and the run branch. It must reply with JSON only: {&quot;verdict&quot;: &quot;pass&quot; or &quot;fail&quot;, &quot;findings&quot;: [{&quot;severity&quot;, &quot;confidence&quot;, &quot;file&quot;, &quot;issue&quot;}]}, reporting every finding, including uncertain ones, rather than filtering. The harness saves it as review.json. On fail it stops and prints the findings; on pass it prints the command a human runs to approve the work: git merge --squash harness/&lt;id&gt;.
+
+Then a report stage writes summary.md: three sentences for a non-technical stakeholder — what changed, what the risk is, what happens next — and appends one line per lesson from the findings to harness/LEARNINGS.md. Make the planning stage read harness/LEARNINGS.md before it plans.
+
+Also write harness/tasks/notify-backers.md, with a # Notify backers heading: &quot;When a creator posts a mission update, every backer of that proposal gets a notification, using the notifications the app already has. Test who is and is not notified.&quot;</pre>
   </div>
-  <div class="copyblock in-host">
-    <div class="cb-head"><span>Start the agent. It runs headless — you watch, you do not drive</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>docker compose -f docker-compose.workshop.yml --profile l4 up autonomous-agent</pre>
+      </li>
+      <li>Run the whole pipeline.
+  <div class="copyblock in-container">
+    <div class="cb-head"><span>2. Run it</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
+    <pre>./harness/pipeline.sh harness/tasks/notify-backers.md</pre>
   </div>
-  <div class="copyblock in-host">
-    <div class="cb-head"><span>Follow what it is doing</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>docker compose -f docker-compose.workshop.yml logs -f autonomous-agent</pre>
+      </li>
+      <li>Read <code>review.json</code> and <code>summary.md</code> in the run folder. Do you agree with the reviewer? Is the summary something you would actually send?
+  <div class="copyblock">
+    <div class="cb-head"><span></span><button type="button">Copy</button></div>
+    <pre>undefined</pre>
   </div>
-  <div class="copyblock in-host">
-    <div class="cb-head"><span>Stop it early if you have seen enough</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>docker compose -f docker-compose.workshop.yml --profile l4 down autonomous-agent</pre>
+      </li>
+      <li>If you agree, approve it. Use the branch name the harness printed. This is the only step it leaves to you.
+  <div class="copyblock in-container">
+    <div class="cb-head"><span>3. Approve</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
+    <pre>git merge --squash harness/&lt;id&gt; &amp;&amp; git commit -m &quot;Notify backers of mission updates (built by the harness)&quot;</pre>
   </div>
-  <div class="note"><strong>You are watching, not driving.</strong> The loop runs <code>claude --dangerously-skip-permissions --print</code> headlessly against a prompt, and the interesting part is what bounds it: <code>MAX_ITERATIONS</code>, <code>COOLDOWN_SECONDS</code>, <code>TIMEOUT_SECONDS</code>, and a 4&nbsp;GB / 2&nbsp;CPU ceiling, all set in <code>docker-compose.workshop.yml</code> where you can read them. Constraints are what make autonomy safe — an unbounded loop is the Loop of Death from the previous slide.</div>
+      </li>
+      <li>Keep the harness and what it learned.
+  <div class="copyblock in-container">
+    <div class="cb-head"><span>4. Commit the harness</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
+    <pre>git add harness &amp;&amp; git commit -m &quot;Harness: review gate, human approval, summary and learnings&quot;</pre>
+  </div>
+      </li>
+    </ol>
+  </div>
+  <div class="note"><strong>The agent can say no; you have the final say.</strong> In Activity 09 you were the whole review. Now a read-only stage reviews first, and you approve what it passes. It reads the run's own diff — against the commit the run started from, not against <code>main</code> — and returns a verdict the harness acts on. Merging is the one step left to a human.</div>
 
   <h2>You are done when</h2>
-  <div class="success">Either it works, or you watch it hit the Loop of Death. Both are the intended outcome.</div>
+  <div class="success">You built a harness that plans, codes, tests, reviews and reports — and stops for you before anything lands.</div>
 
   <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
-      <p><code>./checkpoint.sh 7</code> if the run goes sideways and you need to move on.</p>
-      <p>Getting stuck here is not failing the exercise — a fix-break-fix cycle is exactly what the guardrails exist to stop.</p>
-      <p>Never run this outside a container against a real codebase. That is the whole reason the boundary is here.</p>
+      <p><code>./checkpoint.sh 10</code> gives you the finished harness.</p>
+      <p>The reviewer runs on Opus while the planner and coder stay on Sonnet: the stage whose only job is to catch mistakes gets the strongest model. It is short, so it costs little. If you hit a usage limit, <code>REVIEW_MODEL=sonnet</code> runs it on Sonnet.</p>
+      <p>Nothing after this one. Run another task through it — the spec's out-of-scope list has several, such as deleting an update — and check the planner read <code>LEARNINGS.md</code>.</p>
     </div>
   </details>
   </div>
 
 
   <nav class="pager">
-    <a href="07-build-it-properly.html">&larr; Build It Properly</a>
-    <a href="09-plan-first.html">Plan-First Orchestration &rarr;</a>
+    <a href="09-pipeline.html">&larr; Plan → Do as a Pipeline</a>
+    <span>Next &rarr;</span>
   </nav>
 </div>
 <script>

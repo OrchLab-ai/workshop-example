@@ -21,7 +21,7 @@
 # The two must agree. Disagreement is the whole point: a pass on one and a failure on
 # the other localises the fault to addressing rather than to the app.
 #
-# Run twice on purpose: by ./workshop/up.sh every time the stack starts, and as check 8
+# Run twice on purpose: by ./workshop/up.sh every time the stack starts, and as check 9
 # of ./verify-setup.sh, which starts the stack itself so that it can ask this question
 # the night before rather than at 09:05.
 set -uo pipefail
@@ -94,9 +94,10 @@ pass "verify-outside.png  \"${OUT_HEAD:-$OUT_TITLE}\""
 #
 # Runs where the agent runs, at the URL activity 3 hands the agent, driving the same
 # browser the agent drives — app-views.mjs prefers @playwright/mcp's playwright-core,
-# which is the copy app/autonomous/Dockerfile downloads a chromium for. No module path
-# is passed: the repo's own playwright is a different build with no browser installed,
-# so naming it here would break the check rather than help it.
+# which is the copy workshop/container/Dockerfile downloads a chromium for. No module path
+# is passed: the repo's own playwright is a different build, whose browser only images
+# built from workshop/container/Dockerfile have, so naming it here could break the check
+# on an older image rather than help it.
 printf '   %sINSIDE%s   the workshop container, at the agent'"'"'s own URL\n' "$BOLD" "$RESET"
 
 # IS THE CHECKER EVEN IN THERE?

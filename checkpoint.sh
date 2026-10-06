@@ -50,7 +50,8 @@ Usage: ./checkpoint.sh [N | cp-NN] [--fresh]
 
   N | cp-NN   Jump to that checkpoint. Your uncommitted work is committed to a
               wip/ branch first, and you land on a work/cp-NN branch you can
-              commit to freely.
+              commit to freely. A long activity also has rungs part-way
+              through it: 8a is cp-08a.
   --fresh     Discard an existing work/cp-NN branch and start that checkpoint
               again from the tag. Your work is still parked to wip/ first.
   --list      Show the full ladder and which checkpoints are published.
@@ -116,6 +117,9 @@ for arg in "$@"; do
     --*) die "Unknown option: $arg" ;;
     [0-9]) TARGET="cp-0$arg" ;;
     [0-9][0-9]) TARGET="cp-$arg" ;;
+    # A step inside a long activity: 8a is cp-08a, a rung between cp-07 and cp-08.
+    [0-9][a-z]) TARGET="cp-0$arg" ;;
+    [0-9][0-9][a-z]) TARGET="cp-$arg" ;;
     cp-*) TARGET="$arg" ;;
     *) die "Don't understand \"$arg\". Try  ./checkpoint.sh --list" ;;
   esac
@@ -165,7 +169,7 @@ if [ "$MODE" = "list" ]; then
     fi
     marker="  "
     [ "$tag" = "$CURRENT" ] && marker="${GREEN}->${RESET}"
-    printf '   %b %s  %-28s %b\n' "$marker" "${BOLD}${tag}${RESET}" "${TITLES[$i]}" "$state"
+    printf '   %b %s  %-30s %b\n' "$marker" "${BOLD}$(printf '%-6s' "$tag")${RESET}" "${TITLES[$i]}" "$state"
     printf '        %s%s%s\n' "$DIM" "${STATES[$i]}" "$RESET"
     i=$((i + 1))
   done
@@ -298,8 +302,8 @@ fi
 # regenerates what the current source produces and never deletes what it no longer
 # does, so the orphans survive indefinitely.
 #
-# That bites hardest in the direction attendees actually travel. Build at cp-01, jump
-# back to cp-00, and dist/__tests__ still holds the compiled proposals tests, which
+# That bites hardest in the direction attendees actually travel. Build at cp-02, jump
+# back to cp-01, and dist/__tests__ still holds the compiled proposals tests, which
 # fail against a tree where Proposal does not exist. The failure names files that are
 # not in the repository, so it reads as a broken checkpoint rather than as stale
 # output — and the ladder exists precisely so that a jump is never the thing that
@@ -312,9 +316,9 @@ app_git rev-parse --show-toplevel >/dev/null 2>&1 &&
 
 # RESET THE DATABASE TO THE RUNG. The same problem as dist/, one container over: a
 # jump moves app/, and the database is in the db container, so it stays on whatever
-# migrations the PREVIOUS rung ran. Back from cp-01, the cp-00 API asks for campaigns
-# tables that cp-01's migration renamed to proposals, and every page fails. Forward
-# over an unfinished rename, cp-01's migration lands on top of the attendee's own.
+# migrations the PREVIOUS rung ran. Back from cp-02, the cp-01 API asks for campaigns
+# tables that cp-02's migration renamed to proposals, and every page fails. Forward
+# over an unfinished rename, cp-02's migration lands on top of the attendee's own.
 #
 # So every jump rebuilds it: start-app.sh --reset-db, inside the container, drops the
 # database, runs this rung's migrations (the seed data is migrations too) and restarts

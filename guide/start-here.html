@@ -32,6 +32,8 @@
   --amber:       #7a5200;
   --blue:        #1f5fa8;  /* 6.4:1 on white */
   --danger:      #a02e1a;  /* red — 7.2:1 on white */
+  --warn-bg:     #fff4c2;  /* .warning: a yellow you can see across a room */
+  --warn-edge:   #e0a800;
 }
 /* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
    whatever the operating system says — this is read on projectors and over
@@ -52,6 +54,8 @@
   --amber:       #ffbd2e;
   --blue:        #6cb4ff;
   --danger:      #ff9580;
+  --warn-bg:     #3d3415;
+  --warn-edge:   #ffbd2e;
 }
 :root {
   /* Constant in both themes */
@@ -199,6 +203,15 @@ li { margin: 8px 0; }
   border: 1px solid var(--border); border-radius: 0 0 6px 6px;
 }
 .checkblock li .copyblock { margin: 8px 0 4px; }
+/* Where a lettered checkpoint lands, between two steps: a rule with the tag on it. */
+.checkblock .rung {
+  display: flex; align-items: center; gap: 10px; margin: 14px 0;
+  color: var(--muted); font-size: 13px;
+}
+.checkblock .rung::before, .checkblock .rung::after {
+  content: ""; flex: 1; border-top: 1px dashed var(--border);
+}
+.checkblock .rung b { color: var(--accent); }
 
 /* link list */
 .links { list-style: none; padding: 0; margin: 0; }
@@ -488,6 +501,15 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 0 0 12px;
   font-size: 14.5px;
 }
+/* A guard against the one mistake an activity invites - louder than a .note, which
+   is information. Activity 05's: pasting the finished spec into Claude starts a
+   build two activities early. */
+.warning {
+  border: 1px solid var(--warn-edge); border-left-width: 4px; border-radius: 0 6px 6px 0;
+  background: var(--warn-bg);
+  padding: 12px 16px; margin: 0 0 16px; color: var(--strong); font-size: 14.5px;
+}
+.warning strong { color: var(--strong); }
 
 /* "Which window do I type this into, and from where?" is the most common thing a
    first-timer gets wrong, and a list of copyable commands answers neither half of
@@ -527,6 +549,7 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .in-container { --win: var(--accent); }
 .in-claude    { --win: #d97757; }
 .in-browser   { --win: var(--blue); }
+.in-editor    { --win: var(--brand); }
 .copyblock[class*=" in-"], .checkblock[class*=" in-"] {
   border: 2px solid var(--win); border-radius: 8px;
 }
@@ -542,6 +565,12 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 /* Not a terminal at all. A URL badged "host terminal" read as a command to type into
    one, so it gets a colour none of the three windows use. */
 .loc.browser   { background: var(--blue);   color: var(--bg); }
+/* Your own writing - a file to fill in, or a note: the light OrchLab green, frame and header both, so it
+   cannot be mistaken for the orange-framed prompts around it. */
+.loc.editor    { background: var(--brand);  color: var(--on-brand); }
+.copyblock.in-editor .cb-head, .checkblock.in-editor .cb-head {
+  background: color-mix(in srgb, var(--brand) 22%, var(--bg));
+}
 /* The same badge inside a sentence: "Back in the WORK TERMINAL, press Ctrl+C". Prose
    names a window with this rather than bold text, so the word on the page looks
    exactly like the label on the block it refers to. */
@@ -628,7 +657,7 @@ nav.pager a:hover { background: var(--surface); }
       <a class="card" href="pages/environment-setup.html?ask">
         <span class="num">01a</span>
         <span class="want">I want to prove my setup works</span>
-        <span class="meta">Environment Check &middot; Before we start &middot; <span class="tag">cp-00</span></span>
+        <span class="meta">Environment Check &middot; Before we start &middot; <span class="tag">cp-01</span></span>
       </a>
       <a class="card" href="pages/start-your-day.html">
         <span class="num">01b</span>
@@ -638,12 +667,17 @@ nav.pager a:hover { background: var(--surface); }
       <a class="card" href="pages/02-coding-challenges.html">
         <span class="num">02</span>
         <span class="want">I want to feel what a whole-codebase edit is like</span>
-        <span class="meta">Coding Challenges &middot; Part 1 — AI Coding &middot; <span class="tag">cp-01</span></span>
+        <span class="meta">Coding Challenges &middot; Part 1 — AI Coding &middot; <span class="tag">cp-02</span></span>
+      </a>
+      <a class="card" href="pages/team-activity.html">
+        <span class="num">TEAM</span>
+        <span class="want">I want to work through it with the people around me</span>
+        <span class="meta">Trace the Request &middot; Part 1 — AI Coding</span>
       </a>
       <a class="card" href="pages/03-agent-sight.html">
         <span class="num">03</span>
         <span class="want">I want my agent to see the UI it is changing</span>
-        <span class="meta">Give Your Agent Sight &middot; Part 1 — AI Coding &middot; <span class="tag">cp-02</span></span>
+        <span class="meta">Give Your Agent Sight &middot; Part 1 — AI Coding &middot; <span class="tag">cp-03</span></span>
       </a>
       <a class="card" href="pages/04-blog-engine.html">
         <span class="num">04</span>
@@ -653,32 +687,32 @@ nav.pager a:hover { background: var(--surface); }
       <a class="card" href="pages/05-create-the-spec.html">
         <span class="num">05</span>
         <span class="want">I want to specify it properly this time</span>
-        <span class="meta">Create the Spec &middot; Part 2 — Prompt Engineering &middot; <span class="tag">cp-04</span></span>
+        <span class="meta">Create the Spec &middot; Part 2 — Prompt Engineering &middot; <span class="tag">cp-05</span></span>
       </a>
       <a class="card" href="pages/06-brand-your-app.html">
         <span class="num">06</span>
         <span class="want">I want the app to look unmistakably mine</span>
-        <span class="meta">Brand Your Mission Updates &middot; Part 2 — Prompt Engineering &middot; <span class="tag">cp-05</span></span>
+        <span class="meta">Brand The App &middot; Part 2 — Prompt Engineering &middot; <span class="tag">cp-06</span></span>
       </a>
-      <a class="card" href="pages/07-build-it-properly.html">
+      <a class="card" href="pages/07-spec-it-properly.html">
         <span class="num">07</span>
         <span class="want">I want the AI to interview me before it writes anything</span>
-        <span class="meta">Build It Properly &middot; Part 2 — Prompt Engineering &middot; <span class="tag">cp-06</span></span>
+        <span class="meta">Spec It Properly &middot; Part 2 — Prompt Engineering &middot; <span class="tag">cp-07</span></span>
       </a>
-      <a class="card" href="pages/08-autonomous-agent.html">
+      <a class="card" href="pages/08-headless-run.html">
         <span class="num">08</span>
-        <span class="want">I want to let it run on its own — safely</span>
-        <span class="meta">Build an Autonomous Agent &middot; Part 3 — Orchestration &middot; <span class="tag">cp-07</span></span>
+        <span class="want">I want to hand a task to an agent nobody is watching — safely</span>
+        <span class="meta">Your First Headless Run &middot; Part 3 — Orchestration &middot; <span class="tag">cp-08</span></span>
       </a>
-      <a class="card" href="pages/09-plan-first.html">
+      <a class="card" href="pages/09-pipeline.html">
         <span class="num">09</span>
-        <span class="want">I want one agent to plan and another to execute</span>
-        <span class="meta">Plan-First Orchestration &middot; Part 3 — Orchestration &middot; <span class="tag">cp-08</span></span>
+        <span class="want">I want one agent to plan and another to build — from my spec, with no human in the handoff</span>
+        <span class="meta">Plan → Do as a Pipeline &middot; Part 3 — Orchestration &middot; <span class="tag">cp-09</span></span>
       </a>
-      <a class="card" href="pages/10-automated-review.html">
+      <a class="card" href="pages/10-review-gate.html">
         <span class="num">10</span>
-        <span class="want">I want the agent to review the work and report up</span>
-        <span class="meta">Automated Code Review &middot; Part 3 — Orchestration</span>
+        <span class="want">I want a reviewer that can stop the work, and a summary I can send upwards</span>
+        <span class="meta">The Review Gate &middot; Part 3 — Orchestration &middot; <span class="tag">cp-10</span></span>
       </a>
   </div>
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Automated Code Review — OrchLab Workshop Guide</title>
+<title>Trace the Request — OrchLab Workshop Guide</title>
 <script>
 (function () {
   try {
@@ -32,6 +32,8 @@
   --amber:       #7a5200;
   --blue:        #1f5fa8;  /* 6.4:1 on white */
   --danger:      #a02e1a;  /* red — 7.2:1 on white */
+  --warn-bg:     #fff4c2;  /* .warning: a yellow you can see across a room */
+  --warn-edge:   #e0a800;
 }
 /* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
    whatever the operating system says — this is read on projectors and over
@@ -52,6 +54,8 @@
   --amber:       #ffbd2e;
   --blue:        #6cb4ff;
   --danger:      #ff9580;
+  --warn-bg:     #3d3415;
+  --warn-edge:   #ffbd2e;
 }
 :root {
   /* Constant in both themes */
@@ -199,6 +203,15 @@ li { margin: 8px 0; }
   border: 1px solid var(--border); border-radius: 0 0 6px 6px;
 }
 .checkblock li .copyblock { margin: 8px 0 4px; }
+/* Where a lettered checkpoint lands, between two steps: a rule with the tag on it. */
+.checkblock .rung {
+  display: flex; align-items: center; gap: 10px; margin: 14px 0;
+  color: var(--muted); font-size: 13px;
+}
+.checkblock .rung::before, .checkblock .rung::after {
+  content: ""; flex: 1; border-top: 1px dashed var(--border);
+}
+.checkblock .rung b { color: var(--accent); }
 
 /* link list */
 .links { list-style: none; padding: 0; margin: 0; }
@@ -488,6 +501,15 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 0 0 12px;
   font-size: 14.5px;
 }
+/* A guard against the one mistake an activity invites - louder than a .note, which
+   is information. Activity 05's: pasting the finished spec into Claude starts a
+   build two activities early. */
+.warning {
+  border: 1px solid var(--warn-edge); border-left-width: 4px; border-radius: 0 6px 6px 0;
+  background: var(--warn-bg);
+  padding: 12px 16px; margin: 0 0 16px; color: var(--strong); font-size: 14.5px;
+}
+.warning strong { color: var(--strong); }
 
 /* "Which window do I type this into, and from where?" is the most common thing a
    first-timer gets wrong, and a list of copyable commands answers neither half of
@@ -527,6 +549,7 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .in-container { --win: var(--accent); }
 .in-claude    { --win: #d97757; }
 .in-browser   { --win: var(--blue); }
+.in-editor    { --win: var(--brand); }
 .copyblock[class*=" in-"], .checkblock[class*=" in-"] {
   border: 2px solid var(--win); border-radius: 8px;
 }
@@ -542,6 +565,12 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 /* Not a terminal at all. A URL badged "host terminal" read as a command to type into
    one, so it gets a colour none of the three windows use. */
 .loc.browser   { background: var(--blue);   color: var(--bg); }
+/* Your own writing - a file to fill in, or a note: the light OrchLab green, frame and header both, so it
+   cannot be mistaken for the orange-framed prompts around it. */
+.loc.editor    { background: var(--brand);  color: var(--on-brand); }
+.copyblock.in-editor .cb-head, .checkblock.in-editor .cb-head {
+  background: color-mix(in srgb, var(--brand) 22%, var(--bg));
+}
 /* The same badge inside a sentence: "Back in the WORK TERMINAL, press Ctrl+C". Prose
    names a window with this rather than bold text, so the word on the page looks
    exactly like the label on the block it refers to. */
@@ -620,65 +649,38 @@ nav.pager a:hover { background: var(--surface); }
     ><span class="to-dark">☀ LIGHT</span><span class="to-light">☾ DARK</span></button>
   </header>
 
-  <span class="actnum">ACTIVITY 10</span>
-  <p class="eyebrow">Part 3 — Orchestration</p>
-  <h1>Automated Code Review</h1>
-  <p class="lede">A third specialist reads the diff, summarises the tests, and writes something a non-technical stakeholder could act on.</p>
+  <span class="actnum">TEAM ACTIVITY</span>
+  <p class="eyebrow">Part 1 — AI Coding</p>
+  <h1>Trace the Request</h1>
+  <p class="lede">A facilitated role-play in small groups. Your facilitator explains it and runs it in the room — there is nothing to install, nothing to run, and nothing to read ahead.</p>
 
   <div class="cp">
-    <span>start from <b>cp-08</b></span>
-    <span>final activity</span>
+    <span>no code — in the room, in groups of 3–4</span>
   </div>
 
 
 
   <div>
-  <details class="trouble compact">
-  <summary>Didn't finish the last activity?
-    <span class="cta">Click here to catch up</span>
-  </summary>
-  <div class="tr-body">
-    <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
-  <div class="copyblock in-host">
-    <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>./checkpoint.sh 8</pre>
-  </div>
-  </div>
-</details>
 
-  <h2>Commands</h2>
-  <div class="copyblock in-container">
-    <div class="cb-head"><span>Collect the diff the reviewer will read</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>git diff main...HEAD &gt; /tmp/review.diff</pre>
-  </div>
-  <div class="note"><strong>Permission prompts are off in here.</strong> Your <span class="loc claude inline" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span> has been running <code>--dangerously-skip-permissions</code> since this morning — <a href="start-your-day.html">why that is defensible in there, and nowhere else</a>.</div>
-
-  <h2>Prompts — copy, don't retype</h2>
-  <div class="copyblock is-prompt in-claude">
-    <div class="cb-head"><span>The review agent</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>You are a code reviewer. Read the diff in /tmp/review.diff and identify risks, regressions, and style violations. Report every issue you find, including ones you're uncertain about — give each a confidence level and a severity rather than filtering them out yourself.</pre>
-  </div>
-  <div class="copyblock is-prompt in-claude">
-    <div class="cb-head"><span>The executive summary</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Now summarise this for a non-technical stakeholder in three sentences: what changed, what the risk is, and what happens next. No jargon.</pre>
+  <h2>The exercise</h2>
+  <div class="checkblock">
+    <div class="cb-head"><span>Taking part</span></div>
+    <ol>
+      <li>When the facilitator asks, get into a group of three or four.</li>
+      <li>Take the role you are given, and stay in it — the exercise works because each of you looks from a different angle.</li>
+      <li>Your app is untouched. It is still where Activity 02 left it, at <code>cp-02</code>, and Activity 03 starts from there.</li>
+    </ol>
   </div>
 
   <h2>You are done when</h2>
-  <div class="success">You planned a feature, delegated it, and reviewed it — without writing a line of code yourself.</div>
+  <div class="success">Your group has talked it through, and you can say what your role noticed that the others did not.</div>
 
-  <details class="cheat">
-    <summary>Stuck? Open this</summary>
-    <div class="body">
-      <p>Nothing to skip to. This is the last one.</p>
-      <p>If you are behind, <code>./checkpoint.sh 8</code> gives you a diff worth reviewing.</p>
-    </div>
-  </details>
   </div>
 
 
   <nav class="pager">
-    <a href="09-plan-first.html">&larr; Plan-First Orchestration</a>
-    <span>Next &rarr;</span>
+    <a href="02-coding-challenges.html">&larr; Coding Challenges</a>
+    <a href="03-agent-sight.html">Give Your Agent Sight &rarr;</a>
   </nav>
 </div>
 <script>

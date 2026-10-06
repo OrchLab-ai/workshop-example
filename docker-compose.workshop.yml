@@ -5,8 +5,8 @@
 # Everything an attendee needs is in here, which is the point: the only things
 # required on the host are Docker, Claude Code (for `claude setup-token`), and git.
 #
-# Two services run all day, and a third is started only for the Part 3 autonomy
-# activity — see the `l4` profile at the bottom.
+# Two services run all day: the database and claude-container. Part 3's harness runs
+# inside claude-container too, with `claude -p` - there is no separate agent service.
 name: orchlab-workshop
 
 services:
@@ -31,18 +31,19 @@ services:
   # host: that is the isolation layer the deck argues for on slide 39, and it is
   # what makes skipping permission prompts defensible later on.
   #
-  # The image is the app's own agent image, not a new one. It already carries
-  # Claude Code, the Playwright MCP server, Chromium, dbmate, git and the GitHub
-  # CLI, and it already solves two problems that are painful to rediscover: it
-  # runs as a non-root `agent` user, because Claude Code refuses to skip
-  # permissions as root, and it pre-creates ~/.claude so a volume mount cannot
-  # leave that directory owned by root and break Claude's Bash tool.
+  # The image is workshop/container/Dockerfile, in this repo rather than app/ so that
+  # ./checkpoint.sh rewinding app/ never changes it. It carries Claude Code, the
+  # Playwright MCP server, Chromium, dbmate, git and the GitHub CLI, and it solves two
+  # problems that are painful to rediscover: it runs as a non-root `agent` user,
+  # because Claude Code refuses to skip permissions as root, and it pre-creates
+  # ~/.claude so a volume mount cannot leave that directory owned by root and break
+  # Claude's Bash tool.
   claude-container:
     build:
-      context: ./app/autonomous
+      context: ./workshop/container
       dockerfile: Dockerfile
-    # The image's own entrypoint runs an autonomous loop, which is not what this
-    # container is for. It runs the workshop app instead: dependencies, migrations,
+    # The image only installs the tools; this entrypoint is what makes it the
+    # workshop container. It runs the workshop app: dependencies, migrations,
     # the API and the site, and then it holds itself open so attendees can exec in.
     # start-app.sh comes from THIS repo rather than from app/, because ./checkpoint.sh
     # rewinds app/ and the thing that boots the container must not move with it.
@@ -120,7 +121,7 @@ services:
       - ./verify/app-views.mjs:/usr/local/bin/app-views.mjs:ro
       # The environment check's screenshot of verify-web. It runs HERE, in the
       # container attendees live in, so a pass proves this container's browser and
-      # not a stand-in's. See verify-setup.sh check 7.
+      # not a stand-in's. See verify-setup.sh check 8.
       - ./verify/screenshot.mjs:/usr/local/bin/screenshot.mjs:ro
     ports:
       # The app, served from inside the container so it can be viewed in a normal
@@ -151,63 +152,10 @@ services:
       db:
         condition: service_healthy
 
-  # ---------------------------------------------------------------------------
-  # Part 3 only. Started on demand, never as part of the day's background stack:
-  #
-  #   docker compose -f docker-compose.workshop.yml --profile l4 up autonomous-agent
-  #
-  # This is the headless one. No interactive session, no TTY — it runs
-  # `claude --dangerously-skip-permissions --print` in a loop against a prompt,
-  # bounded by an iteration cap, a cooldown and a timeout. Attendees watch the log
-  # rather than drive it, which is the entire lesson of the activity.
-  autonomous-agent:
-    profiles: ['l4']
-    extra_hosts:
-      - 'localhost:127.0.0.1'
-    build:
-      context: ./app/autonomous-demo
-      dockerfile: Dockerfile
-    # CREDENTIALS COME FROM .env DIRECTLY, not from an `environment:` mapping.
-    #
-    # `ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"` does NOT omit the variable when it
-    # is unset - it sets it to the EMPTY STRING, so the container ends up carrying
-    # ANTHROPIC_API_KEY present and blank. Interactive Claude Code then sees an API key
-    # configured, tries to use it, and drops the attendee at a login prompt - while
-    # `claude -p` authenticates fine on the OAuth token. Every check passes and the only
-    # thing that fails is the thing they actually do.
-    #
-    # env_file has the semantics this needs: a line absent or commented out in .env is
-    # simply not set in the container. `required: false` so a missing .env stays the
-    # environment check's problem to report rather than a raw compose error.
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      DATABASE_URL: postgresql://mmf:mmf@db:5432/mmf?sslmode=disable
-      JWT_SECRET: workshop-jwt-secret
-      # The guardrails are the point of the exercise, so they are visible here
-      # rather than buried in the image.
-      MAX_ITERATIONS: "${MAX_ITERATIONS:-30}"
-      COOLDOWN_SECONDS: "${COOLDOWN_SECONDS:-3}"
-      TIMEOUT_SECONDS: "${TIMEOUT_SECONDS:-1800}"
-    volumes:
-      - ./app:/workspace/repo
-      - agent_node_modules:/workspace/repo/node_modules
-      - agent_client_node_modules:/workspace/repo/packages/client/node_modules
-      - agent_server_node_modules:/workspace/repo/packages/server/node_modules
-      - agent_shared_node_modules:/workspace/repo/packages/shared/node_modules
-      - ./app/autonomous-demo/PROMPT.md:/workspace/PROMPT.md:ro
-      - ./screenshots:/screenshots
-    mem_limit: 4g
-    cpus: 2
-    depends_on:
-      db:
-        condition: service_healthy
-
   # The page the environment check photographs: a static "ENVIRONMENT OK" that
   # claude-container's browser loads over the compose network and stamps with its
   # own hostname. A known page, rather than the app, so a failure here is the
-  # browser and never the app — check 8 is the one that looks at the app.
+  # browser and never the app — check 9 is the one that looks at the app.
   #
   # No published port. Only claude-container needs to reach it, and the port the
   # attendee's browser needs is proven by the app itself in check 5.
@@ -248,7 +196,3 @@ volumes:
   workshop_client_node_modules:
   workshop_server_node_modules:
   workshop_shared_node_modules:
-  agent_node_modules:
-  agent_client_node_modules:
-  agent_server_node_modules:
-  agent_shared_node_modules:

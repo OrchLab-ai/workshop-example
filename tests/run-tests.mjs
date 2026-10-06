@@ -22,7 +22,7 @@
 //
 // WHAT IT DOES NOT COVER, and no green run here should be read as covering:
 //   * that either image builds (needs Docker, and the right daemon mode)
-//   * that a browser actually renders (that IS checks 7 and 8; run verify-setup.sh / verify.ps1)
+//   * that a browser actually renders (that IS checks 8 and 9; run verify-setup.sh / verify.ps1)
 //   * anything about credentials or the network
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "node:fs";
 import { join, dirname, resolve, extname } from "node:path";
@@ -136,8 +136,8 @@ test("start-app.sh --restart stops only the dev servers", null, () => {
 });
 
 // A jump moves app/; the database is in another container and stayed on the previous
-// rung. Back from cp-01 to cp-00, every API call failed on campaigns tables that
-// cp-01's migration had renamed to proposals.
+// rung. Back from cp-02 to cp-01, every API call failed on campaigns tables that
+// cp-02's migration had renamed to proposals.
 test("a checkpoint jump resets the database to the rung", null, () => {
   const cp = codeOf("checkpoint.sh");
   ok(
@@ -256,6 +256,48 @@ test("the index numbers setup and the morning start as cards 01a and 01b", null,
   ok(ask > 0 && gate > ask, "the setup page must wrap everything below its question in a data-setup gate");
 });
 
+// cp-N is what activity N produces. The ladder used to run one behind - activity 02
+// produced cp-01 - so "./checkpoint.sh 5" meant "after activity 6" and every jump
+// needed explaining. Numbers come from the index cards, so the team activity, which
+// has no number, cannot shift anything after it.
+test("activity N produces cp-N, and the team activity takes no number", null, () => {
+  const { activities } = createRequire(import.meta.url)("../guide/src/activities.js");
+  const numbered = activities.filter((a) => !a.team);
+  numbered.forEach((a, n) => {
+    const want = `cp-${String(n + 1).padStart(2, "0")}`;
+    ok(a.to === want, `activity ${n + 1} (${a.slug}) should produce ${want}, not ${a.to}`);
+    if (n > 0) ok(a.from === numbered[n - 1].to, `${a.slug} should start from ${numbered[n - 1].to}, not ${a.from}`);
+  });
+  const team = activities.filter((a) => a.team);
+  ok(team.length === 1 && !team[0].from && !team[0].to, "the team activity must neither start from nor produce a checkpoint");
+  const home = read("guide/start-here.html");
+  const nums = [...home.matchAll(/<span class="num">([^<]+)<\/span>/g)].map((m) => m[1]);
+  ok(nums.join(",") === "01a,01b,02,TEAM,03,04,05,06,07,08,09,10", `index cards out of order: ${nums.join(", ")}`);
+  const tags = read("checkpoints/manifest.txt").split("\n").filter((l) => /^cp-\d\d /.test(l)).map((l) => l.slice(0, 5));
+  ok(tags.join(",") === numbered.map((a) => a.to).join(","), `manifest tags ${tags.join(",")} do not match the activities`);
+
+  // Lettered rungs (cp-08a) sit inside an activity: after cp-07 and before cp-08,
+  // in order, so --list reads as the day runs. checkpoint.sh takes them as 8a.
+  const all = read("checkpoints/manifest.txt").split("\n").filter((l) => /^cp-/.test(l)).map((l) => l.split("|")[0].trim());
+  all.forEach((tag, i) => {
+    const m = tag.match(/^cp-(\d\d)([a-z])$/);
+    if (!m) return;
+    const next = all.slice(i + 1).find((t) => /^cp-\d\d$/.test(t));
+    const prev = all.slice(0, i).reverse().find((t) => /^cp-\d\d$/.test(t));
+    ok(next === `cp-${m[1]}`, `${tag} must come before cp-${m[1]}, not ${next}`);
+    ok(prev === `cp-${String(Number(m[1]) - 1).padStart(2, "0")}`, `${tag} must come after the previous activity's rung, not ${prev}`);
+  });
+  ok(/\[0-9\]\[a-z\]\) TARGET="cp-0\$arg"/.test(read("checkpoint.sh")), "checkpoint.sh must accept a lettered rung as 8a");
+  // ...and every lettered rung is offered on its own activity's page, in the catch-up.
+  for (const tag of all.filter((t) => /^cp-\d\d[a-z]$/.test(t))) {
+    const act = numbered.find((x) => x.to === tag.slice(0, 5));
+    const page = readdirSync(join(ROOT, "guide/pages")).find((f) => f.endsWith(`-${act.slug}.html`));
+    ok(read(`guide/pages/${page}`).includes(`./checkpoint.sh ${tag.replace(/^cp-0?/, "")}`), `${page} must offer ${tag} in its catch-up`);
+    // ...and marked in the steps where it lands, so a reader can see where it picks up.
+    ok(read(`guide/pages/${page}`).includes(`checkpoint <b>${tag}</b> starts here`), `${page} must mark where ${tag} starts in its steps`);
+  }
+});
+
 // The pre-workshop link. Sent to people who do not have the repo yet, so it has to be
 // hosted, and it has to show the FULL setup whatever the viewer's browser remembers.
 test("there is a hosted pre-workshop link that opens the full setup", null, () => {
@@ -338,7 +380,7 @@ test("starting the stack waits for the app, not just the container", null, () =>
 
   // And `docker compose ps` should not claim health the app does not have.
   const workshop = read("docker-compose.workshop.yml");
-  const svc = workshop.slice(workshop.indexOf("claude-container:"), workshop.indexOf("autonomous-agent:"));
+  const svc = workshop.slice(workshop.indexOf("claude-container:"), workshop.indexOf("verify-web:"));
   ok(
     /healthcheck:/.test(svc) && /localhost:\$\{WORKSHOP_PORT:-5173\}/.test(svc),
     "claude-container must have a healthcheck that probes the SITE. Without it `docker compose ps` reports Up seconds after start — the same lie `up -d` tells — and `up -d --wait` returns early"
@@ -356,31 +398,16 @@ test("starting the stack waits for the app, not just the container", null, () =>
 // tag is the whole mechanism, so it is what gets guarded.
 test("the check image and the workshop images share a base, so one download serves both", null, () => {
   const baseOf = (p) => (codeOf(p).match(/^FROM\s+(\S+)/m) || [])[1];
-  // exists() before read, because read throws on a missing file — which made the
-  // skip below unreachable. app/ is a gitignored clone, so it is absent in CI and on
-  // any machine that has not run the check, and this test has been failing there
-  // since app/ stopped being tracked rather than skipping as it says it does.
-  const baseIfPresent = (p) => (exists(p) ? baseOf(p) : null);
   const check = baseOf("verify/Dockerfile");
-  const workshop = baseIfPresent("app/autonomous/Dockerfile");
-  const demo = baseIfPresent("app/autonomous-demo/Dockerfile");
+  const workshop = baseOf("workshop/container/Dockerfile");
 
   ok(check, "verify/Dockerfile has no FROM");
-  // app/ is a separate clone and is gitignored here, so on a machine that has not
-  // run the check yet there is nothing to compare against. Skip rather than fail:
-  // this suite must run with no Docker and no app/ present.
-  if (!workshop) return;
+  ok(workshop, "workshop/container/Dockerfile has no FROM");
 
   ok(
     check === workshop,
     `verify/Dockerfile builds on ${check} but the workshop container builds on ${workshop}. That is a ~2 GB base layer downloaded twice — the environment check would warm an image the workshop never uses, and "no network surprise mid-exercise" stops being true`
   );
-  if (demo) {
-    ok(
-      demo === workshop,
-      `app/autonomous-demo/Dockerfile builds on ${demo} but app/autonomous/Dockerfile on ${workshop} — the Part 3 image would pull a fresh 2 GB base mid-afternoon`
-    );
-  }
   // Pinned Playwright must match the base it is pinned to, or the npm package looks
   // for a browser revision the preinstalled /ms-playwright never shipped.
   const df = codeOf("verify/Dockerfile");
@@ -492,9 +519,11 @@ test("check 3 warms the images the workshop morning needs", null, () => {
     /workshop_compose\s+(--profile\s+\S+\s+)?pull\s+.*\bdb\b/.test(sh),
     "check 3 must pull the postgres image too"
   );
+  // Part 3 has no image of its own any more: the harness runs `claude -p` inside
+  // claude-container. A second agent image would be a 2 GB pull nobody needs.
   ok(
-    /--profile l4 build autonomous-agent/.test(sh),
-    "check 3 must build the Part 3 agent image. It is not needed until the afternoon, which is exactly why it is fetched the night before: a 2 GB pull is worst when it lands mid-exercise"
+    !/autonomous-agent|--profile l4/.test(sh),
+    "check 3 still builds a Part 3 agent image — Part 3 runs in claude-container now, so that is a 2 GB download for nothing"
   );
 });
 
@@ -641,7 +670,7 @@ test("the Linux screenshot drives the agent's own browser", "WIN-012", () => {
   );
   ok(
     /\/usr\/local\/bin\/screenshot\.mjs/.test(read("docker-compose.workshop.yml")),
-    "claude-container must mount verify/screenshot.mjs, or check 7 has nothing to run"
+    "claude-container must mount verify/screenshot.mjs, or check 8 has nothing to run"
   );
 });
 
@@ -799,6 +828,7 @@ const CHECKLISTS = {
     "Workshop image builds",
     "Claude credential in .env",
     "Workshop app up and serving",
+      "Workshop API answers",
     "Claude Code CLI + auth",
     "Playwright screenshot captured",
     "Agent sees the same app you do",
@@ -928,12 +958,16 @@ test("the workshop stack mounts the same app/ the check clones", null, () => {
   const yml = read("docker-compose.workshop.yml");
   ok(/\.\/app:/.test(yml), "docker-compose.workshop.yml must bind-mount ./app");
   ok(
-    /context:\s*\.\/app\/autonomous\b/.test(yml),
-    "the claude-container service builds from ./app/autonomous — if that moves, verify-setup.sh's 'is this the right repo' probe must move with it"
+    /context:\s*\.\/workshop\/container\b/.test(yml),
+    "the claude-container service builds from ./workshop/container — in this repo, so ./checkpoint.sh rewinding app/ never changes the image"
   );
   ok(
-    /autonomous\/Dockerfile/.test(codeOf("verify-setup.sh")),
-    "verify-setup.sh must probe for the file the compose build needs (app/autonomous/Dockerfile), or a wrong-repo clone fails minutes later as an opaque build error"
+    !/context:\s*\.\/app\b/.test(yml),
+    "no image may build from app/: ./checkpoint.sh rewinds it, so the image would depend on which rung the attendee was on when they built it"
+  );
+  ok(
+    /packages\/client\/package\.json/.test(codeOf("verify-setup.sh")),
+    "verify-setup.sh must probe app/ for a file only the workshop app has, or a wrong-repo clone fails minutes later as an app that never starts"
   );
 });
 // ------------------------------------------------------- context integrity
@@ -1870,7 +1904,7 @@ test("credentials are never passed as empty strings", null, () => {
       `${f} passes a credential through an environment: mapping — when unset that sets it to "" rather than omitting it, and a blank ANTHROPIC_API_KEY is what sends attendees to a login prompt`
     );
     // Every service that runs Claude has to get the credential from somewhere.
-    if (/claude|verify-agent|autonomous-agent/.test(yml)) {
+    if (/claude|verify-agent/.test(yml)) {
       ok(/env_file:/.test(yml), `${f} no longer supplies credentials at all — env_file is how they reach the container now`);
       ok(
         /required:\s*false/.test(yml),
@@ -2059,7 +2093,7 @@ test("a command that checks the work comes after the prompt that does it", null,
       }
     }
   }
-  ok(checked >= 6, `expected to place several commands relative to the prompts, placed ${checked}`);
+  ok(checked >= 5, `expected to place several commands relative to the prompts, placed ${checked}`);
 
   // The second group needs a heading of its own. Without one it is a bare run of
   // copy blocks under the prompts, which reads as more prompts.

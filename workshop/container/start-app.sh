@@ -56,8 +56,9 @@ fi
 #
 # It has to be written HERE, at every start, because the image pre-creates ~/.claude
 # but keeps it in the image rather than in a volume - so every recreated container is
-# a first run, forever. Seeding it in app/autonomous/Dockerfile would be rewound by
-# ./checkpoint.sh, same reason the rest of this file lives in this repo.
+# a first run, forever. It could be seeded in workshop/container/Dockerfile instead, now
+# that the image lives in this repo rather than in app/; it stays here so a change to it
+# takes effect on a restart, not an image rebuild.
 #
 # hasTrustDialogAccepted goes with it: the next thing Claude asks is whether this
 # folder is trusted, and the answer cannot be anything but yes - the container exists
@@ -152,10 +153,11 @@ fi
 #
 #   EACCES: permission denied, mkdir '/workspace/repo/node_modules/@acemir'
 #
-# and with no dependencies, Vite and the API both failed to start. The fix lives HERE
-# rather than in app/autonomous/Dockerfile deliberately: ./checkpoint.sh rewinds app/
-# to a cp-* tag, and a fix sitting in a rewound Dockerfile would quietly vanish the
-# first time somebody jumped checkpoints. `agent` has passwordless sudo in the image.
+# and with no dependencies, Vite and the API both failed to start. The fix lives HERE.
+# Pre-creating these paths owned by `agent` in workshop/container/Dockerfile would also
+# work, now that the image lives in this repo rather than in app/; doing it at start
+# means an image that is already built needs no rebuild. `agent` has passwordless sudo
+# in the image.
 step "Dependency volumes"
 VOLUME_DIRS="node_modules packages/client/node_modules packages/server/node_modules packages/shared/node_modules"
 for d in $VOLUME_DIRS; do
@@ -203,8 +205,8 @@ step "Database"
 # --reset-db: DROP THE DATABASE AND MIGRATE IT FROM NOTHING. This is what
 # ./checkpoint.sh runs after every jump. The database lives in its own container and
 # a jump only moves app/, so without this the database stays on the PREVIOUS rung:
-# jump back from cp-01 and the cp-00 API queries campaigns tables that cp-01's
-# migration renamed; jump forward over a half-done rename and cp-01's migration runs
+# jump back from cp-02 and the cp-01 API queries campaigns tables that cp-02's
+# migration renamed; jump forward over a half-done rename and cp-02's migration runs
 # on top of the attendee's own, and fails. Every rung's seed data is itself a
 # migration, so `dbmate up` on an empty database is exactly that rung's data.
 #
@@ -242,7 +244,7 @@ fi
 # -------------------------------------------------------------------- server
 # Is anything listening? NOT "does this route work". This script is deliberately not
 # rewound by ./checkpoint.sh, so it outlives route names — asking for /v1/campaigns
-# here meant that the moment cp-01 renamed it to /v1/proposals, the poll could never
+# here meant that the moment cp-02 renamed it to /v1/proposals, the poll could never
 # succeed and the banner below called a perfectly healthy API dead. A 404 is a pass:
 # it proves the server answered. curl writes 000 when the connection is refused.
 api_listening() {
