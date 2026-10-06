@@ -451,11 +451,11 @@ this is almost always a network problem - check your connection,
 
     if (-not $script:Failed) {
         # Prove it is the RIGHT repository, not merely a repository. The workshop
-        # stack builds app/autonomous/Dockerfile; missing, it surfaces minutes later
-        # as a build error about a missing context.
-        if (-not (Test-Path -LiteralPath (Join-Path $AppDir 'autonomous\Dockerfile'))) {
+        # container starts the app from packages/client and packages/server; missing,
+        # it surfaces minutes later as an app that never comes up.
+        if (-not (Test-Path -LiteralPath (Join-Path $AppDir 'packages\client\package.json'))) {
             Write-CheckFail "$appLeaf\ is a git clone, but it is not the workshop app" @"
-expected to find $appLeaf\autonomous\Dockerfile and it is not there
+expected to find $appLeaf\packages\client\package.json and it is not there
                         if you pointed WORKSHOP_APP_REPO somewhere else, unset it
                         otherwise move the folder aside and re-run  .\verify.ps1
 "@

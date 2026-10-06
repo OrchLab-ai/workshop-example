@@ -72,7 +72,7 @@ services:
     environment:
       VERIFY_URL: http://verify-web/
       VERIFY_OUT: "C:/screenshots/verify.png"
-      VERIFY_CHECKPOINT: "${VERIFY_CHECKPOINT:-cp-00}"
+      VERIFY_CHECKPOINT: "${VERIFY_CHECKPOINT:-cp-01}"
       # Firefox, not Chromium — Chromium cannot render on Server Core at all.
       # See the long comment in windows/Dockerfile.
       PW_BROWSER: "${PW_BROWSER:-firefox}"

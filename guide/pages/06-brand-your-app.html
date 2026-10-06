@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Brand Your Mission Updates — OrchLab Workshop Guide</title>
+<title>Brand The App — OrchLab Workshop Guide</title>
 <script>
 (function () {
   try {
@@ -32,6 +32,8 @@
   --amber:       #7a5200;
   --blue:        #1f5fa8;  /* 6.4:1 on white */
   --danger:      #a02e1a;  /* red — 7.2:1 on white */
+  --warn-bg:     #fff4c2;  /* .warning: a yellow you can see across a room */
+  --warn-edge:   #e0a800;
 }
 /* NO prefers-color-scheme BLOCK HERE, on purpose. Light is the guide's default
    whatever the operating system says — this is read on projectors and over
@@ -52,6 +54,8 @@
   --amber:       #ffbd2e;
   --blue:        #6cb4ff;
   --danger:      #ff9580;
+  --warn-bg:     #3d3415;
+  --warn-edge:   #ffbd2e;
 }
 :root {
   /* Constant in both themes */
@@ -199,6 +203,15 @@ li { margin: 8px 0; }
   border: 1px solid var(--border); border-radius: 0 0 6px 6px;
 }
 .checkblock li .copyblock { margin: 8px 0 4px; }
+/* Where a lettered checkpoint lands, between two steps: a rule with the tag on it. */
+.checkblock .rung {
+  display: flex; align-items: center; gap: 10px; margin: 14px 0;
+  color: var(--muted); font-size: 13px;
+}
+.checkblock .rung::before, .checkblock .rung::after {
+  content: ""; flex: 1; border-top: 1px dashed var(--border);
+}
+.checkblock .rung b { color: var(--accent); }
 
 /* link list */
 .links { list-style: none; padding: 0; margin: 0; }
@@ -488,6 +501,15 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 0 0 12px;
   font-size: 14.5px;
 }
+/* A guard against the one mistake an activity invites - louder than a .note, which
+   is information. Activity 05's: pasting the finished spec into Claude starts a
+   build two activities early. */
+.warning {
+  border: 1px solid var(--warn-edge); border-left-width: 4px; border-radius: 0 6px 6px 0;
+  background: var(--warn-bg);
+  padding: 12px 16px; margin: 0 0 16px; color: var(--strong); font-size: 14.5px;
+}
+.warning strong { color: var(--strong); }
 
 /* "Which window do I type this into, and from where?" is the most common thing a
    first-timer gets wrong, and a list of copyable commands answers neither half of
@@ -527,6 +549,7 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .in-container { --win: var(--accent); }
 .in-claude    { --win: #d97757; }
 .in-browser   { --win: var(--blue); }
+.in-editor    { --win: var(--brand); }
 .copyblock[class*=" in-"], .checkblock[class*=" in-"] {
   border: 2px solid var(--win); border-radius: 8px;
 }
@@ -542,6 +565,12 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 /* Not a terminal at all. A URL badged "host terminal" read as a command to type into
    one, so it gets a colour none of the three windows use. */
 .loc.browser   { background: var(--blue);   color: var(--bg); }
+/* Your own writing - a file to fill in, or a note: the light OrchLab green, frame and header both, so it
+   cannot be mistaken for the orange-framed prompts around it. */
+.loc.editor    { background: var(--brand);  color: var(--on-brand); }
+.copyblock.in-editor .cb-head, .checkblock.in-editor .cb-head {
+  background: color-mix(in srgb, var(--brand) 22%, var(--bg));
+}
 /* The same badge inside a sentence: "Back in the WORK TERMINAL, press Ctrl+C". Prose
    names a window with this rather than bold text, so the word on the page looks
    exactly like the label on the block it refers to. */
@@ -622,12 +651,12 @@ nav.pager a:hover { background: var(--surface); }
 
   <span class="actnum">ACTIVITY 06</span>
   <p class="eyebrow">Part 2 — Prompt Engineering</p>
-  <h1>Brand Your Mission Updates</h1>
+  <h1>Brand The App</h1>
   <p class="lede">Invent a brand, write it down, and have the agent regenerate the app's design tokens from it. Everyone's screen ends up different.</p>
 
   <div class="cp">
-    <span>start from <b>cp-04</b></span>
-    <span>produces <b>cp-05</b></span>
+    <span>start from <b>cp-05</b></span>
+    <span>produces <b>cp-06</b></span>
   </div>
 
 
@@ -641,7 +670,7 @@ nav.pager a:hover { background: var(--surface); }
     <p>Everyone starts this activity from the same code. This parks whatever you have on a <code>wip/</code> branch first — nothing you wrote is thrown away — and then moves <code>app/</code> to the finished state of the activity before this one. If you did finish the last activity, you are already here and there is nothing to run.</p>
   <div class="copyblock in-host">
     <div class="cb-head"><span>Catch up to the start of this activity</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>./checkpoint.sh 4</pre>
+    <pre>./checkpoint.sh 5</pre>
   </div>
   </div>
 </details>
@@ -653,7 +682,7 @@ nav.pager a:hover { background: var(--surface); }
   </div>
   <div class="copyblock is-prompt in-claude">
     <div class="cb-head"><span>2. Make the app wear it</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Read specs/standards/brand.md and regenerate packages/client/src/tokens.css from it. Change only the Tier 1 identity tokens — the semantic tokens and the components must not be edited. If the brand changes the fonts, load them the way specs/tech/frontend.md section 9.1 describes: self-hosted WOFF2 files in packages/client/src/assets/fonts/, @font-face rules in packages/client/src/fonts.css, and the preload in packages/client/index.html. Remove the font files that are no longer used, and update the font table in that section to match. Then use Playwright to screenshot the proposal page so I can see the result.</pre>
+    <pre>Before changing anything, use Playwright to screenshot the Explore Missions page and one proposal page, and save them as /screenshots/brand-before-explore.png and /screenshots/brand-before-proposal.png. Then read specs/standards/brand.md and regenerate packages/client/src/tokens.css from it. Change only the Tier 1 identity tokens — the semantic tokens and the components must not be edited. If the brand changes the fonts, load them the way specs/tech/frontend.md section 9.1 describes: self-hosted WOFF2 files in packages/client/src/assets/fonts/, @font-face rules in packages/client/src/fonts.css, and the preload in packages/client/index.html. Remove the font files that are no longer used, and update the font table in that section to match. When you are done, take the same two screenshots at the same size, save them as /screenshots/brand-after-explore.png and /screenshots/brand-after-proposal.png, and tell me what changed between before and after.</pre>
   </div>
 
   <h2>Check your work</h2>
@@ -670,7 +699,7 @@ packages/client/src/fonts.css</pre>
   <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
-      <p><code>./checkpoint.sh 5</code> gives you <em>a</em> brand — but not <em>your</em> brand. This is the one checkpoint that is personal.</p>
+      <p><code>./checkpoint.sh 6</code> gives you <em>a</em> brand — but not <em>your</em> brand. This is the one checkpoint that is personal.</p>
       <p>If you want to keep what you wrote, note the <code>wip/</code> branch name the jump prints. You can get back to it any time.</p>
       <p>Why it works with no component changes: <code>tokens.css</code> is two-tier. Identity tokens hold the brand; semantic tokens sit underneath; components only ever reference the semantic layer. Change the top, the whole app follows.</p>
     </div>
@@ -680,7 +709,7 @@ packages/client/src/fonts.css</pre>
 
   <nav class="pager">
     <a href="05-create-the-spec.html">&larr; Create the Spec</a>
-    <a href="07-build-it-properly.html">Build It Properly &rarr;</a>
+    <a href="07-spec-it-properly.html">Spec It Properly &rarr;</a>
   </nav>
 </div>
 <script>

@@ -41,7 +41,7 @@ if (!chromium) {
 
 const URL = process.env.VERIFY_URL || "http://verify-web/";
 const OUT = process.env.VERIFY_OUT || "/screenshots/verify.png";
-const CHECKPOINT = process.env.VERIFY_CHECKPOINT || "cp-00";
+const CHECKPOINT = process.env.VERIFY_CHECKPOINT || "cp-01";
 
 mkdirSync(OUT.replace(/\/[^/]+$/, ""), { recursive: true });
 

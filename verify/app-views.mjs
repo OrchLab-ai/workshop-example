@@ -5,7 +5,7 @@
 // only to prove Docker and Playwright work. It never touches the workshop app, which
 // is exactly why two app-breaking bugs walked straight past every environment check:
 //
-//   1. start-app.sh probed /v1/campaigns, a route cp-01 renamed, so the boot banner
+//   1. start-app.sh probed /v1/campaigns, a route cp-02 renamed, so the boot banner
 //      reported "API NOT RUNNING" against a perfectly healthy server.
 //   2. /etc/hosts in the container maps localhost to ::1 with no IPv4 entry, while
 //      Vite binds --host 0.0.0.0 (IPv4 only). Headless Chromium inside the container
@@ -26,10 +26,11 @@ import { mkdirSync } from "node:fs";
 // Two containers run this and they do not have playwright in the same place, and more
 // importantly they do not have the same BUILD of it. The workshop image installs
 // chromium for @playwright/mcp's bundled playwright-core specifically (see
-// app/autonomous/Dockerfile) because the MCP server expects a different build from the
-// base image's. The repo's own node_modules carries a third version, whose browser was
-// never downloaded — asking for that one fails with "Executable doesn't exist" against
-// a container that is perfectly capable of driving a browser.
+// workshop/container/Dockerfile) because the MCP server expects a different build from the
+// base image's. The repo's own node_modules carries a third version; the image now
+// installs its browser too, but an image built before that did not, and asking for it
+// there fails with "Executable doesn't exist" against a container that is perfectly
+// capable of driving a browser.
 //
 // So the MCP copy is tried FIRST. That is the exact stack the agent drives in activity
 // 3, which makes this check the agent's vantage AND the agent's browser rather than an

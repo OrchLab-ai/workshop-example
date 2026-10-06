@@ -12,7 +12,7 @@
 #
 set -uo pipefail
 
-TOTAL=8
+TOTAL=9
 # ONE stack: the workshop's own. The checks used to run in a separate check stack
 # (an nginx page and a look-alike agent image), which proved that a container shaped
 # like the workshop's worked - not that the workshop's did. Now the check starts the
@@ -306,7 +306,7 @@ run_logged() {
   local pid=$! start base rc note
   start=$(date +%s)
   # Time the CHECK, not this command. A check that runs several commands in sequence
-  # (check 3 builds three images and pulls a fourth) otherwise restarts its clock at
+  # (check 3 builds two images and pulls two more) otherwise restarts its clock at
   # every one, and the row counts up, snaps back to 0s, and counts up again - which
   # reads as the thing having crashed and restarted.
   base="${PROGRESS_EPOCH:-$start}"
@@ -477,26 +477,26 @@ else
     if run_logged "$LOG_DIR/01-clone.log" git clone --progress "$APP_REPO" "$APP_DIR"; then
       APP_ACTION="cloned in $(( $(date +%s) - CLONE_START ))s"
 
-      # LAND ON cp-00, NOT ON main.
+      # LAND ON cp-01, NOT ON main.
       #
       # A clone with no branch lands on main's tip, and main is where every rung is
-      # published. That was harmless for exactly as long as main WAS cp-00 — the
-      # moment cp-01 was published, a fresh clone started the day with the whole of
+      # published. That was harmless for exactly as long as main WAS cp-01 — the
+      # moment cp-02 was published, a fresh clone started the day with the whole of
       # activity 2 already applied, so the first exercise of the workshop was a
       # no-op and the activity after it began at its own finish line.
       #
       # Only on a fresh clone. A returning attendee's app/ is on whatever rung they
-      # have reached, and resetting that to cp-00 would throw away their morning.
+      # have reached, and resetting that to cp-01 would throw away their morning.
       # That is ./checkpoint.sh's job, and it parks work before it moves anything.
       #
       # A named branch rather than a detached HEAD, for the reason checkpoints/README
       # gives: attendees commit, and git complaining at them for it helps nobody.
-      if git -C "$APP_DIR" rev-parse -q --verify refs/tags/cp-00 >/dev/null 2>&1; then
+      if git -C "$APP_DIR" rev-parse -q --verify refs/tags/cp-01 >/dev/null 2>&1; then
         if run_logged "$LOG_DIR/01-clone.log" \
-             git -C "$APP_DIR" checkout -B work/cp-00 cp-00; then
-          APP_ACTION="$APP_ACTION, at cp-00"
+             git -C "$APP_DIR" checkout -B work/cp-01 cp-01; then
+          APP_ACTION="$APP_ACTION, at cp-01"
         else
-          fail_check "cloned the app but could not check out cp-00" \
+          fail_check "cloned the app but could not check out cp-01" \
 "the tag exists but the checkout failed - see $LOG_DIR/01-clone.log
                         without this you would start the day on main, which has
                         every later checkpoint already applied"
@@ -522,11 +522,11 @@ else
 
   if [ "$FAILED" -eq 0 ]; then
     # Prove it is the right repository, not merely a repository. The workshop
-    # stack builds app/autonomous/Dockerfile; if that is missing, the failure
-    # surfaces several minutes later as a build error about a missing context.
-    if [ ! -f "$APP_DIR/autonomous/Dockerfile" ]; then
+    # container starts the app from packages/client and packages/server; if they are
+    # missing, the failure surfaces minutes later as an app that never comes up.
+    if [ ! -f "$APP_DIR/packages/client/package.json" ]; then
       fail_check "$APP_DIR/ is a git clone, but it is not the workshop app" \
-"expected to find $APP_DIR/autonomous/Dockerfile and it is not there
+"expected to find $APP_DIR/packages/client/package.json and it is not there
                         if you pointed WORKSHOP_APP_REPO somewhere else, unset it
                         otherwise move the folder aside and re-run  ./verify-setup.sh"
     else
@@ -618,7 +618,7 @@ if [ "$FAILED" -eq 0 ]; then
     workshop_compose build claude-container || BUILD_OK=0
 
   if [ "$BUILD_OK" -eq 1 ]; then
-    # Check 8's outside vantage, and the page check 7 photographs.
+    # Check 9's outside vantage, and the page check 8 photographs.
     STEP_NOTE_PREFIX="view checker:"
     run_logged "$LOG_DIR/03-build-check.log" \
       workshop_compose --profile check build verify-views || BUILD_OK=0
@@ -630,24 +630,17 @@ if [ "$FAILED" -eq 0 ]; then
     run_logged "$LOG_DIR/03-pull.log" \
       workshop_compose --profile check pull db verify-web || BUILD_OK=0
   fi
-  if [ "$BUILD_OK" -eq 1 ]; then
-    # Part 3's image. Not needed until the afternoon, which is exactly why it is
-    # fetched now: a 2 GB pull is worst when it lands in the middle of an exercise.
-    STEP_NOTE_PREFIX="part 3 agent:"
-    run_logged "$LOG_DIR/03-build-agent.log" \
-      workshop_compose --profile l4 build autonomous-agent || BUILD_OK=0
-  fi
   STEP_NOTE_PREFIX=""
 
   if [ "$BUILD_OK" -eq 1 ]; then
-    pass_check "workshop + checker + agent, $(( $(date +%s) - BUILD_START ))s"
+    pass_check "workshop + checker, $(( $(date +%s) - BUILD_START ))s"
   else
     fail_check "a container image failed to build" \
 "this is almost always a network problem - check your connection,
                         then re-run  ./verify-setup.sh
                         the failing step names its own log in $LOG_DIR/:
                         03-build-workshop.log, 03-build-check.log,
-                        03-pull.log, 03-build-agent.log"
+                        03-pull.log"
   fi
 fi
 
@@ -725,7 +718,7 @@ fi
 # attendee's own browser has. So a pass here is also the port check: nothing else on
 # this machine is holding WORKSHOP_PORT, because the workshop itself is serving on it.
 #
-# The two-vantage view check up.sh would run next is skipped here and run as check 8,
+# The two-vantage view check up.sh would run next is skipped here and run as check 9,
 # so that it gets a row of its own rather than failing under this one's label.
 
 if [ "$FAILED" -eq 0 ]; then
@@ -761,7 +754,45 @@ if [ "$FAILED" -eq 0 ]; then
   fi
 fi
 
-# --------------------------------------------------------- 6: Claude Code auth
+# ------------------------------------------------------- 6: Workshop API answers
+#
+# Check 5 proves the site answers; this proves what is behind it does. One login as the
+# seeded demo creator, from the host and through the site's /v1 proxy - the path every
+# page in the app takes - so a pass means the proxy, the API, the database, the
+# migrations and the seed data all work. A site that loads while every request it makes
+# fails is the fault this catches: it looks fine until the first page that needs data.
+
+if [ "$FAILED" -eq 0 ]; then
+  start_check "Workshop API answers"
+  PORT="${WORKSHOP_PORT:-5173}"
+  API_URL="http://localhost:${PORT}/v1/auth/login"
+  API_STATUS=000
+  # The API can come up a few seconds after the site, so allow it half a minute.
+  for _ in $(seq 1 15); do
+    API_STATUS=$(curl -sS -o "$LOG_DIR/06-api.log" -w '%{http_code}' --max-time 10 \
+      -X POST -H 'Content-Type: application/json' \
+      -d '{"email":"creator@example.com","password":"creator-demo-pass"}' \
+      "$API_URL" 2>>"$LOG_DIR/06-api-curl.log") || API_STATUS=000
+    case "$API_STATUS" in 000|502|503|504) sleep 2 ;; *) break ;; esac
+  done
+  if [ "$API_STATUS" = 200 ] && grep -q '"token"' "$LOG_DIR/06-api.log"; then
+    pass_check "logged in as the demo creator via /v1"
+  elif [ "$API_STATUS" = 401 ]; then
+    fail_check "the API answers, but the demo account was not found" \
+"the database is up but is missing its migrations or seed data
+                        rebuild it from scratch, then re-run  ./verify-setup.sh :
+                          docker compose -f $WORKSHOP_COMPOSE_FILE exec claude-container \\
+                            start-app.sh --reset-db"
+  else
+    fail_check "the site is up, but its API did not answer (HTTP $API_STATUS)" \
+"the response is in $LOG_DIR/06-api.log
+                        the API's own log is in the container:
+                          docker compose -f $WORKSHOP_COMPOSE_FILE exec claude-container \\
+                            tail -n 50 /workspace/logs/server.log"
+  fi
+fi
+
+# --------------------------------------------------------- 7: Claude Code auth
 #
 # Asked of the running claude-container, with `exec`, so the answer comes from the
 # same container, the same user and the same environment an attendee's
@@ -769,10 +800,10 @@ fi
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Claude Code CLI + auth"
-  if ! run_logged "$LOG_DIR/06-claude.log" \
+  if ! run_logged "$LOG_DIR/07-claude.log" \
         workshop_compose exec -T claude-container claude --version; then
     fail_check "the Claude Code CLI did not start inside the workshop container" \
-"check $LOG_DIR/06-claude.log for the error
+"check $LOG_DIR/07-claude.log for the error
                         if it mentions authentication, re-run  claude setup-token
                         and refresh the value in .env"
   # THE CHECK THAT ACTUALLY CHECKS. Check 4 proves the value is present and the right
@@ -781,7 +812,7 @@ if [ "$FAILED" -eq 0 ]; then
   # it. All green and then a login prompt. One real round trip is the only thing that
   # distinguishes a credential that exists from one that works, and it costs a
   # handful of tokens.
-  elif ! STEP_NOTE_PREFIX="authenticating " run_logged "$LOG_DIR/06-auth.log" \
+  elif ! STEP_NOTE_PREFIX="authenticating " run_logged "$LOG_DIR/07-auth.log" \
         workshop_compose exec -T claude-container claude -p "Reply with the two characters: OK"; then
     fail_check "the credential was rejected - Claude could not authenticate" \
 "the value in .env is present and the right shape, but Claude will not
@@ -791,14 +822,14 @@ if [ "$FAILED" -eq 0 ]; then
                           - it was truncated on the way into .env - check there is no
                             line break or stray quote around it
                           - .env was saved with Windows line endings (see above)
-                        the exact error is in $LOG_DIR/06-auth.log"
+                        the exact error is in $LOG_DIR/07-auth.log"
   else
-    CLAUDE_VERSION=$(tr -d '\r' < "$LOG_DIR/06-claude.log" | tail -1 | awk '{print $1}')
+    CLAUDE_VERSION=$(tr -d '\r' < "$LOG_DIR/07-claude.log" | tail -1 | awk '{print $1}')
     pass_check "claude ${CLAUDE_VERSION:-ok}, credential authenticated"
   fi
 fi
 
-# --------------------------------------------------------------- 7: Screenshot
+# --------------------------------------------------------------- 8: Screenshot
 #
 # claude-container's own browser - the one the agent drives through the Playwright
 # MCP server - loads the ENVIRONMENT OK page from verify-web over the compose network
@@ -808,19 +839,19 @@ fi
 if [ "$FAILED" -eq 0 ]; then
   start_check "Playwright screenshot captured"
   rm -f "$SCREENSHOT"
-  if ! run_logged "$LOG_DIR/07-web.log" \
+  if ! run_logged "$LOG_DIR/08-web.log" \
        workshop_compose --profile check up -d --wait verify-web; then
     fail_check "the page the screenshot is taken of did not start" \
-"check $LOG_DIR/07-web.log for the error
+"check $LOG_DIR/08-web.log for the error
                         then re-run  ./verify-setup.sh"
-  elif ! run_logged "$LOG_DIR/07-screenshot.log" \
+  elif ! run_logged "$LOG_DIR/08-screenshot.log" \
        workshop_compose exec -T \
          -e VERIFY_URL=http://verify-web/ \
          -e VERIFY_OUT=/screenshots/verify.png \
-         -e VERIFY_CHECKPOINT="${VERIFY_CHECKPOINT:-cp-00}" \
+         -e VERIFY_CHECKPOINT="${VERIFY_CHECKPOINT:-cp-01}" \
          claude-container node /usr/local/bin/screenshot.mjs; then
     fail_check "the headless browser could not render and capture the page" \
-"check $LOG_DIR/07-screenshot.log for the error
+"check $LOG_DIR/08-screenshot.log for the error
                         then re-run  ./verify-setup.sh"
   elif [ ! -s "$SCREENSHOT" ]; then
     fail_check "Playwright reported success but $SCREENSHOT was not written" \
@@ -831,25 +862,25 @@ if [ "$FAILED" -eq 0 ]; then
     SIZE_KB=$(( $(wc -c < "$SCREENSHOT") / 1024 ))
     # What the browser stamped onto the image. Read back out of the log because the
     # container that knew it is stopped when the check ends - see the verdict block.
-    SHOT_HOST=$(tr -d '\r' < "$LOG_DIR/07-screenshot.log" | sed -n 's/^VERIFY_HOST=//p' | tail -1)
-    SHOT_STAMP=$(tr -d '\r' < "$LOG_DIR/07-screenshot.log" | sed -n 's/^VERIFY_STAMP=//p' | tail -1)
+    SHOT_HOST=$(tr -d '\r' < "$LOG_DIR/08-screenshot.log" | sed -n 's/^VERIFY_HOST=//p' | tail -1)
+    SHOT_STAMP=$(tr -d '\r' < "$LOG_DIR/08-screenshot.log" | sed -n 's/^VERIFY_STAMP=//p' | tail -1)
     pass_check "verify.png, ${SIZE_KB} KB"
   fi
 fi
 
-# ---------------------------------------------------- 8: Agent sees what you see
+# ---------------------------------------------------- 9: Agent sees what you see
 #
 # The check that would have caught both of the faults that cost a real run: an API
 # probe asking for a renamed route, and localhost resolving to IPv6 only inside the
-# container while Vite listened on IPv4. Checks 5 and 7 load pages with curl and with
+# container while Vite listened on IPv4. Checks 5 and 8 load pages with curl and with
 # a browser respectively, but neither loads THE APP in a browser from inside - and
 # curl falls back to IPv4 where headless Chromium does not.
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Agent sees the same app you do"
-  if ! run_logged "$LOG_DIR/08-views.log" ./workshop/verify-views.sh; then
+  if ! run_logged "$LOG_DIR/09-views.log" ./workshop/verify-views.sh; then
     fail_check "the app is up, but the two vantage points do not agree" \
-"see $LOG_DIR/08-views.log - it names which vantage failed and why
+"see $LOG_DIR/09-views.log - it names which vantage failed and why
                         the screenshots are in screenshots/verify-outside.png
                         and screenshots/verify-inside.png, side by side"
   else
@@ -867,9 +898,10 @@ while [ "$IDX" -lt "$TOTAL" ]; do
     3) start_check "Workshop image builds" ;;
     4) start_check "Claude credential in .env" ;;
     5) start_check "Workshop app up and serving" ;;
-    6) start_check "Claude Code CLI + auth" ;;
-    7) start_check "Playwright screenshot captured" ;;
-    8) start_check "Agent sees the same app you do" ;;
+    6) start_check "Workshop API answers" ;;
+    7) start_check "Claude Code CLI + auth" ;;
+    8) start_check "Playwright screenshot captured" ;;
+    9) start_check "Agent sees the same app you do" ;;
   esac
   say "${CURRENT_LINE}${DIM}----${RESET}   ${DIM}not reached${RESET}"
 done

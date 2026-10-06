@@ -21,7 +21,7 @@ import { dirname } from "node:path";
 
 const URL_ = process.env.VERIFY_URL || "http://verify-web/";
 const OUT = process.env.VERIFY_OUT || "C:/screenshots/verify.png";
-const CHECKPOINT = process.env.VERIFY_CHECKPOINT || "cp-00";
+const CHECKPOINT = process.env.VERIFY_CHECKPOINT || "cp-01";
 const BROWSER = process.env.PW_BROWSER || "firefox";
 const GLOBAL_ROOT = process.env.NPM_GLOBAL_ROOT || "C:/npm-global/node_modules/";
 
