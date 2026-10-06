@@ -701,10 +701,11 @@ Also write harness/tasks/notify-backers.md, with a # Notify backers heading: &qu
     <pre>undefined</pre>
   </div>
       </li>
-      <li>If you agree, approve it. Use the branch name the harness printed. This is the only step it leaves to you.
+      <li>If you agree, approve it. The first line finds the newest run's branch: check it is the one the harness printed. This is the only step it leaves to you.
   <div class="copyblock in-container">
     <div class="cb-head"><span>3. Approve</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>git merge --squash harness/&lt;id&gt; &amp;&amp; git commit -m &quot;Notify backers of mission updates (built by the harness)&quot;</pre>
+    <pre>run=$(git branch --list 'harness/*' --sort=-committerdate --format='%(refname:short)' | head -1) &amp;&amp; echo &quot;newest run: $run&quot;
+git merge --squash &quot;$run&quot; &amp;&amp; git commit -m &quot;Notify backers of mission updates (built by the harness)&quot;</pre>
   </div>
       </li>
       <li>Keep the harness and what it learned.

@@ -729,11 +729,12 @@ Also write harness/tasks/mission-updates.md, with a # Build Mission Updates head
     <pre>undefined</pre>
   </div>
       </li>
-      <li>If the gate passed, it is your call. Look at the change, take it, apply its migration to your running database, then run the end-to-end tests — the gate did not run those. Use the branch name the harness printed.
+      <li>If the gate passed, it is your call. Look at the change, take it, apply its migration to your running database, then run the end-to-end tests — the gate did not run those. The first line finds the newest run's branch: check it is the one the harness printed.
   <div class="copyblock in-container">
     <div class="cb-head"><span>6. Review it and merge it</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>git diff --stat HEAD...harness/&lt;id&gt;
-git merge --squash harness/&lt;id&gt; &amp;&amp; git commit -m &quot;Add Mission Updates (built by the harness from the v2 spec)&quot;
+    <pre>run=$(git branch --list 'harness/*' --sort=-committerdate --format='%(refname:short)' | head -1) &amp;&amp; echo &quot;newest run: $run&quot;
+git diff --stat HEAD...&quot;$run&quot;
+git merge --squash &quot;$run&quot; &amp;&amp; git commit -m &quot;Add Mission Updates (built by the harness from the v2 spec)&quot;
 dbmate --no-dump-schema -d packages/server/db/migrations up
 ./scripts/run-e2e.sh</pre>
   </div>

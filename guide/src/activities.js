@@ -1151,7 +1151,7 @@ You are a senior full-stack engineer working in this codebase.
           label: "8. Gate it, and show it",
           where: "claude",
           prompt: true,
-          code: "Add a gate to harness/run-task.sh. After the agent's work is committed, run ./scripts/ci-check.sh inside the run's worktree with npm_config_ignore_scripts=true (the install's prepare step cannot write git hooks from a worktree). Log its output to run.log, print a line --- gate, then exactly GATE PASSED or GATE FAILED after the result, keep the branch either way so it can be inspected, and exit non-zero on failure. If the run committed nothing, that is GATE FAILED too: an empty run has not done the task, and checking untouched code would pass. Then add screenshots for the human reviewer: before the agent starts, serve the worktree's client on a spare port (HARNESS_WEB_PORT, default 5373, with --strictPort, sending /v1 to the running API with API_PROXY_TARGET=http://localhost:3001) and use Playwright from the worktree's node_modules to screenshot the first proposal's detail page (find its id with GET /v1/proposals) as before.png in the run folder. After the agent's work is committed, screenshot the same page as after.png, and copy both to /screenshots/<run id>-before.png and /screenshots/<run id>-after.png (the run's id, so runs never overwrite each other) so they open on the host. Stop that server when the run ends, whatever happens, and print the two paths after the gate line. A screenshot that fails is reported, but never fails the run. Add the gate and the screenshots to harness/README.md, including what the script now exits with.",
+          code: "Add a gate to harness/run-task.sh. First, just before the commit, format the files the agent changed with the worktree's own Prettier (npx prettier --write on them, ignoring files it does not handle), the way a pre-commit hook would: the agent may check formatting but not rewrite it, and a style nit should not be what fails the gate. After the agent's work is committed, run ./scripts/ci-check.sh inside the run's worktree with npm_config_ignore_scripts=true (the install's prepare step cannot write git hooks from a worktree). Log its output to run.log, print a line --- gate, then exactly GATE PASSED or GATE FAILED after the result, keep the branch either way so it can be inspected, and exit non-zero on failure. If the run committed nothing, that is GATE FAILED too: an empty run has not done the task, and checking untouched code would pass. Then add screenshots for the human reviewer: before the agent starts, serve the worktree's client on a spare port (HARNESS_WEB_PORT, default 5373, with --strictPort, sending /v1 to the running API with API_PROXY_TARGET=http://localhost:3001) and use Playwright from the worktree's node_modules to screenshot the first proposal's detail page (find its id with GET /v1/proposals) as before.png in the run folder. After the agent's work is committed, screenshot the same page as after.png, and copy both to /screenshots/<run id>-before.png and /screenshots/<run id>-after.png (the run's id, so runs never overwrite each other) so they open on the host. Stop that server when the run ends, whatever happens, and print the two paths after the gate line. A screenshot that fails is reported, but never fails the run. Add the gate and the screenshots to harness/README.md, including what the script now exits with.",
         },
         {
           text: "Run the same task again — restricted and gated. Did it still finish? If it stopped short, read why in the result: least privilege set too tight is a failure too, and the fix is to allow what the task needs, not to switch the rules off. Each run installs its own dependencies in a fresh worktree: that is what isolation costs.",
@@ -1160,10 +1160,10 @@ You are a senior full-stack engineer working in this codebase.
           code: "./harness/run-task.sh harness/tasks/define-tokens.md",
         },
         {
-          text: "Keep the harness, then take the fix. The runs stay on their own <code>harness/…</code> branches; only the harness itself goes on yours. The container has no git identity of its own, so the first two lines give it one — put your own name and email in if you like. <code>--global</code> keeps it inside the container: your identity on your own machine is untouched. If the gate passed, open the run's before and after screenshots in your <code>screenshots/</code> folder, look at what the run changed, then merge it: use the branch name the harness printed. Reload the proposal page: the sections that had no edges now have them.",
+          text: "Keep the harness, then take the fix. The runs stay on their own <code>harness/…</code> branches; only the harness itself goes on yours. The container has no git identity of its own, so the first two lines give it one — put your own name and email in if you like. <code>--global</code> keeps it inside the container: your identity on your own machine is untouched. If the gate passed — check the line says PASSED, and read <code>run.log</code> if it does not — open the run's before and after screenshots in your <code>screenshots/</code> folder, look at what the run changed, then merge it. The <code>run=</code> line finds the newest run's branch: check it is the one the harness printed. Reload the proposal page: the sections that had no edges now have them.",
           label: "10. Commit the harness and merge the fix",
           where: "container",
-          code: "git config --global user.name \"Workshop Attendee\"\ngit config --global user.email \"attendee@workshop.local\"\ngit add harness && git commit -m \"Add a headless harness: run, isolate, restrict, gate\"\ngit diff HEAD...harness/<id>\ngit merge --squash harness/<id> && git commit -m \"Define every design token the components use (built by the harness)\"",
+          code: "git config --global user.name \"Workshop Attendee\"\ngit config --global user.email \"attendee@workshop.local\"\ngit add harness && git commit -m \"Add a headless harness: run, isolate, restrict, gate\"\nrun=$(git branch --list 'harness/*' --sort=-committerdate --format='%(refname:short)' | head -1) && echo \"newest run: $run\"\ngit diff HEAD...\"$run\"\ngit merge --squash \"$run\" && git commit -m \"Define every design token the components use (built by the harness)\"",
         },
       ],
     },
@@ -1227,10 +1227,10 @@ You are a senior full-stack engineer working in this codebase.
           text: "Read <code>plan.md</code> before you look at the code. Is that how you would have split the work? The coding stage only ever saw the plan — never your spec. If the run stopped with <code>BLOCKED:</code>, that is your spec's gap: settle it in v2, commit, and run again.",
         },
         {
-          text: "If the gate passed, it is your call. Look at the change, take it, apply its migration to your running database, then run the end-to-end tests — the gate did not run those. Use the branch name the harness printed.",
+          text: "If the gate passed, it is your call. Look at the change, take it, apply its migration to your running database, then run the end-to-end tests — the gate did not run those. The first line finds the newest run's branch: check it is the one the harness printed.",
           label: "6. Review it and merge it",
           where: "container",
-          code: "git diff --stat HEAD...harness/<id>\ngit merge --squash harness/<id> && git commit -m \"Add Mission Updates (built by the harness from the v2 spec)\"\ndbmate --no-dump-schema -d packages/server/db/migrations up\n./scripts/run-e2e.sh",
+          code: "run=$(git branch --list 'harness/*' --sort=-committerdate --format='%(refname:short)' | head -1) && echo \"newest run: $run\"\ngit diff --stat HEAD...\"$run\"\ngit merge --squash \"$run\" && git commit -m \"Add Mission Updates (built by the harness from the v2 spec)\"\ndbmate --no-dump-schema -d packages/server/db/migrations up\n./scripts/run-e2e.sh",
         },
         {
           text: "Open a proposal page, sign in as its creator and post an update. Mission Updates, built by an agent nobody was watching, from a spec you wrote — in your colours.",
@@ -1280,10 +1280,10 @@ You are a senior full-stack engineer working in this codebase.
           text: "Read <code>review.json</code> and <code>summary.md</code> in the run folder. Do you agree with the reviewer? Is the summary something you would actually send?",
         },
         {
-          text: "If you agree, approve it. Use the branch name the harness printed. This is the only step it leaves to you.",
+          text: "If you agree, approve it. The first line finds the newest run's branch: check it is the one the harness printed. This is the only step it leaves to you.",
           label: "3. Approve",
           where: "container",
-          code: "git merge --squash harness/<id> && git commit -m \"Notify backers of mission updates (built by the harness)\"",
+          code: "run=$(git branch --list 'harness/*' --sort=-committerdate --format='%(refname:short)' | head -1) && echo \"newest run: $run\"\ngit merge --squash \"$run\" && git commit -m \"Notify backers of mission updates (built by the harness)\"",
         },
         {
           label: "4. Commit the harness",
