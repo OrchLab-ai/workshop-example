@@ -171,7 +171,14 @@ while :; do
   # Desktop's port forwarding before the app listened was accepted and never answered.
   # The loop never came round again, so neither the 30s heartbeat nor the timeout below
   # ever fired, and up.sh sat on "Site on :5173" indefinitely.
-  if curl -fsS --max-time 5 -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; then
+  #
+  # The result is KEPT, not just tested, so the heartbeat below can say what the probe
+  # got - an HTTP code, or curl's own error. A wait that only says "still working"
+  # cannot be told apart from a probe failing the same way every two seconds.
+  SITE_URL="http://localhost:${PORT}/"
+  SITE_ERR=$(curl -fsS --max-time 5 -o /dev/null -w '%{http_code}' "$SITE_URL" 2>&1)
+  SITE_RC=$?
+  if [ "$SITE_RC" -eq 0 ]; then
     printf '\n%s%s  READY  %s  the site is answering on http://localhost:%s%s\n' \
       "$GREEN" "$BOLD" "$RESET" "$PORT" ""
     printf '   Took %s. Leave the stack running — you only do this once, at the start of the workshop.\n' "$(hhmmss "$ELAPSED")"
@@ -248,6 +255,12 @@ while :; do
     # A heartbeat, so a long install never looks like a hang. Installing the
     # dependencies is one phase and takes the bulk of the wait.
     printf '   %sstill working — %s%s\n' "$DIM" "$(hhmmss "$ELAPSED")" "$RESET"
+    # Once the site phase has started, also say what the last probe got - the one
+    # line that explains a wait the container's own log says should be over.
+    case "$LAST_PHASE" in
+      Site*) printf '   %s  last check of %s: curl exit %s, %s%s\n' "$DIM" "$SITE_URL" "$SITE_RC" \
+               "$(printf '%s' "$SITE_ERR" | tr -d '\015' | tr '\n' ' ' | cut -c1-120)" "$RESET" ;;
+    esac
     LAST_BEAT=$ELAPSED
   fi
 
