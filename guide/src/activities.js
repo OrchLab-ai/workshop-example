@@ -155,7 +155,12 @@ const CREDENTIALS = {
       summary: "I have a Claude subscription",
       hint: "Most people. Pro, Max or Team.",
       body:
-        "Run this on <strong>your own machine</strong>, never inside the container. It needs Claude Code installed locally — <code>npm install -g @anthropic-ai/claude-code</code> — and it opens a browser for you to sign in. It then prints a long-lived token.",
+        "Run this on <strong>your own machine</strong>, never inside the container. It needs Claude Code installed locally — <code>npm install -g @anthropic-ai/claude-code</code> — and it opens a browser for you to sign in. It then prints a long-lived token." +
+        // Windows only, and the one exception to "everything is Git Bash": the
+        // sign-in screen setup-token draws does not work properly in Git Bash's
+        // terminal. Inlined rather than winOnly(), which is declared further down
+        // and so does not exist yet when this object is built.
+        ' <span data-only="windows-linux windows-windows"><strong>On Windows, run this one in PowerShell or CMD, not Git Bash</strong> — its sign-in screen does not work properly in Git Bash. Everything after setup stays in Git Bash.</span>',
       command: { label: "On your own machine", code: "claude setup-token", where: "host" },
       after:
         "The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> and leave <code>ANTHROPIC_API_KEY</code> commented out.",
@@ -718,7 +723,7 @@ const TERMINALS = {
       `<strong>On Windows, all three windows are</strong> ${GIT_BASH}. ` +
       '<span class="not">Not PowerShell, and not CMD</span> — every <code>./something.sh</code> command in this guide is a bash script and will not run there. ' +
       `${GIT_BASH} came with Git for Windows. Open it from the Start menu and <code>cd</code> into your <code>workshop-example</code> folder, or right-click the folder in Explorer and choose <strong>Open Git Bash here</strong>. ` +
-      "The only PowerShell command in the whole workshop is the Windows-containers environment check, <code>windows\\verify.ps1</code>.",
+      "Two exceptions, both during setup: <code>claude setup-token</code> runs in <strong>PowerShell or CMD</strong>, because its sign-in screen does not work properly in Git Bash, and the Windows-containers environment check, <code>windows\\verify.ps1</code>, runs in PowerShell.",
   },
   // Not a terminal, so it is not a fourth numbered window - but it is the thing that
   // tells you the three above worked.

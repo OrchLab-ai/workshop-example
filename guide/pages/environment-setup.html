@@ -848,7 +848,7 @@ cd workshop-example</pre>
       <span class="hint">Most people. Pro, Max or Team.</span>
     </summary>
     <div class="cred-body">
-      <p>Run this on <strong>your own machine</strong>, never inside the container. It needs Claude Code installed locally — <code>npm install -g @anthropic-ai/claude-code</code> — and it opens a browser for you to sign in. It then prints a long-lived token.</p>
+      <p>Run this on <strong>your own machine</strong>, never inside the container. It needs Claude Code installed locally — <code>npm install -g @anthropic-ai/claude-code</code> — and it opens a browser for you to sign in. It then prints a long-lived token. <span data-only="windows-linux windows-windows"><strong>On Windows, run this one in PowerShell or CMD, not Git Bash</strong> — its sign-in screen does not work properly in Git Bash. Everything after setup stays in Git Bash.</span></p>
   <div class="copyblock in-host">
     <div class="cb-head"><span>On your own machine</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>claude setup-token</pre>
