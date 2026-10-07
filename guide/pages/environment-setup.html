@@ -1142,6 +1142,31 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       </div>
     </details>
     <details class="fix" data-only="macos windows-linux">
+      <summary><span class="fx-check">Check 6</span>the API cannot start: package '…' is not installed</summary>
+      <div class="fx-body">
+        <p>The site loads but the API behind it cannot start, so every page that loads data shows a <strong>500</strong>. The app's dependencies are incomplete — usually an install that was interrupted. Restarting the app checks them against the lockfile and installs whatever is missing; then re-run the check.</p>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Reinstall what is missing and restart the app</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <pre>docker compose -f docker-compose.workshop.yml exec claude-container start-app.sh --restart</pre>
+  </div>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Then re-run the check</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <pre>./verify-setup.sh</pre>
+  </div>
+      </div>
+    </details>
+    <details class="fix" data-only="macos windows-linux">
+      <summary><span class="fx-check">Check 7</span>Claude Code could not be updated to the latest version</summary>
+      <div class="fx-body">
+        <p>The check updates Claude Code inside the workshop container before it tests it, so everyone starts on the same current release. It could not reach the npm registry — almost always the network, a VPN or a proxy. Check your connection and re-run. If a release is known to be bad, you can hold a version instead by naming it in <code>.env</code>.</p>
+  <div class="copyblock in-host">
+    <div class="cb-head"><span>Only if told to hold a version</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <pre>echo WORKSHOP_CLAUDE_VERSION=2.0.14 &gt;&gt; .env
+./verify-setup.sh</pre>
+  </div>
+      </div>
+    </details>
+    <details class="fix" data-only="macos windows-linux">
       <summary><span class="fx-check">Check 7</span>the Claude Code CLI did not start inside the workshop container</summary>
       <div class="fx-body">
         <p>The credential is present but the container could not use it. Read <code>.verify-logs/07-claude.log</code>: if it mentions authentication, the token has expired or was truncated on the way into <code>.env</code> — re-run <code>claude setup-token</code> and replace the value. Check there is no stray quote or line break around it.</p>

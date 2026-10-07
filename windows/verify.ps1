@@ -998,6 +998,14 @@ if (-not $script:Failed) {
     Say "       Container:  ${BOLD}$hostText${RESET}"
     Say "       Taken at:   ${BOLD}$stampText${RESET}"
     Say ''
+    # NOT CHECKED HERE: the workshop app's API. This pathway serves a static page from a
+    # Windows container and never starts the app, whose stack is Linux-only - so there
+    # is no API to ask. ./workshop/up.sh asks it on the day, once Docker is in Linux
+    # mode, and will not say READY until it answers. Said here so a green run is not
+    # read as covering it.
+    Say "   ${DIM}Not checked here: the workshop app and its API - they need Linux containers.${RESET}"
+    Say "   ${DIM}On the day, ./workshop/up.sh in Git Bash checks both before it says READY.${RESET}"
+    Say ''
     Say "   ${BOLD}${Rule}${RESET}"
     if ($Quiet) { Write-Host "PASS  all $Total checks (windows containers)" }
     $script:ExitCode = 0

@@ -112,6 +112,10 @@ FAIL_FIX=""
 # the night before are the images `up -d` wants in the morning, and the container the
 # checks ask questions of is the one attendees will exec into.
 workshop_compose() { docker compose -f "$WORKSHOP_COMPOSE_FILE" "$@"; }
+# Exported because run_logged runs its commands in a fresh bash (see no_tty), which
+# would otherwise know neither the function nor the file it names.
+export WORKSHOP_COMPOSE_FILE
+export -f workshop_compose
 
 # IS THE WORKSHOP STACK ALREADY UP?
 #
@@ -300,6 +304,27 @@ progress_clear() {
   printf '\r%*s\r' "$(term_cols)" ''
 }
 
+# no_tty <command...> - run a command with NO CONTROLLING TERMINAL.
+#
+# Reported as a stray "^[" under check 5's row. Something the step runs - the Docker
+# CLI is the likely one - asks the terminal a question through /dev/tty, the way a
+# program asks for the background colour. Nothing reads the answer, so the terminal
+# echoes it onto the screen, where it lands on top of the progress line. Redirecting
+# stdin, stdout and stderr cannot stop it: /dev/tty is opened by name.
+#
+# A new session has no controlling terminal, so opening /dev/tty fails and the
+# question is never asked. perl rather than setsid(1): setsid is not on macOS, and
+# perl is on macOS, Linux and Git Bash alike. Through bash -c so that shell functions
+# (workshop_compose) still resolve. Without perl it runs the command as before.
+no_tty() {
+  if command -v perl >/dev/null 2>&1; then
+    perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV or die "exec: $!\n"' \
+      bash -c '"$@"' no_tty "$@"
+  else
+    "$@"
+  fi
+}
+
 # run_logged <log> <command...> - run a command silently, logging it, and keep the
 # current check line updated while it runs. Returns the command's own exit status,
 # so the callers' if/elif logic reads exactly as it did before.
@@ -331,10 +356,10 @@ run_logged_inner() {
   # SIGTTIN - which looks exactly like the hang this function exists to prevent.
   # >> not >: run_logged has already written the log's header line.
   if [ "$PROGRESS" -eq 0 ]; then
-    "$@" >>"$log" 2>&1 </dev/null
+    no_tty "$@" >>"$log" 2>&1 </dev/null
     return $?
   fi
-  "$@" >>"$log" 2>&1 </dev/null &
+  no_tty "$@" >>"$log" 2>&1 </dev/null &
   local pid=$! start base rc note
   start=$(date +%s)
   # Time the CHECK, not this command. A check that runs several commands in sequence
@@ -793,14 +818,16 @@ fi
 # attendee's own browser has. So a pass here is also the port check: nothing else on
 # this machine is holding WORKSHOP_PORT, because the workshop itself is serving on it.
 #
-# The two-vantage view check up.sh would run next is skipped here and run as check 9,
-# so that it gets a row of its own rather than failing under this one's label.
+# The API check and the two-vantage view check up.sh would run next are skipped here
+# and run as checks 6 and 9, so each gets a row of its own rather than failing under
+# this one's label.
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop app up and serving"
   PORT="${WORKSHOP_PORT:-5173}"
   UP_START=$(date +%s)
-  if WORKSHOP_SKIP_VIEW_CHECK=1 run_logged "$LOG_DIR/05-up.log" ./workshop/up.sh; then
+  if WORKSHOP_SKIP_API_CHECK=1 WORKSHOP_SKIP_VIEW_CHECK=1 \
+       run_logged "$LOG_DIR/05-up.log" ./workshop/up.sh; then
     if [ "$WORKSHOP_RUNNING" -eq 1 ]; then
       pass_check "http://localhost:${PORT} - your stack, already running"
     else
@@ -836,34 +863,23 @@ fi
 # page in the app takes - so a pass means the proxy, the API, the database, the
 # migrations and the seed data all work. A site that loads while every request it makes
 # fails is the fault this catches: it looks fine until the first page that needs data.
+# The probe and its diagnosis live in workshop/check-api.sh, which up.sh runs too.
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop API answers"
-  PORT="${WORKSHOP_PORT:-5173}"
-  API_URL="http://localhost:${PORT}/v1/auth/login"
-  API_STATUS=000
-  # The API can come up a few seconds after the site, so allow it half a minute.
-  for _ in $(seq 1 15); do
-    API_STATUS=$(curl -sS -o "$LOG_DIR/06-api.log" -w '%{http_code}' --max-time 10 \
-      -X POST -H 'Content-Type: application/json' \
-      -d '{"email":"creator@example.com","password":"creator-demo-pass"}' \
-      "$API_URL" 2>>"$LOG_DIR/06-api-curl.log") || API_STATUS=000
-    case "$API_STATUS" in 000|502|503|504) sleep 2 ;; *) break ;; esac
-  done
-  if [ "$API_STATUS" = 200 ] && grep -q '"token"' "$LOG_DIR/06-api.log"; then
+  if run_logged "$LOG_DIR/06-api.log" ./workshop/check-api.sh; then
     pass_check "logged in as the demo creator via /v1"
-  elif [ "$API_STATUS" = 401 ]; then
-    fail_check "the API answers, but the demo account was not found" \
-"the database is up but is missing its migrations or seed data
-                        rebuild it from scratch, then re-run  ./verify-setup.sh :
-                          docker compose -f $WORKSHOP_COMPOSE_FILE exec claude-container \\
-                            start-app.sh --reset-db"
   else
-    fail_check "the site is up, but its API did not answer (HTTP $API_STATUS)" \
-"the response is in $LOG_DIR/06-api.log
-                        the API's own log is in the container:
-                          docker compose -f $WORKSHOP_COMPOSE_FILE exec claude-container \\
-                            tail -n 50 /workspace/logs/server.log"
+    # check-api.sh has already worked out WHY, from the API's own log. Say its words
+    # rather than a generic "see the log" - the cause line is the whole diagnosis.
+    API_CAUSE=$(sed -n 's/^CAUSE //p' "$LOG_DIR/06-api.log" | tail -1)
+    API_FIX=$(sed -n 's/^FIX   //p; s/^        //p' "$LOG_DIR/06-api.log" | head -3 |
+      sed '2,$s/^/                          /')
+    fail_check "${API_CAUSE:-the workshop API did not answer}" \
+"${API_FIX:-see $LOG_DIR/06-api.log}
+                        then re-run  ./verify-setup.sh
+                        the full diagnosis, with the API's own log, is in
+                        $LOG_DIR/06-api.log"
   fi
 fi
 
@@ -875,7 +891,19 @@ fi
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Claude Code CLI + auth"
-  if ! run_logged "$LOG_DIR/07-claude.log" \
+  # UPDATE FIRST, so the version checked and reported is the one the day will run.
+  # start-app.sh already did this when check 5 started the container; running it again
+  # here costs one registry lookup and makes the answer part of this row. See
+  # update_claude in workshop/container/start-app.sh for why it lives there.
+  if ! STEP_NOTE_PREFIX="updating " run_logged "$LOG_DIR/07-update.log" \
+        workshop_compose exec -T claude-container start-app.sh --update-claude; then
+    fail_check "Claude Code could not be updated to the latest version" \
+"$(tr -d '\r' < "$LOG_DIR/07-update.log" | tail -1)
+                        this is almost always the network - check your connection,
+                        then re-run  ./verify-setup.sh
+                        to hold a known version instead, set it in .env:
+                          WORKSHOP_CLAUDE_VERSION=<version>"
+  elif ! run_logged "$LOG_DIR/07-claude.log" \
         workshop_compose exec -T claude-container claude --version; then
     fail_check "the Claude Code CLI did not start inside the workshop container" \
 "check $LOG_DIR/07-claude.log for the error

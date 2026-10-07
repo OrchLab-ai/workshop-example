@@ -1178,7 +1178,7 @@ const numberOf = new Map(
 const actNum = a => numberOf.get(a);
 // What the reader SEES as the number, which is not always the file's. The environment
 // check and the morning start are two halves of activity 01 in the deck - 01a once
-// ever, 01b every day - so they are numbered as a pair, and the next activity is
+// ever, 01b at the start of the (one-day) workshop - so they are numbered as a pair, and the next activity is
 // still 02. File names keep actNum: renaming files breaks every link already sent out.
 const shownNum = a => (a.team ? "TEAM" : a.platformSetup ? `${actNum(a)}a` : actNum(a));
 // start-your-day.html is not an activity, but it is card 01b and it says so.
@@ -1253,7 +1253,7 @@ const onlyWrap = (only, html) =>
   only ? `      <div data-only="${only.join(" ")}">\n${html}\n      </div>` : html;
 
 // The terminal application, per pathway, rendered from PLATFORMS so the window
-// somebody is told to open each morning is the one their setup pathway told them to
+// somebody is told to open at the start of the workshop is the one their setup pathway told them to
 // use. With nothing picked yet all three are visible, which reads as
 // "Terminal / Git Bash / PowerShell" — true, and better than naming one and being
 // wrong for two thirds of the room.
@@ -1513,7 +1513,7 @@ ${HELP.steps.map(s => `        <li>${s}</li>`).join("\n")}
 const dailyCard = `      <a class="card" href="${FROM_ROOT.daily}">
         <span class="num">${DAILY_NUM}</span>
         <span class="want">I want to start my day</span>
-        <span class="meta">Start Your Day &middot; every morning, before any activity</span>
+        <span class="meta">Start Your Day &middot; at the start of the workshop, before any activity</span>
       </a>`;
 
 const cards = activities
@@ -1663,7 +1663,7 @@ ${platformStrip()}
   <div data-needs-pathway>
   <span class="actnum">ACTIVITY ${DAILY_NUM}</span>
   <h1>Start your day</h1>
-  <p class="lede">Three windows, one command each. Do this once every morning and
+  <p class="lede">Three windows, one command each. Do this once at the start of the workshop and
   leave all three open — every activity assumes it.</p>
 
   <h2>Three terminals</h2>
