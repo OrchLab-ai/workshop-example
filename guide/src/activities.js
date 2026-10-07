@@ -482,6 +482,33 @@ const TROUBLESHOOTING = [
     ],
   },
   {
+    check: "Check 6",
+    only: ["macos", "windows-linux"],
+    symptom: "the API cannot start: package '…' is not installed",
+    fix:
+      "The site loads but the API behind it cannot start, so every page that loads data shows a " +
+      "<strong>500</strong>. The app's dependencies are incomplete — usually an install that was " +
+      "interrupted. Restarting the app checks them against the lockfile and installs whatever is " +
+      "missing; then re-run the check.",
+    commands: [
+      { label: "Reinstall what is missing and restart the app", code: "docker compose -f docker-compose.workshop.yml exec claude-container start-app.sh --restart" },
+      { label: "Then re-run the check", code: "./verify-setup.sh" },
+    ],
+  },
+  {
+    check: "Check 7",
+    only: ["macos", "windows-linux"],
+    symptom: "Claude Code could not be updated to the latest version",
+    fix:
+      "The check updates Claude Code inside the workshop container before it tests it, so everyone " +
+      "starts on the same current release. It could not reach the npm registry — almost always the " +
+      "network, a VPN or a proxy. Check your connection and re-run. If a release is known to be bad, " +
+      "you can hold a version instead by naming it in <code>.env</code>.",
+    commands: [
+      { label: "Only if told to hold a version", code: "echo WORKSHOP_CLAUDE_VERSION=2.0.14 >> .env\n./verify-setup.sh" },
+    ],
+  },
+  {
     check: "Check 7",
     only: ["macos", "windows-linux"],
     symptom: "the Claude Code CLI did not start inside the workshop container",
@@ -632,7 +659,7 @@ const FIRST_RUN_NOTE =
 //
 // It also used to be spliced into every activity's commands, on the reasoning that
 // people arrive at the guide mid-morning having closed their terminal. That reasoning
-// was wrong twice over: it is done once a day, by a room that has just been walked
+// was wrong twice over: it is done once, at the start of the workshop, by a room that has just been walked
 // through it on the slides, and repeated above ten activities the block was longer
 // than the activity underneath it. Every page links here from its header.
 //
@@ -650,7 +677,7 @@ const TERMINALS = {
         "A {shell} window in your <code>workshop-example</code> folder — the only one of the three that is <em>not</em> inside the container. Only a few commands run here: <code>git pull</code> for this folder, <code>docker</code> and <code>./checkpoint.sh</code>. Nothing you type here touches the app.",
       commands: [
         {
-          // FIRST, every morning: fixes to the workshop itself (the guide, checkpoint.sh,
+          // FIRST, at the start of the workshop: fixes to the workshop itself (the guide, checkpoint.sh,
           // the scripts that start the container) land on main right up to the day, and
           // most people set up days before. Pulling BEFORE up.sh matters: a change to the
           // compose file only reaches a container when `up -d` recreates it, and up.sh

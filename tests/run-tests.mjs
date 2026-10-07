@@ -192,6 +192,61 @@ test("start-app.sh --restart stops only the dev servers", null, () => {
   );
 });
 
+// Reported from a real machine: every check green, the site loading, and a 500 on the
+// first page that loaded data. The API was crash-looping on a package the install had
+// missed, because start-app.sh decided "installed" from vite's binary alone - and
+// up.sh said READY on the site alone, because Vite serves the page without the API.
+test("the API is checked before READY, and a stale install is reinstalled", null, () => {
+  ok(exists("workshop/check-api.sh"), "workshop/check-api.sh is missing");
+  const api = codeOf("workshop/check-api.sh");
+  ok(/\/v1\/auth\/login/.test(api), "check-api.sh must probe /v1/auth/login — it survives the cp-01 rename, and it has to query the database to answer");
+  ok(/exit 2/.test(api), "check-api.sh must tell a 401 (API up, demo account missing) apart from an API that is down");
+  ok(/ERR_MODULE_NOT_FOUND/.test(api), "check-api.sh must recognise a missing package in the API's log and say so");
+  ok(/\.\/workshop\/check-api\.sh/.test(codeOf("workshop/up.sh")), "up.sh must check the API before it says READY");
+  // Windows: up.sh is where a Windows attendee's API is checked, in Git Bash, which
+  // rewrites container paths like /workspace/logs/server.log unless told not to.
+  ok(/export MSYS_NO_PATHCONV=1/.test(api), "check-api.sh must turn off Git Bash's path rewriting, or the server.log it reads reaches docker.exe as a Windows path");
+  const ps = codeOf("windows/verify.ps1");
+  ok(/Not checked here: the workshop app and its API/.test(ps), "verify.ps1 must say it does not check the API, and that up.sh does");
+  const sh = codeOf("verify-setup.sh");
+  ok(/run_logged "\$LOG_DIR\/06-api\.log" \.\/workshop\/check-api\.sh/.test(sh), "check 6 must run the same probe up.sh does");
+  ok(/WORKSHOP_SKIP_API_CHECK=1/.test(sh), "check 5 must skip up.sh's API check, so a dead API fails under check 6's label");
+
+  const start = codeOf("workshop/container/start-app.sh");
+  const deps = start.slice(start.indexOf('step "Dependencies"'), start.indexOf('step "Database"'));
+  ok(/package-lock\.json/.test(deps), "the install decision must be keyed on the lockfile, not on one package being present");
+  ok(!/if \[ -x "node_modules\/\.bin\/vite" \] \|\|/.test(deps), "vite's binary alone must not mean 'installed' — that is how a half-finished install skipped npm install");
+  ok(
+    deps.indexOf("npm install") < deps.lastIndexOf("DEPS_STAMP"),
+    "the lockfile stamp must be written after npm install succeeds, never before"
+  );
+});
+
+test("Claude Code is updated where the update survives", null, () => {
+  const start = codeOf("workshop/container/start-app.sh");
+  ok(/update_claude\(\)/.test(start), "start-app.sh must define update_claude");
+  const claudeStep = start.slice(start.indexOf('step "Claude Code"'));
+  ok(/^update_claude\b/m.test(claudeStep.split("\n").slice(0, 3).join("\n")), "the Claude Code step must update the CLI on every start");
+  ok(/sudo npm install -g/.test(start), "update through sudo npm — `claude update` runs as agent and cannot write the root-owned global install");
+  ok(/WORKSHOP_CLAUDE_VERSION/.test(start), "there must be a way to pin the version for the day");
+  const sh = codeOf("verify-setup.sh");
+  const check7 = sh.slice(sh.indexOf('start_check "Claude Code CLI + auth"'), sh.indexOf('start_check "Playwright screenshot'));
+  ok(/start-app\.sh --update-claude/.test(check7), "check 7 must run the update as part of the Claude check");
+  ok(check7.indexOf("--update-claude") < check7.indexOf("claude --version"), "update before reporting the version, so the version reported is the one the day runs");
+});
+
+// Reported as a stray "^[" under check 5's row: something the step ran asked the
+// terminal a question through /dev/tty, and the answer landed on the progress line.
+test("the checked commands cannot reach the terminal", null, () => {
+  const sh = codeOf("verify-setup.sh");
+  const inner = sh.slice(sh.indexOf("run_logged_inner()"), sh.indexOf("cleanup()"));
+  const launches = inner.match(/^\s*.*"\$@" >>"\$log" 2>&1 <\/dev\/null.*$/gm) || [];
+  ok(launches.length === 2, `expected run_logged_inner's two launch lines, found ${launches.length}`);
+  for (const l of launches) ok(/no_tty "\$@"/.test(l), `run_logged must launch through no_tty: ${l.trim()}`);
+  ok(/POSIX::setsid\(\)/.test(sh), "no_tty must start a new session — that is what takes the controlling terminal away");
+  ok(/export -f workshop_compose/.test(sh), "workshop_compose must be exported, or no_tty's fresh bash cannot find it");
+});
+
 // A jump moves app/; the database is in another container and stayed on the previous
 // rung. Back from cp-02 to cp-01, every API call failed on campaigns tables that
 // cp-02's migration had renamed to proposals.
@@ -292,7 +347,7 @@ test("the guide names the three terminals before the first command", null, () =>
 });
 
 // The daily start lived on all ten activity pages, block and explanation both, and
-// was longer than most of the activities it sat above. It is done once a day by a
+// was longer than most of the activities it sat above. It is done once, at the start of the workshop, by a
 // room that has just been walked through it, so it lives on one page now. Two things
 // have to hold for that to be an improvement rather than a hiding place: the page has
 // to carry the whole story, and every page has to be one click from it.

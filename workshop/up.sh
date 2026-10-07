@@ -115,8 +115,8 @@ fi
 # did, until it was fixed - leaves app/ on main's tip, which carries every published
 # rung: the morning's first activity is then already done. Attendees otherwise always
 # work on a work/cp-* branch made by checkpoint.sh, so main means "never placed", not
-# "placed and progressed". Never moved silently - up.sh runs every morning, and a
-# daily reset would throw away the day - only offered, and only on main. The move
+# "placed and progressed". Never moved silently - up.sh is run again whenever the
+# stack is restarted, and a reset then would throw away the day - only offered, and only on main. The move
 # goes through checkpoint.sh, which parks any uncommitted work to wip/ first.
 APP_BRANCH=$(git -C app branch --show-current 2>/dev/null || true)
 if [ "$APP_BRANCH" = "main" ] && git -C app rev-parse -q --verify refs/tags/cp-01 >/dev/null 2>&1; then
@@ -169,7 +169,32 @@ while :; do
   if curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; then
     printf '\n%s%s  READY  %s  the site is answering on http://localhost:%s%s\n' \
       "$GREEN" "$BOLD" "$RESET" "$PORT" ""
-    printf '   Took %s. Leave the stack running — you only do this once a day.\n' "$(hhmmss "$ELAPSED")"
+    printf '   Took %s. Leave the stack running — you only do this once, at the start of the workshop.\n' "$(hhmmss "$ELAPSED")"
+
+    # THE SITE IS NOT THE APP. Vite serves the page while the API behind it is dead,
+    # and every /v1 call then comes back a bare 500 - so the loop above said READY
+    # over an API that was crash-looping on a missing package, and the first sign was
+    # an attendee clicking around the app. check-api.sh asks the API itself, through
+    # the same proxy the browser uses, and names the cause when it cannot answer.
+    #
+    # A 401 (exit 2) only warns: the API is up and querying its database, and the demo
+    # account is gone - which can be an attendee's own work by mid-afternoon, and is
+    # no reason to hold the stack back.
+    if [ -z "${WORKSHOP_SKIP_API_CHECK:-}" ] && [ -x ./workshop/check-api.sh ]; then
+      API_OUT=$(./workshop/check-api.sh)
+      case $? in
+        0) printf '   %sAPI answering, database reachable.%s\n' "$DIM" "$RESET" ;;
+        2) printf '   %sAPI answering, but the demo account was not found.%s\n' "$DIM" "$RESET"
+           printf '%s\n' "$API_OUT" | sed -n 's/^FIX   /   /p; s/^        /       /p' ;;
+        *)
+          printf '\n%s%s  NOT READY  %s  the site is up, but the API behind it is not.\n\n' \
+            "$RED" "$BOLD" "$RESET"
+          printf '%s\n' "$API_OUT" | sed 's/^/   /'
+          printf '\n   To carry on regardless:  WORKSHOP_SKIP_API_CHECK=1 ./workshop/up.sh\n\n'
+          exit 1
+          ;;
+      esac
+    fi
 
     # READY ABOVE IS ONE VANTAGE, AND IT IS NOT THE AGENT'S.
     #
