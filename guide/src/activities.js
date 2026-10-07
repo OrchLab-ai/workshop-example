@@ -160,7 +160,7 @@ const CREDENTIALS = {
         // sign-in screen setup-token draws does not work properly in Git Bash's
         // terminal. Inlined rather than winOnly(), which is declared further down
         // and so does not exist yet when this object is built.
-        ' <span data-only="windows-linux windows-windows"><strong>On Windows, run this one in PowerShell or CMD, not Git Bash</strong> — its sign-in screen does not work properly in Git Bash. Everything after setup stays in Git Bash.</span>',
+        ' <span class="rednote" data-only="windows-linux windows-windows"><strong>On Windows, run this one in PowerShell or CMD, not Git Bash</strong> — its sign-in screen does not work properly in Git Bash. Everything after setup stays in Git Bash.</span>',
       command: { label: "On your own machine", code: "claude setup-token", where: "host" },
       after:
         "The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> and leave <code>ANTHROPIC_API_KEY</code> commented out.",

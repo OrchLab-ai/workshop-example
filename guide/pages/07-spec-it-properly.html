@@ -505,6 +505,18 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .bigred .bigred-detail b { color: var(--danger); display: block; margin-bottom: 2px; }
 .bigred .bigred-detail p { margin: 0; }
 
+/* A one-line red exception inside a paragraph: "On Windows, run this one in
+   PowerShell or CMD, not Git Bash" for claude setup-token, the single host command
+   that breaks the everything-is-Git-Bash rule. A block, so it cannot be read as the
+   tail of the sentence before it. */
+.rednote {
+  display: block; margin: 10px 0 2px; padding: 8px 12px;
+  border-left: 4px solid var(--danger); border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--danger) 9%, var(--bg));
+}
+.rednote strong { color: var(--danger); }
+.rednote[hidden] { display: none; }
+
 .mode-pick {
   border: 2px solid var(--danger); border-radius: 8px;
   padding: 14px 16px 6px; margin: 16px 0 12px;
