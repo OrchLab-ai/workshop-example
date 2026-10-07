@@ -312,9 +312,36 @@ step "Site on :${PORT}"
 ) >"$LOGS/vite.log" 2>&1 &
 echo $! > "$LOGS/vite.pid"
 
+# WAIT AS LONG AS VITE IS ALIVE, NOT A FIXED 30 SECONDS. Vite's first start scans and
+# pre-bundles the app's dependencies, and on Windows every one of those file reads
+# crosses Docker Desktop's file sharing - far slower than on macOS. The old 30-try
+# loop gave up while Vite was still booting, printed WORKSHOP APP DID NOT START
+# (whose first line of advice is "did the dependencies install?"), up.sh failed check
+# 5 on that banner - and Vite came up a minute later, in a log nobody was reading.
+#
+# So: the site is up when it answers; it has FAILED only when Vite has exited. Until
+# then keep waiting, up to WORKSHOP_SITE_WAIT seconds (default 600, the same budget
+# as up.sh), with a line every 30s so the wait is visibly alive. --max-time stops a
+# half-booted Vite that accepts the connection from stalling a single probe for
+# minutes, which is what stretched the old "30 seconds" far past 30.
 SITE_UP=0
-for _ in $(seq 1 30); do
-  if curl -sf "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then SITE_UP=1; break; fi
+VITE_PID=$(cat "$LOGS/vite.pid" 2>/dev/null || true)
+SITE_WAIT="${WORKSHOP_SITE_WAIT:-600}"
+SITE_START=$(date +%s)
+SITE_BEAT=0
+while :; do
+  if curl -sf --max-time 5 "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then SITE_UP=1; break; fi
+  # Vite gone means it failed to boot - say so now rather than waiting out the budget.
+  if [ -n "$VITE_PID" ] && ! kill -0 "$VITE_PID" 2>/dev/null; then
+    echo "Vite exited before serving - see ${LOGS}/vite.log" >&2
+    break
+  fi
+  SITE_ELAPSED=$(( $(date +%s) - SITE_START ))
+  [ "$SITE_ELAPSED" -ge "$SITE_WAIT" ] && break
+  if [ $(( SITE_ELAPSED - SITE_BEAT )) -ge 30 ]; then
+    echo "still starting the site - ${SITE_ELAPSED}s (the first start is the slow one)"
+    SITE_BEAT=$SITE_ELAPSED
+  fi
   sleep 1
 done
 fi   # APP_OK
