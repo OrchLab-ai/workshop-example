@@ -565,6 +565,24 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .rednote strong { color: var(--danger); }
 .rednote[hidden] { display: none; }
 
+/* The credential paste step, the one people get wrong: its own boxed step in the
+   accent green (red is kept for warnings), with the finished .env lines under it.
+   A plain <pre>, deliberately not a copy block - the value is a placeholder, and a
+   Copy button would invite pasting "...your token..." into .env. */
+.pastestep {
+  border: 3px solid var(--accent); border-radius: 10px; padding: 14px 18px;
+  margin: 14px 0 4px; background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+details.cred .cred-body .pastestep .pastestep-title {
+  margin: 0 0 6px; color: var(--accent); font-weight: 800; font-size: 20px; line-height: 1.25;
+}
+details.cred .cred-body .pastestep p { margin: 0 0 10px; color: var(--strong); }
+.pastestep .pastestep-label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.pastestep pre {
+  margin: 0; padding: 10px 14px; border-radius: 6px; background: #111; color: #eee;
+  font: 14px/1.5 ui-monospace, Menlo, monospace; overflow-x: auto;
+}
+
 /* PowerShell's badge: the guide's blue, so it never reads as the amber Git Bash one. */
 .shellbadge.ps { background: var(--blue); color: var(--bg); }
 /* In a copy block's header, the shell badges take the auto margin that pushes the
@@ -1272,7 +1290,12 @@ ${CREDENTIALS.options
     <div class="cred-body">
       <p>${o.body}</p>
 ${o.command ? copyBlock(o.command.label, o.command.code, false, o.command.where, shellBadges(null, o.command.shell)) : ""}
-      <p>${o.after}</p>
+      <div class="pastestep">
+        <p class="pastestep-title">${esc(o.pasteTitle)}</p>
+        <p>${o.after}</p>
+        <div class="pastestep-env"><span class="pastestep-label">Your <code>.env</code> should then read</span>
+<pre>${esc(o.env)}</pre></div>
+      </div>
     </div>
   </details>`
   )

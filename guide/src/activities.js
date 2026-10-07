@@ -164,8 +164,13 @@ const CREDENTIALS = {
       // shell: which Windows shell badge the block carries, where it is not the
       // pathway's own (Git Bash on Linux containers, PowerShell on Windows containers).
       command: { label: "On your own machine", code: "claude setup-token", where: "host", shell: "pscmd" },
+      // The paste step is where this goes wrong, so it is rendered as its own
+      // highlighted step (pasteTitle + after + env), not a closing sentence. `env` is
+      // what the two credential lines of .env look like when it is done.
+      pasteTitle: "Then paste the token into .env",
       after:
-        "The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> and leave <code>ANTHROPIC_API_KEY</code> commented out.",
+        "The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> right after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> — no spaces, no quotes — and leave <code>ANTHROPIC_API_KEY</code> commented out.",
+      env: "CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-…your token…\n# ANTHROPIC_API_KEY=",
     },
     {
       id: "apikey",
@@ -173,8 +178,10 @@ const CREDENTIALS = {
       hint: "From console.anthropic.com. Billed per token.",
       body:
         'Create one at <a href="https://console.anthropic.com">console.anthropic.com</a> if you do not have it yet. There is nothing to install and nothing to run.',
+      pasteTitle: "Then paste the key into .env",
       after:
-        "The key starts <code>sk-ant-api03-</code>. Uncomment <code>ANTHROPIC_API_KEY</code> in <code>.env</code>, paste it there, and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> empty.",
+        "The key starts <code>sk-ant-api03-</code>. Uncomment <code>ANTHROPIC_API_KEY</code> in <code>.env</code> (delete the <code>#</code>), paste the key right after the <code>=</code> — no spaces, no quotes — and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> empty.",
+      env: "CLAUDE_CODE_OAUTH_TOKEN=\nANTHROPIC_API_KEY=sk-ant-api03-…your key…",
     },
   ],
   // Shown under both, because it is the thing neither section can tell you on its

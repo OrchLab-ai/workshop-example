@@ -517,6 +517,24 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .rednote strong { color: var(--danger); }
 .rednote[hidden] { display: none; }
 
+/* The credential paste step, the one people get wrong: its own boxed step in the
+   accent green (red is kept for warnings), with the finished .env lines under it.
+   A plain <pre>, deliberately not a copy block - the value is a placeholder, and a
+   Copy button would invite pasting "...your token..." into .env. */
+.pastestep {
+  border: 3px solid var(--accent); border-radius: 10px; padding: 14px 18px;
+  margin: 14px 0 4px; background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+}
+details.cred .cred-body .pastestep .pastestep-title {
+  margin: 0 0 6px; color: var(--accent); font-weight: 800; font-size: 20px; line-height: 1.25;
+}
+details.cred .cred-body .pastestep p { margin: 0 0 10px; color: var(--strong); }
+.pastestep .pastestep-label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.pastestep pre {
+  margin: 0; padding: 10px 14px; border-radius: 6px; background: #111; color: #eee;
+  font: 14px/1.5 ui-monospace, Menlo, monospace; overflow-x: auto;
+}
+
 /* PowerShell's badge: the guide's blue, so it never reads as the amber Git Bash one. */
 .shellbadge.ps { background: var(--blue); color: var(--bg); }
 /* In a copy block's header, the shell badges take the auto margin that pushes the
@@ -874,7 +892,13 @@ cd workshop-example</pre>
     <div class="cb-head"><span>On your own machine</span><span class="cb-shells"><span data-only="windows-linux windows-windows"><span class="shellbadge ps">PowerShell / CMD</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>claude setup-token</pre>
   </div>
-      <p>The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> and leave <code>ANTHROPIC_API_KEY</code> commented out.</p>
+      <div class="pastestep">
+        <p class="pastestep-title">Then paste the token into .env</p>
+        <p>The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> right after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> — no spaces, no quotes — and leave <code>ANTHROPIC_API_KEY</code> commented out.</p>
+        <div class="pastestep-env"><span class="pastestep-label">Your <code>.env</code> should then read</span>
+<pre>CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-…your token…
+# ANTHROPIC_API_KEY=</pre></div>
+      </div>
     </div>
   </details>
   <details class="cred" name="credential" data-exclusive="credential">
@@ -885,7 +909,13 @@ cd workshop-example</pre>
     <div class="cred-body">
       <p>Create one at <a href="https://console.anthropic.com">console.anthropic.com</a> if you do not have it yet. There is nothing to install and nothing to run.</p>
 
-      <p>The key starts <code>sk-ant-api03-</code>. Uncomment <code>ANTHROPIC_API_KEY</code> in <code>.env</code>, paste it there, and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> empty.</p>
+      <div class="pastestep">
+        <p class="pastestep-title">Then paste the key into .env</p>
+        <p>The key starts <code>sk-ant-api03-</code>. Uncomment <code>ANTHROPIC_API_KEY</code> in <code>.env</code> (delete the <code>#</code>), paste the key right after the <code>=</code> — no spaces, no quotes — and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> empty.</p>
+        <div class="pastestep-env"><span class="pastestep-label">Your <code>.env</code> should then read</span>
+<pre>CLAUDE_CODE_OAUTH_TOKEN=
+ANTHROPIC_API_KEY=sk-ant-api03-…your key…</pre></div>
+      </div>
     </div>
   </details>
   <div class="note"><strong>The two are not interchangeable and they look almost identical</strong> — both start <code>sk-ant-</code>, both run to about 108 characters. Only the prefix tells them apart, and putting one on the other's line fails <em>silently</em>: <code>.env</code> looks right, every check passes, and Claude asks you to log in anyway. Check 4 tests the prefix so that it fails loudly instead. Either value is a credential: <code>.env</code> is gitignored, and it must never be pasted into a message or a screenshot.</div>
