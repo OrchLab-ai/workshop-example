@@ -652,7 +652,7 @@ nav.pager a:hover { background: var(--surface); }
   <span class="actnum">ACTIVITY 10</span>
   <p class="eyebrow">Part 3 — Orchestration</p>
   <h1>The Review Gate</h1>
-  <p class="lede">Add a read-only review stage that can fail the run, a human approval step, a summary for stakeholders, and a learnings file the next run reads.</p>
+  <p class="lede">Add a read-only review stage that can fail the run, an agent that fixes what it finds, round after round up to a limit, a human approval step, a summary for stakeholders, and a learnings file the next run reads. Then hand it the other half of Mission Updates: posting.</p>
 
   <div class="cp">
     <span>start from <b>cp-09</b></span>
@@ -679,53 +679,57 @@ nav.pager a:hover { background: var(--surface); }
   <div class="checkblock">
     <div class="cb-head"><span>Review, approve, report, learn</span></div>
     <ol>
-      <li>Add the last stages: a reviewer that can say no, a report, and a memory.
+      <li>Add the last stages: a reviewer that can say no, an agent that fixes what it found, a limit on how often they go round, a report, and a memory.
   <div class="copyblock is-prompt in-claude">
     <div class="cb-head"><span>1. Add the review gate</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Add a review stage to harness/pipeline.sh, after the gate. It runs claude -p on a stronger model than the stages that did the work (--model from REVIEW_MODEL, default opus), with a read-only permissions file, harness/settings.review.json, on the diff between the commit the run started from and the run branch. It must reply with JSON only: {&quot;verdict&quot;: &quot;pass&quot; or &quot;fail&quot;, &quot;findings&quot;: [{&quot;severity&quot;, &quot;confidence&quot;, &quot;file&quot;, &quot;issue&quot;}]}, reporting every finding, including uncertain ones, rather than filtering. The harness saves it as review.json. On fail it stops and prints the findings; on pass it prints the command a human runs to approve the work: git merge --squash harness/&lt;id&gt;.
+    <pre>Add a review loop to harness/pipeline.sh, after the gate: a reviewer that can say no, an agent that fixes what it found, and a limit.
 
-Then a report stage writes summary.md: three sentences for a non-technical stakeholder — what changed, what the risk is, what happens next — and appends one line per lesson from the findings to harness/LEARNINGS.md. Make the planning stage read harness/LEARNINGS.md before it plans.
+Review: claude -p on a stronger model than the stages that did the work (--model from REVIEW_MODEL, default opus), with a read-only permissions file, harness/settings.review.json (read and search files, the look-around Bash commands, and git diff, git log and git show; nothing else), on the diff between the commit the run started from and the run branch. It must reply with JSON only: {&quot;verdict&quot;: &quot;pass&quot; or &quot;fail&quot;, &quot;findings&quot;: [{&quot;severity&quot;, &quot;confidence&quot;, &quot;file&quot;, &quot;issue&quot;}]}, reporting every finding, including uncertain ones, rather than filtering, and failing the work only for a finding of medium severity or above. Save each round's review as review-&lt;n&gt;.json in the run folder. Anything that is not that JSON counts as a fail.
 
-Also write harness/tasks/notify-backers.md, with a # Notify backers heading: &quot;When a creator posts a mission update, every backer of that proposal gets a notification, using the notifications the app already has. Test who is and is not notified.&quot;</pre>
+Fix: on a fail, run a fixing agent in the same worktree with harness/settings.json and the coding stage's model, given the task and the findings: &quot;Fix every finding of medium severity or above. Fix a lower one only where it is small and safe. Change nothing else. If a finding is wrong, do not change the code for it: say why on a line starting DISPUTED:.&quot; Then do what the harness does after the coding stage: the Prettier step, a commit to the run branch (Harness run &lt;id&gt;: review fixes, round &lt;n&gt;), and the gate. Then review again, giving the reviewer the fixer's DISPUTED: lines so it can accept or reject them. Stop when a review passes, when the gate fails, or after MAX_LOOPS fix rounds (default 2). Retake the after screenshot once the loop ends, so it shows the final code.
+
+At the end: on a pass, print the remaining findings and the command a human runs to approve the work, git merge --squash harness/&lt;id&gt;. Otherwise print the open findings, say that a human must decide, and exit non-zero. Either way, a report stage writes summary.md: three sentences for a non-technical stakeholder (what changed, what the risk is, what happens next). It also appends one line per lesson from every round's findings to harness/LEARNINGS.md in this checkout, not in the run's worktree, so the lessons are kept even when you do not merge the run. Put the contents of that file into the planning stage's prompt (the worktree is cut from your last commit, so the planner would not see lessons you have not committed). Also change the coding stage's prompt so that when a step of the plan is wrong it stops with a line starting BLOCKED: that says why, rather than only saying so: otherwise the pipeline cannot tell that it stopped, and gates half-finished work.
+
+Take the screenshots signed in as the seeded creator, so a change only a creator can see shows up: before opening the proposal, sign in at /login as creator@example.com with the password creator-demo-pass (the app's local demo account), using the Email and Password fields and the Sign in button, and wait to land on /. A failed sign-in is reported like any other screenshot failure.
+
+Also write harness/tasks/post-updates.md, with a # Let creators post mission updates heading: &quot;Build the write side of Mission Updates from specs/mission-updates.v2.spec.md: acceptance criteria S2, A5 to A12, A13 and A14 for the POST endpoint, U1 to U4, C1 for createMissionUpdate, C7 to C10, C12 to C14 for what those cover, and E1 to E3. The read side is already built; do not change how it behaves. One gap the spec does not mention: the shared error handler (packages/server/src/middleware/errorHandler.ts) returns err.message for every error, so an unexpected database error would reach the client as raw SQL. In the new POST route, map unexpected errors to a generic 500 INTERNAL_SERVER_ERROR; leave the shared handler as it is, which is out of scope. Where the spec is silent, follow the existing code; where you would have to guess something that matters, stop.&quot;</pre>
   </div>
       </li>
-      <li>Run the whole pipeline.
+      <li>Run the whole pipeline. Like the last run, it needs room: the turn cap and timeout are raised again. It takes 7 to 20 minutes, depending on how many review rounds it needs.
   <div class="copyblock in-container">
     <div class="cb-head"><span>2. Run it</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>./harness/pipeline.sh harness/tasks/notify-backers.md</pre>
+    <pre>MAX_TURNS=150 TIMEOUT_SECONDS=3600 ./harness/pipeline.sh harness/tasks/post-updates.md</pre>
   </div>
       </li>
-      <li>Read <code>review.json</code> and <code>summary.md</code> in the run folder. Do you agree with the reviewer? Is the summary something you would actually send?
-  <div class="copyblock">
-    <div class="cb-head"><span></span><button type="button">Copy</button></div>
-    <pre>undefined</pre>
-  </div>
-      </li>
-      <li>If you agree, approve it. Use the branch name the harness printed. This is the only step it leaves to you.
+      <li>Read the reviews (<code>review-1.json</code>, then each round after it), the fix commits on the run branch, and <code>summary.md</code> in the run folder, and compare the two screenshots: signed in as the creator, the after one should show the form above the updates. Do you agree with the reviewer? Is the summary something you would actually send? Did each round fix what the review before it found, or argue with it (<code>DISPUTED:</code>)? If it still failed after <code>MAX_LOOPS</code> rounds, that is your call: fix it by hand, or run step 2 again, when the planner reads the lessons this run wrote to <code>harness/LEARNINGS.md</code>.</li>
+      <li>If you agree, approve it, then run the end-to-end tests, which include the new posting spec: the gate did not run those. The first line finds the newest run's branch: check it is the one the harness printed. This is the only step it leaves to you.
   <div class="copyblock in-container">
-    <div class="cb-head"><span>3. Approve</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>git merge --squash harness/&lt;id&gt; &amp;&amp; git commit -m &quot;Notify backers of mission updates (built by the harness)&quot;</pre>
+    <div class="cb-head"><span>4. Approve</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
+    <pre>run=$(git branch --list 'harness/*' --sort=-committerdate --format='%(refname:short)' | head -1) &amp;&amp; echo &quot;newest run: $run&quot;
+git merge --squash &quot;$run&quot; &amp;&amp; git commit -m &quot;Let creators post mission updates (built by the harness)&quot;
+./scripts/run-e2e.sh</pre>
   </div>
       </li>
       <li>Keep the harness and what it learned.
   <div class="copyblock in-container">
-    <div class="cb-head"><span>4. Commit the harness</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>5. Commit the harness</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
     <pre>git add harness &amp;&amp; git commit -m &quot;Harness: review gate, human approval, summary and learnings&quot;</pre>
   </div>
       </li>
     </ol>
   </div>
-  <div class="note"><strong>The agent can say no; you have the final say.</strong> In Activity 09 you were the whole review. Now a read-only stage reviews first, and you approve what it passes. It reads the run's own diff — against the commit the run started from, not against <code>main</code> — and returns a verdict the harness acts on. Merging is the one step left to a human.</div>
+  <div class="note"><strong>The agent can say no; you have the final say.</strong> In Activity 09 you were the whole review. Now a read-only stage reviews first, a fixing agent answers what it finds, and the two go round until the review passes or the limit is reached. You approve what passes. It reads the run's own diff — against the commit the run started from, not against <code>main</code> — and returns a verdict the harness acts on. Merging is the one step left to a human.</div>
 
   <h2>You are done when</h2>
-  <div class="success">You built a harness that plans, codes, tests, reviews and reports — and stops for you before anything lands.</div>
+  <div class="success">You built a harness that plans, codes, tests, reviews, fixes and reports — and stops for you before anything lands. And creators can now post mission updates.</div>
 
   <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
-      <p><code>./checkpoint.sh 10</code> gives you the finished harness.</p>
+      <p><code>./checkpoint.sh 10</code> gives you the finished harness, and posting.</p>
       <p>The reviewer runs on Opus while the planner and coder stay on Sonnet: the stage whose only job is to catch mistakes gets the strongest model. It is short, so it costs little. If you hit a usage limit, <code>REVIEW_MODEL=sonnet</code> runs it on Sonnet.</p>
-      <p>Nothing after this one. Run another task through it — the spec's out-of-scope list has several, such as deleting an update — and check the planner read <code>LEARNINGS.md</code>.</p>
+      <p>Every round costs a fix, a gate and an Opus review, a few minutes and well under a dollar each. <code>MAX_LOOPS</code> caps it (default 2); <code>MAX_LOOPS=0</code> reviews once and leaves every fix to you. A loop with no limit is how an agent spends an afternoon arguing with itself.</p>
+      <p>Nothing after this one. Run another task through it — the spec's out-of-scope list has several, such as deleting an update, or notify backers when an update is posted. Or fix the leak this run worked around: the shared error handler still sends raw database errors to the client from every other route — and check the planner read <code>LEARNINGS.md</code>.</p>
     </div>
   </details>
   </div>

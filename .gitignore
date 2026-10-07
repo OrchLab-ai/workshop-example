@@ -5,6 +5,9 @@ verify-report.txt
 # logs (.log) and page snapshots (.yml) Playwright MCP saves alongside them.
 screenshots/*
 !screenshots/.gitkeep
+# Copies of the harness runs, from the container. See workshop/container/mirror-runs.sh.
+runs/*
+!runs/.gitkeep
 node_modules/
 .DS_Store
 

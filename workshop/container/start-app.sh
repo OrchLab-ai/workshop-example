@@ -379,4 +379,10 @@ if [ "$$" -ne 1 ]; then
   [ "${SITE_UP:-0}" -eq 1 ] && [ "${DB_OK:-1}" -eq 1 ] && exit 0
   exit 1
 fi
+
+# The harness runs' plans, results, logs, screenshots and diffs, copied to runs/ on the
+# host as they are written (see mirror-runs.sh). Started here, at boot and only at boot,
+# so a --restart never starts a second copy.
+bash "$(dirname "$(readlink -f "$0")")/mirror-runs.sh" >"$LOGS/mirror-runs.log" 2>&1 &
+
 exec sleep infinity

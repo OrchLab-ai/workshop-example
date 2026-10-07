@@ -103,6 +103,11 @@ services:
       - workshop_shared_node_modules:/workspace/repo/packages/shared/node_modules
       # Screenshots the agent takes land on the host, where they can be looked at.
       - ./screenshots:/screenshots
+      # The harness runs (Part 3), readable on the host: plan.md, result.md, run.log, the
+      # events, the screenshots and a changes.diff, copied every few seconds by
+      # workshop/container/mirror-runs.sh. Not /workspace/runs itself: each run holds a
+      # worktree with its own node_modules, which over a bind mount would slow every run.
+      - ./runs:/workspace/runs-view
       # How the app is started. Read-only: it is infrastructure, not an exercise.
       #
       # A FOLDER, NOT THE FILE. A single-file bind mount is pinned to the file as it was

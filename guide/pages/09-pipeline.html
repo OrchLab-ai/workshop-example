@@ -652,7 +652,7 @@ nav.pager a:hover { background: var(--surface); }
   <span class="actnum">ACTIVITY 09</span>
   <p class="eyebrow">Part 3 — Orchestration</p>
   <h1>Plan → Do as a Pipeline</h1>
-  <p class="lede">Split the harness into a planner that can only read and a coder that can only do what the plan says, make it fail closed, then hand it your v2 spec. It writes its own brief and tasks, builds Mission Updates, and the gate decides. Then you merge it.</p>
+  <p class="lede">Split the harness into a planner that can only read and a coder that can only do what the plan says, make it fail closed, then hand it your v2 spec. It writes its own brief and tasks, builds the read side of Mission Updates, and the gate decides. Then you merge it.</p>
 
   <div class="cp">
     <span>start from <b>cp-08</b></span>
@@ -687,13 +687,13 @@ nav.pager a:hover { background: var(--surface); }
       <li>Add a planning stage in front of the coding stage. Different roles get different permissions.
   <div class="copyblock is-prompt in-claude">
     <div class="cb-head"><span>1. Build the pipeline</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Add harness/pipeline.sh &lt;task-file&gt;, reusing run-task.sh rather than copying it.
+    <pre>Add harness/pipeline.sh &lt;task-file&gt;. Reuse run-task.sh's parts rather than copying them: one run id, one run folder and one worktree, with both stages running in that worktree and logging to the same run.log and events.
 
-Stage 1, plan: claude -p with a read-only permissions file, harness/settings.plan.json (read and search files only: no edits, no shell), told: &quot;You are the planning stage. Do not change anything. Read the task and every spec it names. Output a plan as markdown: a short brief, then numbered tasks, each with the files it touches and the tests that must pass.&quot; The harness, not the agent, saves that output as plan.md in the run folder.
+Stage 1, plan: claude -p with a read-only permissions file, harness/settings.plan.json: Read, Glob and Grep, plus the same look-around Bash commands and denies as settings.json (it searches through Bash, so without them it is blind), but no Edit, no Write and no other commands. Pass it the way run-task.sh passes settings.json (--setting-sources local, --permission-mode dontAsk), with its own --append-system-prompt saying it is read-only. Tell it: &quot;You are the planning stage. Do not change anything. Read the task and every spec it names. Output a plan as markdown: a short brief, then numbered tasks, each with the files it touches and the tests that must pass.&quot; The harness, not the agent, saves that output as plan.md in the run folder.
 
-Stage 2, code: claude -p with harness/settings.json and the plan as its whole prompt: &quot;Execute this plan exactly. If a step is wrong, stop and say so rather than improvising.&quot; Then the same gate as before. Print where each stage's output is.
+Stage 2, code: claude -p with harness/settings.json and the plan as its whole prompt: &quot;Execute this plan exactly. If a step is wrong, stop with a line starting BLOCKED: that says why, rather than improvising.&quot; Take the before screenshot before stage 1. Then, once and after stage 2 only, everything run-task.sh does after the agent: the Prettier step, the commit, the after screenshot and the gate. Print where each stage's output is.
 
-Also write harness/tasks/mission-updates.md, with a # Build Mission Updates heading: &quot;Build Mission Updates exactly as specs/mission-updates.v2.spec.md describes. The spec is the whole requirement. Where it is silent, follow the existing code; where you would have to guess something that matters, stop.&quot;</pre>
+Also write harness/tasks/mission-updates.md, with a # Build Mission Updates (read side) heading: &quot;Build the read side of Mission Updates from specs/mission-updates.v2.spec.md: acceptance criteria D1 to D6, S1, S3 for MissionUpdateSchema only, A1 to A4, A13 and A14 for the GET endpoint, K1, K2, C1 for listMissionUpdates only, C2 to C6, C11 to C13, and C14 for what those cover. Nothing else: no POST endpoint, no form, no audit and no end-to-end tests; those come later. Also add a seed migration with two example updates, posted by its creator, on the seeded proposal 00000000-0001-0000-0000-000000000001, so the feature shows on that page. Where the spec is silent, follow the existing code; where you would have to guess something that matters, stop.&quot;</pre>
   </div>
       </li>
       <li>Before you hand it anything real, see what one of this morning's skills does with nobody there. Run an interview skill headless and read what comes back.
@@ -705,7 +705,7 @@ Also write harness/tasks/mission-updates.md, with a # Build Mission Updates head
       <li>It asks questions nobody will answer, or answers them itself. Neither is safe in a pipeline. Make it fail closed — and notice that the fix is a change to <code>CLAUDE.md</code>, which every run now reads.
   <div class="copyblock is-prompt in-claude">
     <div class="cb-head"><span>3. Fail closed</span><span class="loc claude" tabindex="0">claude terminal<span class="tip" role="tooltip">Window 3. Claude, already running inside the container. Paste prompts here — and do not exit it to run a command; use the work terminal for that.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container claude --dangerously-skip-permissions</code></span></span></span><button type="button">Copy</button></div>
-    <pre>Add a short section to CLAUDE.md for agents running headless, with no human available: never ask a question. Either write your assumptions under an ASSUMPTIONS heading and carry on, or stop with a line starting BLOCKED: and the reason. Then make harness/pipeline.sh stop and print the reason if any stage's output contains BLOCKED:.</pre>
+    <pre>Add a short section to CLAUDE.md for agents running headless, with no human available: never ask a question. Either write your assumptions under an ASSUMPTIONS heading and carry on, or stop with a line starting BLOCKED: and the reason. Then make harness/pipeline.sh check each stage's output for a line that starts with BLOCKED: (a line that only mentions it does not count). If it finds one, it prints which stage stopped and why, commits and gates nothing, and exits non-zero. Do not run it yourself.</pre>
   </div>
       </li>
       <li>Commit before you run. Each run's worktree is cut from your last commit, so an uncommitted <code>CLAUDE.md</code> is a rule the agent never sees.
@@ -717,31 +717,27 @@ Also write harness/tasks/mission-updates.md, with a # Build Mission Updates head
     </ol>
     <div class="rung"><span>checkpoint <b>cp-09a</b> starts here</span></div>
     <ol start="5">
-      <li>Now the real thing: your v2 spec in, Mission Updates out. This is the biggest run of the day, so give it room — the turn cap and timeout are raised for this one. Expect it to take a while.
+      <li>Now the real thing: your v2 spec in, Mission Updates out. This is the biggest run of the day, so the turn cap and timeout are raised for this one. It takes about ten minutes. The planner finishes first: its plan appears as <code>runs/&lt;run id&gt;/plan.md</code> in the workshop folder on your machine (the run id is the timestamp the harness prints, such as <code>20261007-091500</code>), so open it in your editor while the coder works.
   <div class="copyblock in-container">
     <div class="cb-head"><span>5. Run the pipeline on your spec</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
     <pre>MAX_TURNS=150 TIMEOUT_SECONDS=3600 ./harness/pipeline.sh harness/tasks/mission-updates.md</pre>
   </div>
       </li>
-      <li>Read <code>plan.md</code> before you look at the code. Is that how you would have split the work? The coding stage only ever saw the plan — never your spec. If the run stopped with <code>BLOCKED:</code>, that is your spec's gap: settle it in v2, commit, and run again.
-  <div class="copyblock">
-    <div class="cb-head"><span></span><button type="button">Copy</button></div>
-    <pre>undefined</pre>
-  </div>
-      </li>
-      <li>If the gate passed, it is your call. Look at the change, take it, apply its migration to your running database, then run the end-to-end tests — the gate did not run those. Use the branch name the harness printed.
+      <li>Open <code>runs/&lt;run id&gt;/plan.md</code> in the workshop folder on your machine (inside the container it is <code>/workspace/runs/&lt;run id&gt;/plan.md</code>, and the harness prints that path) and read it before you look at the code. Is that how you would have split the work? The coding stage only ever saw the plan — never your spec. If the run stopped with <code>BLOCKED:</code>, that is your spec's gap.</li>
+      <li>If the gate passed, it is your call. Look at the change, take it, apply its migration to your running database, then run the end-to-end tests — the gate did not run those. The first line finds the newest run's branch: check it is the one the harness printed.
   <div class="copyblock in-container">
-    <div class="cb-head"><span>6. Review it and merge it</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
-    <pre>git diff --stat HEAD...harness/&lt;id&gt;
-git merge --squash harness/&lt;id&gt; &amp;&amp; git commit -m &quot;Add Mission Updates (built by the harness from the v2 spec)&quot;
+    <div class="cb-head"><span>7. Review it and merge it</span><span class="loc container" tabindex="0">work terminal<span class="tip" role="tooltip">Window 2. A shell inside the container: tests, <code>./scripts/ci-check.sh</code>, git, and anything else that needs to see the app's code.<span class="tip-cmd"><span class="tip-cmd-head">Closed it? Reopen it from the host terminal<button type="button" class="tip-copy">Copy</button></span><code class="tip-code">docker compose -f docker-compose.workshop.yml exec claude-container bash</code></span></span></span><button type="button">Copy</button></div>
+    <pre>run=$(git branch --list 'harness/*' --sort=-committerdate --format='%(refname:short)' | head -1) &amp;&amp; echo &quot;newest run: $run&quot;
+git diff --stat HEAD...&quot;$run&quot;
+git merge --squash &quot;$run&quot; &amp;&amp; git commit -m &quot;Add Mission Updates, read side (built by the harness from the v2 spec)&quot;
 dbmate --no-dump-schema -d packages/server/db/migrations up
 ./scripts/run-e2e.sh</pre>
   </div>
       </li>
-      <li>Open a proposal page, sign in as its creator and post an update. Mission Updates, built by an agent nobody was watching, from a spec you wrote — in your colours.
+      <li>Open the seeded proposal and scroll to Mission updates: the two example updates are there. Built by an agent nobody was watching, from a spec you wrote — in your colours. Posting is the next task.
   <div class="copyblock in-browser">
-    <div class="cb-head"><span>7. See it</span><span class="loc browser" tabindex="0">your browser<span class="tip" role="tooltip">Not a terminal. Open this in your web browser.</span></span><button type="button">Copy</button></div>
-    <pre>http://localhost:5173/proposals</pre>
+    <div class="cb-head"><span>8. See it</span><span class="loc browser" tabindex="0">your browser<span class="tip" role="tooltip">Not a terminal. Open this in your web browser.</span></span><button type="button">Copy</button></div>
+    <pre>http://localhost:5173/proposals/00000000-0001-0000-0000-000000000001</pre>
   </div>
       </li>
     </ol>
@@ -749,12 +745,12 @@ dbmate --no-dump-schema -d packages/server/db/migrations up
   <div class="note"><strong>Your spec is the whole brief now.</strong> <code>CLAUDE.md</code>, <code>specs/</code> and the skills in <code>.claude/skills/</code> are loaded by every <code>claude -p</code> the harness starts. With nobody watching they are configuration — and nobody is there to answer a question. Whatever your v2 spec left open, the agent either guesses or stops.</div>
 
   <h2>You are done when</h2>
-  <div class="success">Mission Updates is on your branch, built from your spec by a pipeline where each stage had only the permissions its role needed — and you read its plan and approved its work before it landed.</div>
+  <div class="success">Mission Updates shows on your proposal pages, built from your spec by a pipeline where each stage had only the permissions its role needed — and you read its plan and approved its work before it landed.</div>
 
   <details class="cheat">
     <summary>Stuck? Open this</summary>
     <div class="body">
-      <p><code>./checkpoint.sh 9</code> gives you the pipeline and the finished feature, as this activity leaves them.</p>
+      <p><code>./checkpoint.sh 9</code> gives you the pipeline and the read side of Mission Updates, as this activity leaves them.</p>
       <p>The planner having broad read access and the coder a narrow brief is the point. Do not merge them back together.</p>
       <p>This whole build runs on Sonnet. That is the point of the spec: the more it decides, the less the model has to — so a complete spec lets a cheaper, faster model do the work.</p>
       <p>A run that stops with <code>BLOCKED:</code> has done its job: it found something your spec did not decide. That is cheaper to fix in the spec than in the code.</p>
