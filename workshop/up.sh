@@ -166,7 +166,12 @@ LAST_BEAT=0
 while :; do
   ELAPSED=$(( $(date +%s) - START ))
 
-  if curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; then
+  # --max-time: without it one probe could wait FOREVER. Seen on Windows: the site was
+  # up inside the container within a second, but a connection made through Docker
+  # Desktop's port forwarding before the app listened was accepted and never answered.
+  # The loop never came round again, so neither the 30s heartbeat nor the timeout below
+  # ever fired, and up.sh sat on "Site on :5173" indefinitely.
+  if curl -fsS --max-time 5 -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; then
     printf '\n%s%s  READY  %s  the site is answering on http://localhost:%s%s\n' \
       "$GREEN" "$BOLD" "$RESET" "$PORT" ""
     printf '   Took %s. Leave the stack running — you only do this once, at the start of the workshop.\n' "$(hhmmss "$ELAPSED")"
