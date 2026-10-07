@@ -268,6 +268,20 @@ const PLATFORMS = [
 // with no pathway chosen it stays visible, which is the right default for somebody
 // reading the troubleshooting list before they have answered the picker.
 const winOnly = t => `<span data-only="windows-linux windows-windows">${t}</span>`;
+
+// Windows 2 and 3 run `docker compose exec`, which needs a REAL terminal. Git Bash in
+// Windows Terminal, or with "pseudo console" support enabled in the Git for Windows
+// installer, passes one through; the classic Git Bash window (mintty) without it does
+// not. Then Claude sees no terminal, assumes it is being fed input, and stops with
+// "Input must be provided either through stdin or as a prompt argument when using
+// --print"; bash in window 2 starts with no prompt. Seen on one attendee's machine and
+// not on another's, so a fix to reach for rather than a rule for everyone.
+const TTY_NOTE =
+  '<span class="rednote" data-only="windows-linux windows-windows"><strong>If Claude says ' +
+  '"Input must be provided either through stdin…", or you get a shell with no prompt</strong> — ' +
+  "your Git Bash window cannot pass a terminal through to Docker. Run this command in " +
+  "<strong>PowerShell</strong> or Windows Terminal instead, from the same folder, or put " +
+  "<code>winpty</code> in front of it in Git Bash.</span>";
 // Narrower still: true on the Git Bash pathway and NOT on the PowerShell one, which
 // is a distinction it is very easy to lose when both are "Windows".
 const gitBashOnly = t => `<span data-only="windows-linux">${t}</span>`;
@@ -711,7 +725,7 @@ const TERMINALS = {
       where: "container",
       title: "The work terminal",
       body:
-        "Open a second {shell} window and run this. You are then <em>inside</em> the container: this is where you run tests, <code>./scripts/ci-check.sh</code>, git commands against the app, and anything else that needs to see the code. Everything badged {loc:container} goes here.",
+        "Open a second {shell} window and run this. You are then <em>inside</em> the container: this is where you run tests, <code>./scripts/ci-check.sh</code>, git commands against the app, and anything else that needs to see the code. Everything badged {loc:container} goes here." + " " + TTY_NOTE,
       commands: [
         {
           label: "Get a shell inside the container",
@@ -725,7 +739,7 @@ const TERMINALS = {
       where: "claude",
       title: "The Claude terminal",
       body:
-        "Open a third {shell} window and run this — it drops you straight into Claude, inside the container. Also a container shell, but it gets its own badge and its own window for one reason: <strong>keep it separate.</strong> Claude holds its conversation in that session — exiting it to run one command throws the context away, and that context is most of what you are paying for.",
+        "Open a third {shell} window and run this — it drops you straight into Claude, inside the container. Also a container shell, but it gets its own badge and its own window for one reason: <strong>keep it separate.</strong> Claude holds its conversation in that session — exiting it to run one command throws the context away, and that context is most of what you are paying for." + " " + TTY_NOTE,
       commands: [
         {
           // ONE command, not `exec ... bash` followed by `claude` on a second line.
@@ -759,7 +773,8 @@ const TERMINALS = {
       `<strong>On Windows, all three windows are</strong> ${GIT_BASH}. ` +
       '<span class="not">Not PowerShell, and not CMD</span> — every <code>./something.sh</code> command in this guide is a bash script and will not run there. ' +
       `${GIT_BASH} came with Git for Windows. Open it from the Start menu and <code>cd</code> into your <code>workshop-example</code> folder, or right-click the folder in Explorer and choose <strong>Open Git Bash here</strong>. ` +
-      "Two exceptions, both during setup: <code>claude setup-token</code> runs in <strong>PowerShell or CMD</strong>, because its sign-in screen does not work properly in Git Bash, and the Windows-containers environment check, <code>windows\\verify.ps1</code>, runs in PowerShell.",
+      "Two exceptions, both during setup: <code>claude setup-token</code> runs in <strong>PowerShell or CMD</strong>, because its sign-in screen does not work properly in Git Bash, and the Windows-containers environment check, <code>windows\\verify.ps1</code>, runs in PowerShell. " +
+      "Windows 2 and 3 only run <code>docker</code>, so if Git Bash gives trouble there, PowerShell works for them too — see the note under each.",
   },
   // Not a terminal, so it is not a fourth numbered window - but it is the thing that
   // tells you the three above worked.
