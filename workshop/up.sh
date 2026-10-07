@@ -111,6 +111,30 @@ if [ "$DOCKER_OS" = "windows" ]; then
   fi
 fi
 
+# STILL ON main? A setup that skipped the "land on cp-01" step - windows\verify.ps1
+# did, until it was fixed - leaves app/ on main's tip, which carries every published
+# rung: the morning's first activity is then already done. Attendees otherwise always
+# work on a work/cp-* branch made by checkpoint.sh, so main means "never placed", not
+# "placed and progressed". Never moved silently - up.sh runs every morning, and a
+# daily reset would throw away the day - only offered, and only on main. The move
+# goes through checkpoint.sh, which parks any uncommitted work to wip/ first.
+APP_BRANCH=$(git -C app branch --show-current 2>/dev/null || true)
+if [ "$APP_BRANCH" = "main" ] && git -C app rev-parse -q --verify refs/tags/cp-01 >/dev/null 2>&1; then
+  printf '\n%sThe app is on main, not on a checkpoint.%s main has every published\n' "$RED$BOLD" "$RESET"
+  printf 'checkpoint already applied, so the first activity would start finished.\n'
+  printf 'The workshop starts at cp-01. Any uncommitted work is parked to a wip/ branch first.\n\n'
+  if [ -t 0 ] && [ -t 1 ]; then
+    printf '%sMove the app to cp-01 now? [Y/n] %s' "$BOLD" "$RESET"
+    read -r ANSWER || ANSWER=""
+    case "$ANSWER" in
+      [nN]|[nN][oO]) printf '\nLeft on main. To move it later:  %s./checkpoint.sh 1%s\n' "$BOLD" "$RESET" ;;
+      *) ./checkpoint.sh 1 || exit 1 ;;
+    esac
+  else
+    printf 'To move it:  %s./checkpoint.sh 1%s\n' "$BOLD" "$RESET"
+  fi
+fi
+
 printf '\n%sStarting the workshop stack%s\n\n' "$BOLD" "$RESET"
 compose up -d || exit 1
 

@@ -464,6 +464,26 @@ the checkpoint ladder is git tags, so a copy of the files is not enough
         # checklist row moving, and without it a slow clone looks like a hang.
         if ((Invoke-Logged '01-clone.log' @('clone', '-c', 'core.autocrlf=false', '--progress', $AppRepo, $AppDir) 'git') -eq 0) {
             $appAction = 'cloned in {0}s' -f [int]((Get-Date) - $cloneStart).TotalSeconds
+
+            # LAND ON cp-01, NOT ON main - the twin of the same step in
+            # verify-setup.sh, which this script was missing. main carries every
+            # published rung, so a clone left on its tip started the day with the
+            # early activities already applied. Only on a fresh clone: a returning
+            # attendee's app\ is on whatever rung they have reached, and moving it is
+            # checkpoint.sh's job. A named branch, not a detached HEAD, because
+            # attendees commit.
+            $null = & git -C $AppDir rev-parse -q --verify refs/tags/cp-01 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                if ((Invoke-Logged '01-checkout.log' @('-C', $AppDir, 'checkout', '-B', 'work/cp-01', 'cp-01') 'git') -eq 0) {
+                    $appAction = "$appAction, at cp-01"
+                } else {
+                    Write-CheckFail 'cloned the app but could not check out cp-01' @'
+the tag exists but the checkout failed - see .verify-logs\01-checkout.log
+                        without this you would start the day on main, which has
+                        every later checkpoint already applied
+'@
+                }
+            }
         } else {
             Write-CheckFail "could not clone the workshop app from $AppRepo" @'
 this is almost always a network problem - check your connection,
