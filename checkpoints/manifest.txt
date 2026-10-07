@@ -23,5 +23,5 @@ cp-08b | Restricted, probe written    | harness/settings.json, and a probe task 
 cp-08c | Holes closed, limits written | The deny list tightened against the probe, and what a deny list cannot stop.            | Activity 08, step 8 — Gate it, and show it
 cp-08  | Headless harness             | harness/run-task.sh, restricted and gated; its first run defined every missing token.   | Activity 09 — Plan → Do as a Pipeline
 cp-09a | Pipeline built, fails closed | harness/pipeline.sh: read-only planner, coder, BLOCKED: stops the run. Nothing built.   | Activity 09, step 5 — Run the pipeline on your spec
-cp-09  | Mission Updates, by harness  | harness/pipeline.sh plans and codes from the v2 spec; Mission Updates built and merged. | Activity 10 — The Review Gate
-cp-10  | Review gate                  | A review stage that can fail the run, human approval, a summary and learnings.          | End of the workshop
+cp-09  | Mission Updates, by harness  | harness/pipeline.sh plans and codes from the v2 spec; read side of Mission Updates built and merged. | Activity 10 — The Review Gate
+cp-10  | Review gate                  | A review loop: reviewer, fixer, MAX_LOOPS rounds, approval, summary, learnings; posting. | End of the workshop

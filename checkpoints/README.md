@@ -79,8 +79,8 @@ ahead and then want your half-finished attempt back, it is there.
 | `cp-08c` | Activity 08 part-way: holes closed, limits written | Activity 08, step 8 — Gate it, and show it |
 | `cp-08` | A headless harness, isolated, restricted and gated; its first run defined the missing design tokens | Activity 09 — Plan → Do as a Pipeline |
 | `cp-09a` | Activity 09 part-way: the pipeline built and failing closed; nothing built yet | Activity 09, step 5 — the run on your spec |
-| `cp-09` | The harness as a plan → code pipeline, and Mission Updates built by it from your spec | Activity 10 — The Review Gate |
-| `cp-10` | The harness with a review gate, approval and learnings | End of the workshop |
+| `cp-09` | The harness as a plan → code pipeline, and the read side of Mission Updates built by it from your spec | Activity 10 — The Review Gate |
+| `cp-10` | The harness with a review loop (reviewer, fixer, a limit), approval and learnings; posting built by it | End of the workshop |
 
 Activity N produces `cp-N`, so the tag number is always the activity number. The
 long Part 3 activities also have lettered rungs part-way through (`cp-08a`,

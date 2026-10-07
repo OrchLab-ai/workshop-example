@@ -392,8 +392,8 @@ invalidate a checkpoint.
 | `cp-08a`, `cp-08b`, `cp-08c` | Activity 08 part-way: harness built; restricted, probe written; holes closed |
 | `cp-08` | Headless harness: run, isolate, restrict, gate — plus its first fix |
 | `cp-09a` | Activity 09 part-way: pipeline built and failing closed |
-| `cp-09` | Harness as a plan → code pipeline; Mission Updates built by it |
-| `cp-10` | Harness with a review gate |
+| `cp-09` | Harness as a plan → code pipeline; read side of Mission Updates built by it |
+| `cp-10` | Harness with a review loop; posting built by it |
 
 Checkpoints beyond `cp-01` are published as the container is built out;
 `--list` shows you which exist. Asking for one that doesn't yet gives you a

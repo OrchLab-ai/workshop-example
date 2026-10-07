@@ -119,6 +119,63 @@ test("start-app.sh can write its dependency volumes, and says so if it cannot", 
   );
 });
 
+// Attendees read the harness runs on the host through runs/. The runs themselves stay in the
+// container (each holds a worktree with node_modules, slow over a bind mount), so a loop
+// copies the record across. It must start once, at boot: started on --restart, it doubles.
+test("the harness runs are mirrored to runs/ on the host, from one loop started at boot", null, () => {
+  const compose = codeOf("docker-compose.workshop.yml");
+  const start = codeOf("workshop/container/start-app.sh");
+  const mirror = codeOf("workshop/container/mirror-runs.sh");
+
+  ok(
+    /-\s*\.\/runs:\/workspace\/runs-view\b/.test(compose),
+    "claude-container must mount ./runs at /workspace/runs-view, where mirror-runs.sh writes"
+  );
+  ok(
+    !/:\/workspace\/runs\s*$/m.test(compose),
+    "/workspace/runs itself must not be bind-mounted: every run's worktree and node_modules would cross it"
+  );
+  const pid1 = start.indexOf('if [ "$$" -ne 1 ]');
+  const launch = start.indexOf("mirror-runs.sh");
+  ok(
+    pid1 > -1 && launch > pid1 && launch < start.lastIndexOf("exec sleep infinity"),
+    "start-app.sh must start mirror-runs.sh after the PID-1 check and before `exec sleep infinity`, so only the boot starts it and a --restart never adds a second loop"
+  );
+  ok(
+    /git -C "\$1" diff --no-index/.test(mirror) && /return 0/.test(mirror),
+    "changes.diff must include new files, and a new file's --no-index diff exits 1, so that status must not count as failure"
+  );
+  ok(!/\brepo\/\*\*|cp -r/.test(mirror), "the mirror must never copy the worktree");
+  ok(/^runs\/\*$/m.test(read(".gitignore")), "runs/ must be ignored, apart from its .gitkeep");
+});
+
+// A step's box label must carry the number the list shows: a text-only step still takes a
+// number, and labels counted without it sent people to the wrong box ("6." sat at item 7).
+test("every numbered step label matches its place in the list", null, () => {
+  const { activities } = createRequire(import.meta.url)("../guide/src/activities.js");
+  const off = [];
+  const walk = (o) => {
+    if (Array.isArray(o)) {
+      if (o.some((s) => s && typeof s === "object" && "text" in s && "label" in s))
+        o.forEach((s, i) => {
+          const m = s && typeof s === "object" && /^(\d+)\./.exec(s.label || "");
+          if (m && +m[1] !== i + 1) off.push(`"${s.label}" is item ${i + 1}`);
+        });
+      o.forEach(walk);
+    } else if (o && typeof o === "object") Object.values(o).forEach(walk);
+  };
+  walk(activities);
+  ok(off.length === 0, `step labels out of step with the list: ${off.join("; ")}`);
+});
+
+// A step written as { text } with no code rendered an empty copy block reading "undefined".
+test("no page renders an empty copy block", null, () => {
+  const bad = readdirSync(join(ROOT, "guide/pages"))
+    .filter((f) => f.endsWith(".html"))
+    .filter((f) => /<pre>(undefined)?<\/pre>/.test(read(`guide/pages/${f}`)));
+  ok(bad.length === 0, `empty or "undefined" copy block in: ${bad.join(", ")}`);
+});
+
 // --restart used to pkill anything matching 'vite' or 'packages/server', which also
 // killed the app's E2E run (its own API and Vite on 3101/5273), and any shell whose
 // command line merely mentioned vite. It must stop the dev servers and nothing else.

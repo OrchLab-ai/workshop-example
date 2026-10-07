@@ -1024,8 +1024,8 @@ function checkBlock(c, rungs) {
   rungs = Array.isArray(rungs) ? rungs : []; // also called from .map(), which passes an index
   const loc = c.where ? LOCATIONS[c.where] : null;
   const step = s =>
-    typeof s === "string"
-      ? `      <li>${s}</li>`
+    typeof s === "string" || s.code === undefined // a step to read or think, with nothing to copy
+      ? `      <li>${typeof s === "string" ? s : s.text}</li>`
       : `      <li>${s.text}\n${copyBlock(s.label || "", s.code, !!s.prompt, s.where || c.where)}\n      </li>`;
   return `  <div class="checkblock${loc ? ` in-${loc.cls}` : ""}">
     <div class="cb-head"><span>${esc(c.label)}</span>${loc ? badge(c.where) : ""}</div>
