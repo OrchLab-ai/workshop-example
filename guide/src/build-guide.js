@@ -12,7 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { activities, LINKS, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER, CATCH_UP } = require("./activities");
+const { activities, GIT_BASH, SWITCH_TO_LINUX, LINKS, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER, CATCH_UP } = require("./activities");
 
 // This file lives in guide/src/. The guide itself is one directory up, and is laid
 // out so that opening the guide folder presents exactly ONE thing to double-click:
@@ -318,7 +318,9 @@ details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
 /* Three spellings of the same slot, one per pathway; the platform script hides the
    two that do not apply. Before anything is picked all three show, which reads as
    "Terminal / Git Bash / PowerShell" and is honest rather than wrong. */
-.shellname + .shellname::before { content: " / "; font-weight: 400; color: var(--muted); }
+/* Separator only between VISIBLE names. A plain `+` sibling rule also fired after a
+   hidden one, which left a picked Windows pathway reading "A / Git Bash window". */
+.shellname:not([hidden]) ~ .shellname:not([hidden])::before { content: " / "; font-weight: 400; color: var(--muted); }
 
 /* Two exclusive sections, styled as a choice rather than as a disclosure: full
    width, equal weight, and the closed one clearly still clickable. The point is that
@@ -434,7 +436,8 @@ h3.cmdgroup:first-of-type { margin-top: 4px; }
    ends on "ALL 6 CHECKS PASSED": a passing setup should not have to scroll past
    thirteen failures to reach the pager. RED because it is the one thing on this page
    somebody scans for while something is actually broken, and red is what the eye
-   finds. It is the only use of --danger in the guide, which is what keeps it loud. */
+   finds. --danger is used in one other place only - the unanswered linux/windows
+   choice in setup (.mode-pick) - and nowhere else, which is what keeps it loud. */
 details.trouble {
   margin: 34px 0 0; background: var(--panel);
   border: 1px solid var(--danger); border-left: 4px solid var(--danger);
@@ -524,6 +527,42 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 }
 .picker button[aria-pressed="true"] .sub { color: var(--on-brand); opacity: .8; }
 
+/* The linux / windows answer. Feedback from a run: people ran the detect command,
+   read the word, and scrolled on without clicking either button - and everything
+   after it is gated on that click, so the rest of setup looked missing. Red while
+   unanswered, because it is the one thing on the page that blocks the rest; back to
+   a plain frame once a button is pressed, so it stops shouting at someone who has
+   done what it asked. :has() where supported; without it the box simply stays red. */
+/* The one instruction a Windows-containers attendee cannot miss: switch Docker to
+   Linux containers before the day. Deliberately the loudest thing in the guide. */
+.bigred {
+  border: 4px solid var(--danger); border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 9%, var(--bg));
+  padding: 20px 24px; margin: 22px 0; color: var(--strong); font-size: 16px;
+}
+.bigred .bigred-title {
+  margin: 0 0 10px; color: var(--danger);
+  font-weight: 800; font-size: 30px; line-height: 1.2; letter-spacing: -.01em;
+}
+.bigred ol { margin: 10px 0 16px; padding-left: 22px; font-weight: 600; }
+.bigred li { margin: 6px 0; }
+.bigred .bigred-detail {
+  border-top: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  padding-top: 10px; margin-top: 10px; font-size: 14.5px; color: var(--text);
+}
+.bigred .bigred-detail b { color: var(--danger); display: block; margin-bottom: 2px; }
+.bigred .bigred-detail p { margin: 0; }
+
+.mode-pick {
+  border: 2px solid var(--danger); border-radius: 8px;
+  padding: 14px 16px 6px; margin: 16px 0 12px;
+}
+.mode-pick .mode-pick-prompt {
+  margin: 0 0 12px; color: var(--danger); font-weight: 700;
+}
+.mode-pick:has(button[aria-pressed="true"]) { border-color: var(--border); }
+.mode-pick:has(button[aria-pressed="true"]) .mode-pick-prompt { display: none; }
+
 /* the "you chose X" strip, with a way back out */
 .chosen {
   display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
@@ -577,6 +616,16 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   margin-right: 10px; vertical-align: 1px;
 }
 .shellreq strong { color: var(--strong); }
+/* "Git Bash", wherever the guide tells a Windows attendee which shell to open. In
+   the host terminal's amber because on Windows that is exactly what it is - the
+   window 1 badge and the shell's name read as the same thing. Styled like .loc, but
+   not a .loc: it has no tooltip and is not a window of its own. */
+.shellbadge {
+  display: inline-block; background: var(--amber); color: var(--bg);
+  font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
+  text-transform: uppercase; padding: 4px 7px; border-radius: 3px;
+  margin: 0 2px; vertical-align: 1px; white-space: nowrap;
+}
 
 /* WHICH OF THE THREE WINDOWS does this command belong in. Named after the terminals
    themselves rather than after host-vs-container, because host-vs-container is not
@@ -1125,7 +1174,7 @@ const pathwayFor = id => PLATFORMS.find(p => p.id === id);
 // the activity pages cannot disagree about the answer.
 const shellCallout = p => `      <div class="shellreq"><span class="where">Where</span>${
   p.shell
-    ? `Run these in <strong>${esc(p.shell)}</strong>${p.shellNote ? `, ${p.shellNote}` : "."}${
+    ? `Run these in ${shellLabel(p.shell)}${p.shellNote ? `, ${p.shellNote}` : "."}${
         p.cwd ? ` ${p.cwd.replace("{shell}", shellName())}` : ""
       }`
     : p.cwd.replace("{shell}", shellName())
@@ -1143,10 +1192,17 @@ const onlyWrap = (only, html) =>
 // use. With nothing picked yet all three are visible, which reads as
 // "Terminal / Git Bash / PowerShell" — true, and better than naming one and being
 // wrong for two thirds of the room.
-const shellName = () =>
+// `day` picks the shell for the workshop itself rather than for setup - they differ
+// only on windows-windows, which runs its check in PowerShell and its day in Git Bash.
+const shellName = (day = false) =>
   PLATFORMS.map(
-    p => `<span class="shellname" data-only="${p.id}"><strong>${esc(p.shell)}</strong></span>`
+    p => `<span class="shellname" data-only="${p.id}">${shellLabel((day && p.dayShell) || p.shell)}</span>`
   ).join("");
+
+// Git Bash gets the badge; the other shells stay bold text. It is the one name a
+// Windows attendee must not substitute, so it is the one that has to stand out.
+const shellLabel = name =>
+  name === "Git Bash" ? GIT_BASH : `<strong>${esc(name)}</strong>`;
 
 // The credential, as two sections of which at most one is open.
 //
@@ -1194,10 +1250,22 @@ ${o.command ? copyBlock(o.command.label, o.command.code, false, o.command.where)
 // "Run the check" on screen above the section explaining what the check reads out of
 // .env - so the obvious thing to do was run it, and the obvious result was check 4
 // failing for want of a credential nobody had been told about yet.
+// The big red "switch to Linux containers" box. See SWITCH_TO_LINUX in activities.js.
+const switchToLinux = () => `      <div class="bigred" role="note">
+        <p class="bigred-title">${esc(SWITCH_TO_LINUX.title)}</p>
+        <p>${SWITCH_TO_LINUX.body}</p>
+        <ol>
+${SWITCH_TO_LINUX.steps.map(s => `          <li>${s}</li>`).join("\n")}
+        </ol>
+${SWITCH_TO_LINUX.details.map(d => `        <div class="bigred-detail"><b>${esc(d.h)}</b><p>${d.text}</p></div>`).join("\n")}
+      </div>`;
+
 const runTheCheck = () =>
   PLATFORMS.map(
     p => `    <div class="pathway" data-pathway="${p.id}">
-${p.checkCommands.map(c => copyBlock(c.label, c.code, false, "host")).join("\n")}
+${p.checkCommands.map(c => copyBlock(c.label, c.code, false, "host")).join("\n")}${
+  p.afterCheck ? `\n${switchToLinux()}` : ""
+}
     </div>`
   ).join("\n") +
   `\n  <p data-pick-empty class="tinynote">Pick your operating system above to see the
@@ -1275,11 +1343,14 @@ function platformPicker() {
     one daemon, one mode, never both — and the workshop uses a different check for
     each. Don't guess. Run this and read the one word it prints:</p>
 ${copyBlock("Tells you which mode Docker is in", DETECT_COMMAND)}
-    <div class="picker">
-      <button type="button" data-pick="windows-linux" aria-pressed="false">It printed <code>linux</code>
-        <span class="sub">Linux containers — the usual setup</span></button>
-      <button type="button" data-pick="windows-windows" aria-pressed="false">It printed <code>windows</code>
-        <span class="sub">Windows containers — usually deliberate</span></button>
+    <div class="mode-pick">
+      <p class="mode-pick-prompt">Now pick the button that matches what it printed — <code>linux</code> or <code>windows</code>. The rest of setup stays hidden until you do.</p>
+      <div class="picker">
+        <button type="button" data-pick="windows-linux" aria-pressed="false">It printed <code>linux</code>
+          <span class="sub">Linux containers — the usual setup</span></button>
+        <button type="button" data-pick="windows-windows" aria-pressed="false">It printed <code>windows</code>
+          <span class="sub">Windows containers — usually deliberate</span></button>
+      </div>
     </div>
     <div class="note">If that command errors, Docker Desktop is not running. Start it,
     wait for the whale icon to stop animating, and run it again.</div>
@@ -1424,13 +1495,15 @@ ${copyBlock("Find work an earlier jump parked for you", "./checkpoint.sh --parke
 // answers which CONTAINER shell, which the badges cannot.
 const terminalsCallout = () => `  <div class="terminals">
   <p class="tm-intro">${TERMINALS.intro}</p>
+${onlyWrap(TERMINALS.note.only, switchToLinux())}
+${onlyWrap(TERMINALS.windowsShell.only, `    <div class="shellreq"><span class="where">Windows</span>${TERMINALS.windowsShell.body}</div>`)}
 ${TERMINALS.list
 .map(
   t => `    <div class="tm">
     <span class="tm-n">${esc(t.n)}</span>
     <div>
       <b>${esc(t.title)}</b> ${badge(t.where, "tm-loc")}
-      <p>${t.body.replace("{shell}", shellName())}</p>
+      <p>${t.body.replace("{shell}", shellName(true))}</p>
 ${(t.commands || []).map(c => onlyWrap(c.only, copyBlock(c.label, c.code, false, c.where))).join("\n")}${
   // Terminal 3 carries the flag, so terminal 3 carries the explanation. Attached to
   // the terminal rather than dropped at the end of the list, so the command and the
@@ -1441,7 +1514,6 @@ ${(t.commands || []).map(c => onlyWrap(c.only, copyBlock(c.label, c.code, false,
   </div>`
 )
 .join("\n")}
-${onlyWrap(TERMINALS.note.only, `    <div class="note">${TERMINALS.note.body}</div>`)}
   <div class="tm tm-after">
     <span class="tm-n tm-check">&#10003;</span>
     <div>

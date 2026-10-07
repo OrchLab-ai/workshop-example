@@ -897,6 +897,9 @@ const CHECKLISTS = {
     "Claude Code CLI + auth",
     "Workshop site responds",
     "Playwright screenshot captured",
+    // Windows only: the day's commands are bash scripts. Last, so 1-6 keep the
+    // numbers they share with verify-setup.sh.
+    "Git Bash available",
   ],
 };
 
@@ -1374,8 +1377,14 @@ test("start-your-day inherits the platform answer rather than re-asking", null, 
 
   // Rendered from PLATFORMS, so the shell named here cannot drift from the shell the
   // setup page told them to use.
-  for (const shell of ["Terminal", "Git Bash", "PowerShell"]) {
-    ok(html.includes(`<strong>${shell}</strong>`), `the ${shell} variant is missing — the shell names must come from PLATFORMS`);
+  // Git Bash renders as a badge (.shellbadge) rather than bold text; either form counts.
+  // No PowerShell here: this page names the DAY's shell (PLATFORMS[].dayShell), and on
+  // the Windows-containers pathway that is Git Bash - PowerShell runs only its check.
+  for (const shell of ["Terminal", "Git Bash"]) {
+    ok(
+      html.includes(`<strong>${shell}</strong>`) || html.includes(`class="shellbadge">${shell}<`),
+      `the ${shell} variant is missing — the shell names must come from PLATFORMS`
+    );
   }
   ok(
     (html.match(/class="shellname" data-only=/g) || []).length >= 9,

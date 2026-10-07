@@ -27,6 +27,16 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
+# Git Bash rewrites any argument that looks like a POSIX path into a Windows path
+# before docker.exe sees it - right for host paths, fatal for CONTAINER paths:
+# `test -f /usr/local/bin/app-views.mjs` reached the container as
+# C:/Program Files/Git/usr/local/bin/app-views.mjs, and the view check reported the
+# checker "not mounted" in a container created a minute earlier. Every host path in
+# this script is relative, so nothing here needs the conversion. Same guard as
+# verify-setup.sh; meaningless on macOS and Linux.
+export MSYS_NO_PATHCONV=1
+export MSYS2_ARG_CONV_EXCL='*'
+
 COMPOSE_FILE="docker-compose.workshop.yml"
 PORT="${WORKSHOP_PORT:-5173}"
 SHOTS="screenshots"

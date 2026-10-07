@@ -270,7 +270,9 @@ details.cheat .body p { margin: 0 0 10px; color: var(--text); font-size: 15px; }
 /* Three spellings of the same slot, one per pathway; the platform script hides the
    two that do not apply. Before anything is picked all three show, which reads as
    "Terminal / Git Bash / PowerShell" and is honest rather than wrong. */
-.shellname + .shellname::before { content: " / "; font-weight: 400; color: var(--muted); }
+/* Separator only between VISIBLE names. A plain  sibling rule also fired after a
+   hidden one, which left a picked Windows pathway reading "A / Git Bash window". */
+.shellname:not([hidden]) ~ .shellname:not([hidden])::before { content: " / "; font-weight: 400; color: var(--muted); }
 
 /* Two exclusive sections, styled as a choice rather than as a disclosure: full
    width, equal weight, and the closed one clearly still clickable. The point is that
@@ -386,7 +388,8 @@ h3.cmdgroup:first-of-type { margin-top: 4px; }
    ends on "ALL 6 CHECKS PASSED": a passing setup should not have to scroll past
    thirteen failures to reach the pager. RED because it is the one thing on this page
    somebody scans for while something is actually broken, and red is what the eye
-   finds. It is the only use of --danger in the guide, which is what keeps it loud. */
+   finds. --danger is used in one other place only - the unanswered linux/windows
+   choice in setup (.mode-pick) - and nowhere else, which is what keeps it loud. */
 details.trouble {
   margin: 34px 0 0; background: var(--panel);
   border: 1px solid var(--danger); border-left: 4px solid var(--danger);
@@ -476,6 +479,42 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 }
 .picker button[aria-pressed="true"] .sub { color: var(--on-brand); opacity: .8; }
 
+/* The linux / windows answer. Feedback from a run: people ran the detect command,
+   read the word, and scrolled on without clicking either button - and everything
+   after it is gated on that click, so the rest of setup looked missing. Red while
+   unanswered, because it is the one thing on the page that blocks the rest; back to
+   a plain frame once a button is pressed, so it stops shouting at someone who has
+   done what it asked. :has() where supported; without it the box simply stays red. */
+/* The one instruction a Windows-containers attendee cannot miss: switch Docker to
+   Linux containers before the day. Deliberately the loudest thing in the guide. */
+.bigred {
+  border: 4px solid var(--danger); border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 9%, var(--bg));
+  padding: 20px 24px; margin: 22px 0; color: var(--strong); font-size: 16px;
+}
+.bigred .bigred-title {
+  margin: 0 0 10px; color: var(--danger);
+  font-weight: 800; font-size: 30px; line-height: 1.2; letter-spacing: -.01em;
+}
+.bigred ol { margin: 10px 0 16px; padding-left: 22px; font-weight: 600; }
+.bigred li { margin: 6px 0; }
+.bigred .bigred-detail {
+  border-top: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  padding-top: 10px; margin-top: 10px; font-size: 14.5px; color: var(--text);
+}
+.bigred .bigred-detail b { color: var(--danger); display: block; margin-bottom: 2px; }
+.bigred .bigred-detail p { margin: 0; }
+
+.mode-pick {
+  border: 2px solid var(--danger); border-radius: 8px;
+  padding: 14px 16px 6px; margin: 16px 0 12px;
+}
+.mode-pick .mode-pick-prompt {
+  margin: 0 0 12px; color: var(--danger); font-weight: 700;
+}
+.mode-pick:has(button[aria-pressed="true"]) { border-color: var(--border); }
+.mode-pick:has(button[aria-pressed="true"]) .mode-pick-prompt { display: none; }
+
 /* the "you chose X" strip, with a way back out */
 .chosen {
   display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: baseline;
@@ -529,6 +568,16 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
   margin-right: 10px; vertical-align: 1px;
 }
 .shellreq strong { color: var(--strong); }
+/* "Git Bash", wherever the guide tells a Windows attendee which shell to open. In
+   the host terminal's amber because on Windows that is exactly what it is - the
+   window 1 badge and the shell's name read as the same thing. Styled like .loc, but
+   not a .loc: it has no tooltip and is not a window of its own. */
+.shellbadge {
+  display: inline-block; background: var(--amber); color: var(--bg);
+  font: 700 11px/1 ui-monospace, Menlo, monospace; letter-spacing: .06em;
+  text-transform: uppercase; padding: 4px 7px; border-radius: 3px;
+  margin: 0 2px; vertical-align: 1px; white-space: nowrap;
+}
 
 /* WHICH OF THE THREE WINDOWS does this command belong in. Named after the terminals
    themselves rather than after host-vs-container, because host-vs-container is not
@@ -701,11 +750,14 @@ nav.pager a:hover { background: var(--surface); }
     <div class="cb-head"><span>Tells you which mode Docker is in</span><button type="button">Copy</button></div>
     <pre>docker info --format '{{.OSType}}'</pre>
   </div>
-    <div class="picker">
-      <button type="button" data-pick="windows-linux" aria-pressed="false">It printed <code>linux</code>
-        <span class="sub">Linux containers — the usual setup</span></button>
-      <button type="button" data-pick="windows-windows" aria-pressed="false">It printed <code>windows</code>
-        <span class="sub">Windows containers — usually deliberate</span></button>
+    <div class="mode-pick">
+      <p class="mode-pick-prompt">Now pick the button that matches what it printed — <code>linux</code> or <code>windows</code>. The rest of setup stays hidden until you do.</p>
+      <div class="picker">
+        <button type="button" data-pick="windows-linux" aria-pressed="false">It printed <code>linux</code>
+          <span class="sub">Linux containers — the usual setup</span></button>
+        <button type="button" data-pick="windows-windows" aria-pressed="false">It printed <code>windows</code>
+          <span class="sub">Windows containers — usually deliberate</span></button>
+      </div>
     </div>
     <div class="note">If that command errors, Docker Desktop is not running. Start it,
     wait for the whale icon to stop animating, and run it again.</div>
@@ -758,7 +810,7 @@ cd workshop-example</pre>
     <div class="pathway" data-pathway="windows-linux">
       <h3>Linux containers &middot; Windows</h3>
       <p class="confirm">This is the usual setup on Windows, and the better-tested path.</p>
-      <div class="shellreq"><span class="where">Where</span>Run these in <strong>Git Bash</strong>, which comes with Git for Windows. <span class="not">Not PowerShell, and not CMD</span> — the commands below are POSIX shell and will not run there. Start from wherever you keep your code — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.</div>
+      <div class="shellreq"><span class="where">Where</span>Run these in <span class="shellbadge">Git Bash</span>, which comes with Git for Windows. <span class="not">Not PowerShell, and not CMD</span> — the commands below are POSIX shell and will not run there. Start from wherever you keep your code — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.</div>
   <div class="copyblock">
     <div class="cb-head"><span>Clone and enter the repo</span><button type="button">Copy</button></div>
     <pre>git clone https://github.com/OrchLab-ai/workshop-example.git
@@ -772,7 +824,7 @@ cd workshop-example</pre>
     </div>
     <div class="pathway" data-pathway="windows-windows">
       <h3>Windows containers &middot; Windows</h3>
-      <p class="confirm">Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same six things.</p>
+      <p class="confirm">Less common, and usually deliberate — .NET Framework work needs it. There is a Windows-container version of the environment check, so you can run it without switching modes — <strong>but the workshop itself needs Linux containers</strong>, and you will switch once the check passes. Switching is safe and reversible.</p>
       <div class="shellreq"><span class="where">Where</span>Run these in <strong>PowerShell</strong>. Start from wherever you keep your code — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.</div>
   <div class="copyblock">
     <div class="cb-head"><span>Clone and enter the repo</span><button type="button">Copy</button></div>
@@ -856,6 +908,17 @@ cd workshop-example</pre>
     <pre>$env:WORKSHOP_PORT=5174
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
+      <div class="bigred" role="note">
+        <p class="bigred-title">Now switch Docker to Linux containers</p>
+        <p>The environment check runs in Windows-container mode. <strong>The workshop does not</strong> — it needs <strong>Linux containers</strong>, because every workshop image is Linux, and the workshop stack will not start — Docker reports <code>no matching manifest for windows</code> — until you switch. Do it before anything else.</p>
+        <ol>
+          <li>Right-click the Docker whale in the system tray and choose <strong>Switch to Linux containers…</strong></li>
+          <li>Wait for Docker to restart, then check: <code>docker info --format '{{.OSType}}'</code> must print <code>linux</code>.</li>
+        </ol>
+        <div class="bigred-detail"><b>What switching actually does</b><p>Docker Desktop on Windows has <strong>two separate engines</strong> — one for Windows containers, one for Linux containers — and only one is active at a time. Switching stops the Windows engine and starts the Linux one (it runs inside WSL 2 or a small Hyper-V VM). Your <code>docker</code> commands then talk to the Linux engine. Nothing is converted, copied or removed.</p></div>
+        <div class="bigred-detail"><b>Why it is safe</b><p>Each engine keeps its own images, containers and volumes on disk. While you are in Linux mode your Windows images, containers and volumes are <strong>hidden, not deleted</strong> — <code>docker ps -a</code> and <code>docker images</code> just stop listing them. The one thing that happens: any Windows container that is <em>running</em> when you switch is stopped, so stop anything you care about first. The first switch can take a minute, and may ask you to install WSL 2 if it is not already there.</p></div>
+        <div class="bigred-detail"><b>Switching back after the workshop</b><p>Same menu: right-click the whale and choose <strong>Switch to Windows containers…</strong> Everything you had is listed again exactly as you left it. Containers that were stopped by the switch do not restart on their own — start them again as you normally would. You can switch back and forth as often as you like.</p></div>
+      </div>
     </div>
   <p data-pick-empty class="tinynote">Pick your operating system above to see the
   exact command for your machine.</p>
@@ -885,7 +948,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
     <details class="fix" data-only="windows-linux windows-windows">
       <summary><span class="fx-check">Before check 1</span>Docker is in Windows-container mode — run windows\verify.ps1 instead</summary>
       <div class="fx-body">
-        <p>Not a failure, and nothing is broken. Every image <code>./verify-setup.sh</code> uses is a Linux image, and one Docker daemon serves one mode. You do <strong>not</strong> need to switch modes — there is a Windows-container check that tests the same toolchain: Docker, Claude and a browser.</p>
+        <p>Not a failure, and nothing is broken. Every image <code>./verify-setup.sh</code> uses is a Linux image, and one Docker daemon serves one mode. You do not need to switch modes <em>for the check</em> — there is a Windows-container version that tests the same toolchain: Docker, Claude and a browser. <strong>You will need to switch to Linux containers for the workshop itself</strong>, once the check passes.</p>
   <div class="copyblock in-host">
     <div class="cb-head"><span>Run this instead</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
@@ -895,7 +958,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
     <details class="fix">
       <summary><span class="fx-check">Check 1</span>the 'git' command was not found on your PATH</summary>
       <div class="fx-body">
-        <p>git is one of the three things this workshop needs on your own machine — the other two are Docker and Claude Code. Install it from <a href="https://git-scm.com/downloads">git-scm.com/downloads</a>, then re-run the check. <span data-only="windows-linux">Installing Git for Windows is also what gives you <strong>Git Bash</strong>, which is the shell the whole setup expects.</span></p>
+        <p>git is one of the three things this workshop needs on your own machine — the other two are Docker and Claude Code. Install it from <a href="https://git-scm.com/downloads">git-scm.com/downloads</a>, then re-run the check. <span data-only="windows-linux">Installing Git for Windows is also what gives you <span class="shellbadge">Git Bash</span>, which is the shell the whole setup expects.</span></p>
       </div>
     </details>
     <details class="fix">
@@ -1023,7 +1086,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
   <div class="copyblock in-host">
     <div class="cb-head"><span>The API's own log</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
-    <pre>docker compose -f docker-compose.workshop.yml exec claude-container tail -n 50 /workspace/logs/server.log</pre>
+    <pre>docker compose -f docker-compose.workshop.yml exec claude-container sh -c 'tail -n 50 /workspace/logs/server.log'</pre>
   </div>
       </div>
     </details>
@@ -1084,6 +1147,12 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <summary><span class="fx-check">Check 6</span>the headless browser could not render and capture the page</summary>
       <div class="fx-body">
         <p>Read <code>.verify-logs/06-screenshot.log</code> and re-run. This one is rare, and on a machine where checks 1–5 passed it is usually transient — the site had not finished starting. If it fails twice with the same error, that is the point to ask rather than keep re-running.</p>
+      </div>
+    </details>
+    <details class="fix" data-only="windows-windows">
+      <summary><span class="fx-check">Check 7</span>Git Bash not found - the workshop commands are bash scripts</summary>
+      <div class="fx-body">
+        <p>Every command after setup — <code>./checkpoint.sh</code> and the script that starts the stack — is a bash script, and PowerShell and CMD cannot run it. <span class="shellbadge">Git Bash</span> comes with Git for Windows: install it from <a href="https://git-scm.com/download/win">git-scm.com/download/win</a> (the defaults are fine) and re-run the check. It deliberately ignores WSL's <code>bash</code>, which would run the scripts in a different Linux with a different Docker.</p>
       </div>
     </details>
 

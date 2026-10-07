@@ -26,8 +26,11 @@ From the **repo root**:
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1
 ```
 
-It prints the same six-line checklist and the same one-line verdict as the Linux
-check, and writes the same `screenshots\verify.png` proof and `verify-report.txt`.
+It prints the same checklist and the same one-line verdict as the Linux check, plus
+a seventh row, **Git Bash available**: every command after setup (`./workshop/up.sh`,
+`./checkpoint.sh`) is a bash script, so Windows attendees need Git Bash on the day. It
+looks for Git for Windows' own `bash.exe`, never `bash` on PATH, which is WSL's on a
+machine that has WSL. It also writes the same `screenshots\verify.png` proof and `verify-report.txt`.
 
 | Command | What it does |
 |---|---|
@@ -44,7 +47,7 @@ While it works, check 3 redraws its own row with what Docker is doing, so a long
 download cannot be mistaken for a hang:
 
 ```
-   [3/6]  Workshop image builds ... pulling 742.8MB / 1.9GB 96s
+   [3/7]  Workshop image builds ... pulling 742.8MB / 1.9GB 96s
 ```
 
 The finished `PASS` line replaces it. This matches `verify-setup.sh`, and like it the

@@ -46,6 +46,55 @@ const DETECT_COMMAND = "docker info --format '{{.OSType}}'";
 const DOCKER_USERS_NOTE =
   'If Docker says <strong>access is denied</strong>, or the check reports you are not in <code>docker-users</code>: an administrator needs to run <code>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</code> once — and then you must <strong>sign out of Windows and back in</strong>. Group rights are granted at logon, so nothing changes until a new session. Restarting Docker Desktop will not help.';
 
+// The Git Bash badge (.shellbadge, styled in build-guide.js). Prose fields here are
+// trusted markup, so this drops straight into a sentence.
+const GIT_BASH = '<span class="shellbadge">Git Bash</span>';
+
+// THE STEP THE WINDOWS-CONTAINERS PATHWAY MISSED. Its environment check passes in
+// Windows-container mode, and the guide used to say "you do not have to switch
+// modes" - true of the check, false of the workshop, whose every image is Linux. An
+// attendee followed it to the letter and ./workshop/up.sh failed with "no matching
+// manifest for windows(...)/amd64". Rendered big and red in two places: right after
+// that pathway's check, so it is done the night before, and at the top of Start
+// your day, for anyone who skipped past it. One copy, so the two cannot disagree.
+const SWITCH_TO_LINUX = {
+  title: "Now switch Docker to Linux containers",
+  body:
+    "The environment check runs in Windows-container mode. <strong>The workshop does not</strong> — it needs <strong>Linux containers</strong>, because every workshop image is Linux, " +
+    "and the workshop stack will not start — Docker reports <code>no matching manifest for windows</code> — until you switch. Do it before anything else.",
+  steps: [
+    "Right-click the Docker whale in the system tray and choose <strong>Switch to Linux containers…</strong>",
+    "Wait for Docker to restart, then check: <code>docker info --format '{{.OSType}}'</code> must print <code>linux</code>.",
+  ],
+  // What it does, that it is safe, and the way back - each its own short paragraph,
+  // because "will this break my other Docker work?" is the question that stops people
+  // clicking, and the answer has to be on the box, not in a chat with a facilitator.
+  details: [
+    {
+      h: "What switching actually does",
+      text:
+        "Docker Desktop on Windows has <strong>two separate engines</strong> — one for Windows containers, one for Linux containers — " +
+        "and only one is active at a time. Switching stops the Windows engine and starts the Linux one (it runs inside WSL 2 or a small Hyper-V VM). " +
+        "Your <code>docker</code> commands then talk to the Linux engine. Nothing is converted, copied or removed.",
+    },
+    {
+      h: "Why it is safe",
+      text:
+        "Each engine keeps its own images, containers and volumes on disk. While you are in Linux mode your Windows images, containers and volumes " +
+        "are <strong>hidden, not deleted</strong> — <code>docker ps -a</code> and <code>docker images</code> just stop listing them. " +
+        "The one thing that happens: any Windows container that is <em>running</em> when you switch is stopped, so stop anything you care about first. " +
+        "The first switch can take a minute, and may ask you to install WSL 2 if it is not already there.",
+    },
+    {
+      h: "Switching back after the workshop",
+      text:
+        "Same menu: right-click the whale and choose <strong>Switch to Windows containers…</strong> Everything you had is listed again exactly as you left it. " +
+        "Containers that were stopped by the switch do not restart on their own — start them again as you normally would. " +
+        "You can switch back and forth as often as you like.",
+    },
+  ],
+};
+
 // Where to run things, and what the token step actually involves. Both questions
 // come up on every pathway, so the text lives here once rather than three times.
 const CWD_CLONE =
@@ -173,8 +222,15 @@ const PLATFORMS = [
     label: "Windows containers",
     detectValue: "windows",
     confirm:
-      "Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same six things.",
+      "Less common, and usually deliberate — .NET Framework work needs it. There is a Windows-container version of the environment check, so you can run it without switching modes — <strong>but the workshop itself needs Linux containers</strong>, and you will switch once the check passes. Switching is safe and reversible.",
+    afterCheck: true,
     shell: "PowerShell",
+    // PowerShell is for the CHECK only (windows\verify.ps1). Everything on the day
+    // is a bash script - ./workshop/up.sh, ./checkpoint.sh - and this pathway also
+    // switches Docker to Linux containers before the first activity. So the three
+    // windows on the start-your-day page are Git Bash here too. Rendered as PowerShell
+    // they told an attendee to run ./workshop/up.sh in a shell that cannot run it.
+    dayShell: "Git Bash",
     cwd: CWD_CLONE,
     commands: [
       { label: "Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
@@ -231,8 +287,9 @@ const TROUBLESHOOTING = [
     symptom: "Docker is in Windows-container mode — run windows\\verify.ps1 instead",
     fix:
       "Not a failure, and nothing is broken. Every image <code>./verify-setup.sh</code> uses is a " +
-      "Linux image, and one Docker daemon serves one mode. You do <strong>not</strong> need to " +
-      "switch modes — there is a Windows-container check that tests the same toolchain: Docker, Claude and a browser.",
+      "Linux image, and one Docker daemon serves one mode. You do not need to switch modes " +
+      "<em>for the check</em> — there is a Windows-container version that tests the same toolchain: Docker, Claude and a browser. " +
+      "<strong>You will need to switch to Linux containers for the workshop itself</strong>, once the check passes.",
     commands: [
       { label: "Run this instead", code: "powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
     ],
@@ -245,7 +302,7 @@ const TROUBLESHOOTING = [
       "Docker and Claude Code. Install it from <a href=\"https://git-scm.com/downloads\">git-scm.com/downloads</a>, " +
       "then re-run the check. " +
       gitBashOnly(
-        "Installing Git for Windows is also what gives you <strong>Git Bash</strong>, which is the " +
+        `Installing Git for Windows is also what gives you ${GIT_BASH}, which is the ` +
           "shell the whole setup expects."
       ),
   },
@@ -407,7 +464,7 @@ const TROUBLESHOOTING = [
     commands: [
       { label: "Rebuild the database", code: "docker compose -f docker-compose.workshop.yml exec claude-container start-app.sh --reset-db" },
       { label: "Then re-run the check", code: "./verify-setup.sh" },
-      { label: "The API's own log", code: "docker compose -f docker-compose.workshop.yml exec claude-container tail -n 50 /workspace/logs/server.log" },
+      { label: "The API's own log", code: "docker compose -f docker-compose.workshop.yml exec claude-container sh -c 'tail -n 50 /workspace/logs/server.log'" },
     ],
   },
   {
@@ -498,6 +555,18 @@ const TROUBLESHOOTING = [
       "Read <code>.verify-logs/06-screenshot.log</code> and re-run. This one is rare, and on a machine " +
       "where checks 1–5 passed it is usually transient — the site had not finished starting. If it " +
       "fails twice with the same error, that is the point to ask rather than keep re-running.",
+  },
+  // Windows-container check only - verify-setup.sh is already running in Git Bash
+  // on Windows, so it has nothing to look for.
+  {
+    check: "Check 7",
+    only: ["windows-windows"],
+    symptom: "Git Bash not found - the workshop commands are bash scripts",
+    fix:
+      `Every command after setup — <code>./checkpoint.sh</code> and the script that starts the stack — is a bash script, and ` +
+      `PowerShell and CMD cannot run it. ${GIT_BASH} comes with Git for Windows: install it from ` +
+      '<a href="https://git-scm.com/download/win">git-scm.com/download/win</a> (the defaults are fine) and re-run the check. ' +
+      "It deliberately ignores WSL's <code>bash</code>, which would run the scripts in a different Linux with a different Docker.",
   },
 ];
 
@@ -638,6 +707,19 @@ const TERMINALS = {
       ],
     },
   ],
+  // Both Windows pathways, ABOVE the three windows rather than after them: by the
+  // time a note at the bottom is read, ./workshop/up.sh has already failed in
+  // PowerShell. `bash ./workshop/up.sh` from PowerShell was considered instead and
+  // rejected - on a machine with WSL, `bash` there is WSL's bash, which runs the
+  // script in a different Linux with a different Docker context.
+  windowsShell: {
+    only: ["windows-linux", "windows-windows"],
+    body:
+      `<strong>On Windows, all three windows are</strong> ${GIT_BASH}. ` +
+      '<span class="not">Not PowerShell, and not CMD</span> — every <code>./something.sh</code> command in this guide is a bash script and will not run there. ' +
+      `${GIT_BASH} came with Git for Windows. Open it from the Start menu and <code>cd</code> into your <code>workshop-example</code> folder, or right-click the folder in Explorer and choose <strong>Open Git Bash here</strong>. ` +
+      "The only PowerShell command in the whole workshop is the Windows-containers environment check, <code>windows\\verify.ps1</code>.",
+  },
   // Not a terminal, so it is not a fourth numbered window - but it is the thing that
   // tells you the three above worked.
   after: {
@@ -657,10 +739,10 @@ const TERMINALS = {
   // Windows-container mode runs the environment CHECK, not the workshop. Everything
   // the day itself uses is a Linux image, and one Docker daemon cannot serve both
   // modes at once.
+  // Gates the big red SWITCH_TO_LINUX box at the top of the three windows. Its text
+  // lives in SWITCH_TO_LINUX, shared with the setup page, so the two cannot drift.
   note: {
     only: ["windows-windows"],
-    body:
-      "<strong>You are in Windows-container mode.</strong> That is fine for the environment check — there is a Windows-container version of it — but the workshop stack itself is Linux images, and Docker Desktop cannot run both modes at once. Switch Docker Desktop to <strong>Linux containers</strong> before the first activity, and use Git Bash for the commands above. Ask us on the day if you are unsure; do not spend the morning on it.",
   },
 };
 
@@ -1305,4 +1387,4 @@ You are a senior full-stack engineer working in this codebase.
   },
 ];
 
-module.exports = { activities, LINKS, REPO_URL, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER, CATCH_UP };
+module.exports = { activities, GIT_BASH, SWITCH_TO_LINUX, LINKS, REPO_URL, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER, CATCH_UP };

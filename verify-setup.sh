@@ -474,7 +474,7 @@ else
     CLONE_START=$(date +%s)
     # --progress, not --quiet: run_logged reads this log to keep the checklist
     # line moving, and without it a slow clone looks exactly like a hang.
-    if run_logged "$LOG_DIR/01-clone.log" git clone --progress "$APP_REPO" "$APP_DIR"; then
+    if run_logged "$LOG_DIR/01-clone.log" git clone -c core.autocrlf=false --progress "$APP_REPO" "$APP_DIR"; then
       APP_ACTION="cloned in $(( $(date +%s) - CLONE_START ))s"
 
       # LAND ON cp-01, NOT ON main.
@@ -518,6 +518,49 @@ else
     # it remove one that was deleted, so a retired rung would read as published
     # forever. See checkpoint.sh.
     run_logged "$LOG_DIR/01-clone.log" git -C "$APP_DIR" fetch --tags --force --prune --prune-tags --quiet || true
+
+    # LINE ENDINGS. The app repo has no .gitattributes, and Git for Windows defaults
+    # to core.autocrlf=true - so a Windows clone has CRLF in every text file. The
+    # container's Linux git compares those with the LF in the index and reports the
+    # whole app (240 files) as modified, and the first commit made in there rewrites
+    # them all. New clones are made with autocrlf=false (above); this repairs one made
+    # before that, WITHOUT touching real work: every file git stores as LF but has
+    # checked out as CRLF gets its carriage returns stripped IN PLACE. A file that
+    # differed only by line endings is then clean again; a file with real edits -
+    # the package-lock.json the container's npm install rewrites, which npm keeps
+    # CRLF - keeps every edit, now with LF. Nothing is checked out, so nothing can be
+    # lost. Keyed on the files themselves, not on the config, so a clone already set
+    # to autocrlf=false with CRLF left behind is still repaired. A no-op on macOS and
+    # Linux, where nothing is checked out as CRLF.
+    if [ "$FAILED" -eq 0 ] &&
+       git -C "$APP_DIR" ls-files --eol 2>/dev/null | grep -qE '^i/lf +w/(crlf|mixed)'; then
+      EOL_OK=1
+      git -C "$APP_DIR" config core.autocrlf false || EOL_OK=0
+      # -z: one NUL-terminated record per file, "i/lf w/crlf attr/<TAB>path".
+      # w/mixed too: a CRLF file somebody has since appended LF lines to.
+      while IFS= read -r -d '' rec; do
+        case "$rec" in
+          # perl, not sed -i: BSD sed on macOS reads -i's argument as a backup
+          # suffix. perl -pi is the same on macOS, Linux and Git for Windows.
+          i/lf*w/crlf*|i/lf*w/mixed*)
+            perl -pi -e 's/\r\n/\n/' "$APP_DIR/${rec#*$'\t'}" || EOL_OK=0 ;;
+        esac
+      done < <(git -C "$APP_DIR" ls-files --eol -z 2>/dev/null)
+      # The index still records each file's old, CRLF SIZE, and git treats a size
+      # change as "modified" without looking at the content - so every rewritten file
+      # would stay listed even where it now matches exactly, and update-index
+      # --refresh does not clear it. Rebuilding the index from HEAD does. Files on
+      # disk are not touched; anything staged is merely unstaged.
+      { git -C "$APP_DIR" rm --cached -r -q . &&
+        git -C "$APP_DIR" reset -q; } >/dev/null 2>&1 || EOL_OK=0
+      if [ "$EOL_OK" -eq 1 ]; then
+        APP_ACTION="$APP_ACTION, line endings fixed"
+      else
+        fail_check "could not convert $APP_DIR/ to LF line endings" \
+"run  git -C $APP_DIR ls-files --eol | grep w/crlf  to see which files,
+                        then tell a facilitator"
+      fi
+    fi
   fi
 
   if [ "$FAILED" -eq 0 ]; then

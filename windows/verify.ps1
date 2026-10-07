@@ -50,7 +50,7 @@ Exit code is 0 only when all checks pass.
 
 # ---------------------------------------------------------------- configuration
 
-$Total        = 6
+$Total        = 7
 $RepoRoot     = Split-Path -Parent $PSScriptRoot
 # The application attendees work on. It lives in its own repository so that its
 # history (the cp-* ladder) moves independently of this one - see
@@ -211,8 +211,18 @@ function Format-NativeArgs([string[]]$Arguments) {
 
 # Run a command, send every stream to a log file, return the exit code. Keeping
 # this in one place is what keeps the checklist the only thing on screen.
-function Invoke-Logged([string]$LogName, [string[]]$Arguments, [string]$Exe = 'docker') {
+# Exit code Invoke-Logged returns when -TimeoutSec runs out. 124 is what GNU
+# `timeout` uses, so the Linux script and this one read the same.
+$TimedOutExitCode = 124
+
+function Invoke-Logged([string]$LogName, [string[]]$Arguments, [string]$Exe = 'docker',
+                       [int]$TimeoutSec = 0, [string]$KillContainer = '') {
     $log = Join-Path $LogDir $LogName
+    # A timeout needs a process handle to kill, which only the Start-Process path
+    # has - so a timed call takes that path even when progress output is off.
+    if ($TimeoutSec -gt 0) {
+        return Invoke-LoggedWithProgress $log $Arguments $Exe $TimeoutSec $KillContainer
+    }
     # $ErrorActionPreference MUST be relaxed around a native command.
     #
     # With it set to 'Stop', PowerShell promotes ANY bytes a native command writes to
@@ -237,7 +247,8 @@ function Invoke-Logged([string]$LogName, [string[]]$Arguments, [string]$Exe = 'd
 # The same job as Invoke-Logged, run as a separate process so that this script can
 # read the log while docker is still writing it. Start-Process cannot send both
 # streams to one file, so they land in two and are merged once it exits.
-function Invoke-LoggedWithProgress([string]$Log, [string[]]$Arguments, [string]$Exe = 'docker') {
+function Invoke-LoggedWithProgress([string]$Log, [string[]]$Arguments, [string]$Exe = 'docker',
+                                   [int]$TimeoutSec = 0, [string]$KillContainer = '') {
     $outFile = "$Log.out"
     $errFile = "$Log.err"
     foreach ($stale in @($outFile, $errFile)) {
@@ -256,12 +267,25 @@ function Invoke-LoggedWithProgress([string]$Log, [string[]]$Arguments, [string]$
     $null = $proc.Handle
 
     $start = Get-Date
+    $timedOut = $false
     while (-not $proc.HasExited) {
-        Write-ProgressLine ([int]((Get-Date) - $start).TotalSeconds) (Get-ProgressNote @($errFile, $outFile))
+        $elapsed = [int]((Get-Date) - $start).TotalSeconds
+        if ($TimeoutSec -gt 0 -and $elapsed -ge $TimeoutSec) {
+            $timedOut = $true
+            try { $proc.Kill() } catch {}
+            # Killing the `docker compose run` CLIENT leaves its container running -
+            # the container is the daemon's, not ours. Remove it by name, or it sits
+            # there holding the image until someone notices.
+            if ($KillContainer) { & docker rm -f $KillContainer *>&1 | Out-Null }
+            break
+        }
+        if ($script:Progress) {
+            Write-ProgressLine $elapsed (Get-ProgressNote @($errFile, $outFile))
+        }
         Start-Sleep -Milliseconds 900
     }
     $proc.WaitForExit()
-    Clear-ProgressLine
+    if ($script:Progress) { Clear-ProgressLine }
 
     # stderr first, stdout last. Docker's progress chatter goes to stderr, and check 3
     # reads the TAIL of this log for the version the CLI printed on stdout - so the
@@ -274,12 +298,17 @@ function Invoke-LoggedWithProgress([string]$Log, [string[]]$Arguments, [string]$
     foreach ($part in @($outFile, $errFile)) {
         if (Test-Path -LiteralPath $part) { Remove-Item -LiteralPath $part -Force }
     }
+    if ($timedOut) {
+        Add-Content -LiteralPath $Log -Value "verify.ps1: gave up after ${TimeoutSec}s" -Encoding UTF8
+        return $TimedOutExitCode
+    }
     return $proc.ExitCode
 }
 
-function Invoke-Compose([string]$LogName, [string[]]$Arguments) {
+function Invoke-Compose([string]$LogName, [string[]]$Arguments,
+                        [int]$TimeoutSec = 0, [string]$KillContainer = '') {
     $base = @('compose', '-f', $ComposeFile, '-p', $Project)
-    return Invoke-Logged $LogName ($base + $Arguments)
+    return Invoke-Logged $LogName ($base + $Arguments) 'docker' $TimeoutSec $KillContainer
 }
 
 # Why the current process TOKEN is inspected rather than the group's membership
@@ -433,7 +462,7 @@ the checkpoint ladder is git tags, so a copy of the files is not enough
         $cloneStart = Get-Date
         # --progress, not --quiet: Get-ProgressNote reads this log to keep the
         # checklist row moving, and without it a slow clone looks like a hang.
-        if ((Invoke-Logged '01-clone.log' @('clone', '--progress', $AppRepo, $AppDir) 'git') -eq 0) {
+        if ((Invoke-Logged '01-clone.log' @('clone', '-c', 'core.autocrlf=false', '--progress', $AppRepo, $AppDir) 'git') -eq 0) {
             $appAction = 'cloned in {0}s' -f [int]((Get-Date) - $cloneStart).TotalSeconds
         } else {
             Write-CheckFail "could not clone the workshop app from $AppRepo" @'
@@ -447,6 +476,51 @@ this is almost always a network problem - check your connection,
         # was made should be visible, but being offline must not fail a check that
         # has everything it needs on disk. checkpoint.sh retries a fetch of its own.
         $null = Invoke-Logged '01-clone.log' @('-C', $AppDir, 'fetch', '--tags', '--quiet') 'git'
+
+        # LINE ENDINGS - see the same block in verify-setup.sh. Git for Windows
+        # defaults to core.autocrlf=true and the app repo has no .gitattributes, so a
+        # clone made before -c core.autocrlf=false has CRLF everywhere, and the
+        # container's Linux git reports all of it as modified. Every file git stores
+        # as LF but has checked out as CRLF gets its carriage returns stripped IN
+        # PLACE: line-ending-only differences vanish, real edits (the package-lock.json
+        # npm rewrites, and keeps CRLF) survive with LF. Nothing is checked out, so
+        # nothing can be lost. Keyed on the files, not the config.
+        $crlfFiles = @(& git -C $AppDir -c core.quotepath=off ls-files --eol 2>$null |
+                       Where-Object { $_ -match '^i/lf\s+w/(crlf|mixed)' } |
+                       ForEach-Object { ($_ -split "`t", 2)[1] })
+        if ($crlfFiles.Count -gt 0) {
+            $ok = (Invoke-Logged '01-eol.log' @('-C', $AppDir, 'config', 'core.autocrlf', 'false') 'git') -eq 0
+            foreach ($rel in $crlfFiles) {
+                if (-not $ok) { break }
+                try {
+                    $full = Join-Path $AppDir $rel
+                    $bytes = [System.IO.File]::ReadAllBytes($full)
+                    $outBytes = New-Object System.Collections.Generic.List[byte] $bytes.Length
+                    for ($b = 0; $b -lt $bytes.Length; $b++) {
+                        # Drop a CR only when an LF follows it - a lone CR is content.
+                        if ($bytes[$b] -eq 13 -and $b + 1 -lt $bytes.Length -and $bytes[$b + 1] -eq 10) { continue }
+                        $outBytes.Add($bytes[$b])
+                    }
+                    [System.IO.File]::WriteAllBytes($full, $outBytes.ToArray())
+                } catch { $ok = $false }
+            }
+            # The index still records each file's old CRLF SIZE, and git treats a size
+            # change as "modified" without comparing content, which update-index
+            # --refresh does not clear. Rebuilding the index from HEAD does. Files on
+            # disk are not touched; anything staged is merely unstaged.
+            if ($ok) {
+                $ok = ((Invoke-Logged '01-eol.log' @('-C', $AppDir, 'rm', '--cached', '-r', '-q', '.') 'git') -eq 0) -and
+                      ((Invoke-Logged '01-eol.log' @('-C', $AppDir, 'reset', '-q') 'git') -eq 0)
+            }
+            if ($ok) {
+                $appAction = "$appAction, line endings fixed"
+            } else {
+                Write-CheckFail "could not convert $appLeaf\ to LF line endings" @'
+run  git -C app ls-files --eol | Select-String w/crlf  to see which files,
+                        then tell a facilitator
+'@
+            }
+        }
     }
 
     if (-not $script:Failed) {
@@ -651,7 +725,22 @@ check .verify-logs\04-claude.log for the error
         # shape, and that the CLI runs - and `claude --version` makes no network call,
         # so all of it passed for an attendee whose credential was rejected the moment
         # they used it. Kept in step with check 4 of verify-setup.sh.
-        } elseif ((Invoke-Compose '04-auth.log' @('run', '--rm', '--no-deps', 'verify-agent', 'cmd', '/c', 'claude -p "Reply with the two characters: OK"')) -ne 0) {
+        #
+        # Bounded, because a container that cannot resolve names never fails here -
+        # `claude -p` just retries, and the attendee watched a spinner for minutes with
+        # nothing pointing at DNS. A healthy round trip takes well under 30s.
+        } elseif (($authCode = Invoke-Compose '04-auth.log' @('run', '--rm', '--no-deps', '--name', "$Project-verify-auth", 'verify-agent', 'cmd', '/c', 'claude -p "Reply with the two characters: OK"') 90 "$Project-verify-auth") -eq $TimedOutExitCode) {
+            Write-CheckFail 'Claude did not answer within 90s - the container probably cannot reach the internet' @'
+this is almost always DNS inside the Windows container, not your
+                        credential. docker-compose.windows.yml already points the
+                        container at 1.1.1.1 and 8.8.8.8; if those are blocked on your
+                        network (corporate DNS, VPN), tell a facilitator.
+                        also try: turn off whichever of WiFi / Ethernet you are not
+                        using, restart Docker Desktop, then re-run  .\verify.ps1
+                        what Claude printed before it was stopped is in
+                        .verify-logs-auth.log
+'@
+        } elseif ($authCode -ne 0) {
             Write-CheckFail 'the credential was rejected - Claude could not authenticate' @'
 the value in .env is present and the right shape, but Claude will not
                         accept it. The usual causes, in order:
@@ -759,12 +848,73 @@ this is usually a Docker file-sharing permission problem
     }
 }
 
+# ---------------------------------------------------------- 7: Git Bash
+#
+# Windows-only, and about the DAY rather than this check. Everything after setup -
+# ./workshop/up.sh, ./checkpoint.sh - is a bash script, and an attendee who passed
+# this check in PowerShell carried on in PowerShell and hit it at 09:05. Last, not
+# first, so checks 1-6 keep the numbers verify-setup.sh and the guide use for them.
+#
+# Git for Windows' own bash, and deliberately NOT whatever `bash` is on PATH: on a
+# machine with WSL that is C:\Windows\System32\bash.exe, which runs the script in a
+# different Linux with a different Docker context. Found from the registry key the
+# installer writes, then from git.exe's location (<root>\cmd\git.exe), so a portable
+# or scoop install is found too.
+
+function Find-GitBash {
+    $roots = @()
+    foreach ($key in @('HKLM:\SOFTWARE\GitForWindows', 'HKCU:\SOFTWARE\GitForWindows')) {
+        try { $roots += (Get-ItemProperty -Path $key -Name InstallPath -ErrorAction Stop).InstallPath } catch {}
+    }
+    $git = Get-Command git.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($git) { $roots += (Split-Path (Split-Path $git.Source -Parent) -Parent) }
+    $roots += (Join-Path $env:ProgramFiles 'Git')
+    foreach ($root in $roots) {
+        if (-not $root) { continue }
+        $bash = Join-Path $root 'bin\bash.exe'
+        if (Test-Path -LiteralPath $bash) { return $bash }
+    }
+    return $null
+}
+
+if (-not $script:Failed) {
+    Write-CheckStart 'Git Bash available'
+    $gitBash = Find-GitBash
+    $bashVersion = $null
+    if ($gitBash) {
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { $bashVersion = (& $gitBash --noprofile --norc -c 'echo $BASH_VERSION' 2>$null | Select-Object -First 1) } catch {}
+        $ErrorActionPreference = $previous
+    }
+    if (-not $gitBash) {
+        Write-CheckFail 'Git Bash not found - the workshop commands are bash scripts' @'
+on the day you run  ./workshop/up.sh  and  ./checkpoint.sh  - bash
+                        scripts that will not run in PowerShell or CMD. Git Bash
+                        comes with Git for Windows:
+                          https://git-scm.com/download/win
+                        install it (the defaults are fine), then re-run  .\verify.ps1
+                        and use Git Bash, not PowerShell, for every command after this.
+'@
+    } elseif (-not $bashVersion) {
+        Write-CheckFail "Git Bash is installed but did not run - $gitBash" @'
+open Git Bash from the Start menu once and check it starts. If it
+                        does not, reinstall Git for Windows:
+                          https://git-scm.com/download/win
+                        then re-run  .\verify.ps1
+'@
+    } else {
+        Write-CheckPass "bash $($bashVersion.Trim()) - use Git Bash, not PowerShell, from here on"
+    }
+}
+
 # ------------------------------------------------------------ Skipped rows
 
 # A failure stops the run, but the checklist should still show its full length -
 # otherwise it reads as "the script crashed" rather than "check 3 failed".
 $remaining = @{ 2 = 'Docker daemon reachable'; 3 = 'Workshop image builds'; 4 = 'Claude Code CLI + auth';
-                5 = 'Workshop site responds'; 6 = 'Playwright screenshot captured' }
+                5 = 'Workshop site responds'; 6 = 'Playwright screenshot captured';
+                7 = 'Git Bash available' }
 while ($script:Idx -lt $Total) {
     Write-CheckStart $remaining[$script:Idx + 1]
     Say "$($script:CurrentLine)${DIM}----${RESET}   ${DIM}not reached${RESET}"

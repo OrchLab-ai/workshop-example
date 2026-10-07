@@ -24,6 +24,16 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 1
 
+# Git Bash rewrites any argument that looks like a POSIX path into a Windows path
+# before docker.exe sees it - right for host paths, fatal for CONTAINER paths:
+# `test -f /usr/local/bin/app-views.mjs` reached the container as
+# C:/Program Files/Git/usr/local/bin/app-views.mjs, and the view check reported the
+# checker "not mounted" in a container created a minute earlier. Every host path in
+# this script is relative, so nothing here needs the conversion. Same guard as
+# verify-setup.sh; meaningless on macOS and Linux.
+export MSYS_NO_PATHCONV=1
+export MSYS2_ARG_CONV_EXCL='*'
+
 COMPOSE_FILE="docker-compose.workshop.yml"
 PORT="${WORKSHOP_PORT:-5173}"
 SERVICE="claude-container"
@@ -42,6 +52,64 @@ fi
 compose() { docker compose -f "$COMPOSE_FILE" "$@"; }
 
 hhmmss() { printf '%dm%02ds' "$(( $1 / 60 ))" "$(( $1 % 60 ))"; }
+
+# Docker in Windows-container mode cannot run this stack - every image is Linux - and
+# compose says so only as "no matching manifest for windows(...)/amd64", which reads
+# like a broken image. Seen on the Windows-containers pathway, whose environment check
+# passes in that mode and so never prompted the switch. Checked before `up`, and
+# only when the answer is definite: an empty OSType (daemon not running) falls
+# through to compose, whose own error for that case is already clear.
+#
+# Interactive runs are offered the switch itself, through Docker Desktop's own CLI -
+# never without a yes, because it stops any Windows container that is running.
+# Non-interactive runs (verify-setup.sh's check 5, anything piped) only explain.
+# Same facts as SWITCH_TO_LINUX in guide/src/activities.js; keep the two in step.
+DOCKER_OS=$(docker info --format '{{.OSType}}' 2>/dev/null || true)
+if [ "$DOCKER_OS" = "windows" ]; then
+  printf '\n%sDocker is in Windows-container mode. The workshop needs Linux containers.%s\n\n' "$RED$BOLD" "$RESET"
+  printf 'Every workshop image is a Linux image, and Docker Desktop runs one mode at a time.\n\n'
+  printf '%sWhat switching does%s  Docker Desktop has two separate engines, Windows and Linux.\n' "$BOLD" "$RESET"
+  printf '  Switching stops one and starts the other. Nothing is converted or removed.\n'
+  printf '%sWhy it is safe%s  Your Windows images, containers and volumes are kept - hidden\n' "$BOLD" "$RESET"
+  printf '  while you are in Linux mode, not deleted. Only RUNNING Windows containers stop.\n'
+  printf '%sSwitching back%s  Right-click the whale -> Switch to Windows containers... and\n' "$BOLD" "$RESET"
+  printf '  everything is listed again as you left it.\n\n'
+
+  DOCKER_CLI="${ProgramFiles:-C:/Program Files}/Docker/Docker/DockerCli.exe"
+  if [ -t 0 ] && [ -t 1 ] && [ -x "$DOCKER_CLI" ]; then
+    printf '%sSwitch Docker to Linux containers now? [y/N] %s' "$BOLD" "$RESET"
+    read -r ANSWER || ANSWER=""
+    case "$ANSWER" in
+      [yY]|[yY][eE][sS])
+        printf '\nSwitching - Docker restarts, which can take a minute (longer the first time).\n'
+        "$DOCKER_CLI" -SwitchLinuxEngine >/dev/null 2>&1
+        SWITCH_START=$(date +%s)
+        while :; do
+          DOCKER_OS=$(docker info --format '{{.OSType}}' 2>/dev/null || true)
+          [ "$DOCKER_OS" = "linux" ] && break
+          if [ $(( $(date +%s) - SWITCH_START )) -ge 300 ]; then
+            printf '\n%sDocker has not come back in Linux mode after 5 minutes.%s\n' "$RED$BOLD" "$RESET"
+            printf 'Check the Docker Desktop window - the first switch may be asking to install\n'
+            printf 'WSL 2. Once  docker info --format '"'"'{{.OSType}}'"'"'  prints linux, run this again.\n'
+            exit 1
+          fi
+          sleep 3
+        done
+        printf '%s%s  Docker is in Linux-container mode.%s\n' "$GREEN" "$BOLD" "$RESET"
+        ;;
+      *)
+        printf '\nNot switched. When you are ready:\n'
+        ;;
+    esac
+  fi
+
+  if [ "$DOCKER_OS" != "linux" ]; then
+    printf '  Right-click the Docker whale in the system tray -> %sSwitch to Linux containers...%s\n' "$BOLD" "$RESET"
+    printf '  wait for Docker to restart, then run  %s./workshop/up.sh%s  again.\n\n' "$BOLD" "$RESET"
+    printf '%sCheck with  docker info --format '"'"'{{.OSType}}'"'"'  - it should print linux.%s\n' "$DIM" "$RESET"
+    exit 1
+  fi
+fi
 
 printf '\n%sStarting the workshop stack%s\n\n' "$BOLD" "$RESET"
 compose up -d || exit 1

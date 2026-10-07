@@ -87,6 +87,13 @@ services:
     # browser. Raising it here is cheaper than debugging a browser that dies for
     # reasons that look like a Playwright fault.
     mem_limit: ${WINDOWS_MEMORY:-4g}
+    # Public resolvers, because the NAT network's DNS proxy (the gateway address
+    # Docker hands the container) silently stops answering on some hosts — seen
+    # with Ethernet and WiFi both up. Every lookup then times out and `claude -p`
+    # retries forever, so the auth check hangs with no error.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     # NOTE ON HARDENING: the Linux stack's read_only, cap_drop and tmpfs have NO
     # Windows-container equivalent. They are absent because they are unsupported,
     # not because they were forgotten. What is available — a non-admin
