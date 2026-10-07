@@ -517,6 +517,15 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .rednote strong { color: var(--danger); }
 .rednote[hidden] { display: none; }
 
+/* PowerShell's badge: the guide's blue, so it never reads as the amber Git Bash one. */
+.shellbadge.ps { background: var(--blue); color: var(--bg); }
+/* In a copy block's header, the shell badges take the auto margin that pushes the
+   window badge right, and the window badge sits beside them. */
+.cb-head .cb-shells { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
+.cb-head .cb-shells .shellbadge { margin: 0; font-size: 10.5px; padding: 3px 8px; }
+.cb-head .cb-shells + .loc { margin-left: 6px; }
+.cb-head .cb-shells + button { margin-left: 10px; }
+
 .mode-pick {
   border: 2px solid var(--danger); border-radius: 8px;
   padding: 14px 16px 6px; margin: 16px 0 12px;
@@ -759,7 +768,7 @@ nav.pager a:hover { background: var(--surface); }
     one daemon, one mode, never both — and the workshop uses a different check for
     each. Don't guess. Run this and read the one word it prints:</p>
   <div class="copyblock">
-    <div class="cb-head"><span>Tells you which mode Docker is in</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Tells you which mode Docker is in</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span><span data-only="windows-windows"><span class="shellbadge ps">PowerShell</span></span></span><button type="button">Copy</button></div>
     <pre>docker info --format '{{.OSType}}'</pre>
   </div>
     <div class="mode-pick">
@@ -824,12 +833,12 @@ cd workshop-example</pre>
       <p class="confirm">This is the usual setup on Windows, and the better-tested path.</p>
       <div class="shellreq"><span class="where">Where</span>Run these in <span class="shellbadge">Git Bash</span>, which comes with Git for Windows. <span class="not">Not PowerShell, and not CMD</span> — the commands below are POSIX shell and will not run there. Start from wherever you keep your code — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.</div>
   <div class="copyblock">
-    <div class="cb-head"><span>Clone and enter the repo</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Clone and enter the repo</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><button type="button">Copy</button></div>
     <pre>git clone https://github.com/OrchLab-ai/workshop-example.git
 cd workshop-example</pre>
   </div>
   <div class="copyblock">
-    <div class="cb-head"><span>Create your .env</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Create your .env</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><button type="button">Copy</button></div>
     <pre>cp .env.example .env</pre>
   </div>
       <div class="note">If Docker says <strong>access is denied</strong>, or the check reports you are not in <code>docker-users</code>: an administrator needs to run <code>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</code> once — and then you must <strong>sign out of Windows and back in</strong>. Group rights are granted at logon, so nothing changes until a new session. Restarting Docker Desktop will not help.</div>
@@ -837,14 +846,14 @@ cd workshop-example</pre>
     <div class="pathway" data-pathway="windows-windows">
       <h3>Windows containers &middot; Windows</h3>
       <p class="confirm">Less common, and usually deliberate — .NET Framework work needs it. There is a Windows-container version of the environment check, so you can run it without switching modes — <strong>but the workshop itself needs Linux containers</strong>, and you will switch once the check passes. Switching is safe and reversible.</p>
-      <div class="shellreq"><span class="where">Where</span>Run these in <strong>PowerShell</strong>. Start from wherever you keep your code — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.</div>
+      <div class="shellreq"><span class="where">Where</span>Run these in <span class="shellbadge ps">PowerShell</span>. Start from wherever you keep your code — the first command creates the <code>workshop-example</code> folder, and every command after it runs from <strong>inside</strong> that folder.</div>
   <div class="copyblock">
-    <div class="cb-head"><span>Clone and enter the repo</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Clone and enter the repo</span><span class="cb-shells"><span data-only="windows-windows"><span class="shellbadge ps">PowerShell</span></span></span><button type="button">Copy</button></div>
     <pre>git clone https://github.com/OrchLab-ai/workshop-example.git
 cd workshop-example</pre>
   </div>
   <div class="copyblock">
-    <div class="cb-head"><span>Create your .env</span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Create your .env</span><span class="cb-shells"><span data-only="windows-windows"><span class="shellbadge ps">PowerShell</span></span></span><button type="button">Copy</button></div>
     <pre>copy .env.example .env</pre>
   </div>
       <div class="note">The first run pulls a ~2 GB Windows base image, so give it longer than you would expect. Later runs reuse it.</div>
@@ -862,7 +871,7 @@ cd workshop-example</pre>
     <div class="cred-body">
       <p>Run this on <strong>your own machine</strong>, never inside the container. It needs Claude Code installed locally — <code>npm install -g @anthropic-ai/claude-code</code> — and it opens a browser for you to sign in. It then prints a long-lived token. <span class="rednote" data-only="windows-linux windows-windows"><strong>On Windows, run this one in PowerShell or CMD, not Git Bash</strong> — its sign-in screen does not work properly in Git Bash. Everything after setup stays in Git Bash.</span></p>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>On your own machine</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>On your own machine</span><span class="cb-shells"><span data-only="windows-linux windows-windows"><span class="shellbadge ps">PowerShell / CMD</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>claude setup-token</pre>
   </div>
       <p>The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> and leave <code>ANTHROPIC_API_KEY</code> commented out.</p>
@@ -901,22 +910,22 @@ cd workshop-example</pre>
     </div>
     <div class="pathway" data-pathway="windows-linux">
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Run the check</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Run the check</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>./verify-setup.sh</pre>
   </div>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Only if the check says 5173 is taken</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Only if the check says 5173 is taken</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>echo WORKSHOP_PORT=5174 &gt;&gt; .env
 ./verify-setup.sh</pre>
   </div>
     </div>
     <div class="pathway" data-pathway="windows-windows">
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Run the check</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Run the check</span><span class="cb-shells"><span data-only="windows-windows"><span class="shellbadge ps">PowerShell</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Only if the check says 5173 is taken</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Only if the check says 5173 is taken</span><span class="cb-shells"><span data-only="windows-windows"><span class="shellbadge ps">PowerShell</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>$env:WORKSHOP_PORT=5174
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
@@ -962,7 +971,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <div class="fx-body">
         <p>Not a failure, and nothing is broken. Every image <code>./verify-setup.sh</code> uses is a Linux image, and one Docker daemon serves one mode. You do not need to switch modes <em>for the check</em> — there is a Windows-container version that tests the same toolchain: Docker, Claude and a browser. <strong>You will need to switch to Linux containers for the workshop itself</strong>, once the check passes.</p>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Run this instead</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Run this instead</span><span class="cb-shells"><span data-only="windows-linux windows-windows"><span class="shellbadge ps">PowerShell</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
       </div>
@@ -979,14 +988,14 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
         <p>You almost certainly downloaded the app as a ZIP rather than cloning it. A copy of the files is not enough: the checkpoint ladder <em>is</em> the git tags, so <code>./checkpoint.sh</code> has nothing to move you between. The check will not delete that folder for you — you may have put work in it — so move it aside yourself and let the check clone it properly.</p>
   <div data-only="macos windows-linux">
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Move it aside, then re-run</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Move it aside, then re-run</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>mv app app-old
 ./verify-setup.sh</pre>
   </div>
   </div>
   <div data-only="windows-windows">
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Move it aside, then re-run</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Move it aside, then re-run</span><span class="cb-shells"><span data-only="windows-windows"><span class="shellbadge ps">PowerShell</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>move app app-old
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>
@@ -1010,7 +1019,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <div class="fx-body">
         <p><strong>The daemon is running fine.</strong> It simply will not talk to you, and restarting it cannot change that — this is the one failure that sends people into a loop they can never win. It needs an administrator once, and then a <strong>new login session</strong>: group rights are granted at logon, so nothing changes until you sign out and back in.</p>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>In an ELEVATED PowerShell, then sign out of Windows and back in</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>In an ELEVATED PowerShell, then sign out of Windows and back in</span><span class="cb-shells"><span data-only="windows-linux windows-windows"><span class="shellbadge ps">PowerShell</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</pre>
   </div>
   <div data-only="">
@@ -1039,13 +1048,13 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
         <p>The most common failure of them all, and it is usually one of two things: <code>.env</code> was never created from <code>.env.example</code>, or the credential was pasted into the example file instead of into <code>.env</code>. Then open <em>Your credential</em> above and follow whichever of the two sections describes you — one of them, not both.</p>
   <div data-only="macos windows-linux">
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Create .env if you have not already</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Create .env if you have not already</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>cp .env.example .env</pre>
   </div>
   </div>
   <div data-only="windows-windows">
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Create .env if you have not already</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Create .env if you have not already</span><span class="cb-shells"><span data-only="windows-windows"><span class="shellbadge ps">PowerShell</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>copy .env.example .env</pre>
   </div>
   </div>
@@ -1068,7 +1077,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <div class="fx-body">
         <p>Check 5 starts the workshop on <strong>the port it runs on all day</strong>, so a pass means the day will work rather than merely that some port was free. 5173 is Vite's default, so the usual culprit is another project of yours already running. Stop it, or move the workshop to another port — put it in <code>.env</code> and it is picked up by the check <em>and</em> the stack, so every other command in this guide stays exactly as written.</p>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Move the workshop to another port, once</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Move the workshop to another port, once</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>echo WORKSHOP_PORT=5174 &gt;&gt; .env
 ./verify-setup.sh</pre>
   </div>
@@ -1079,7 +1088,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <div class="fx-body">
         <p>Docker and the images are fine; the app itself did not come up. The reason is at the end of <code>.verify-logs/05-up.log</code>, and the container's own output has the rest. Re-run once — if it fails the same way twice, that is the point to ask rather than keep re-running.</p>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>The container's full output</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>The container's full output</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>docker compose -f docker-compose.workshop.yml logs claude-container</pre>
   </div>
       </div>
@@ -1089,15 +1098,15 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <div class="fx-body">
         <p>The site loads but the API behind it does not work, so every page that needs data would fail. The check logs in as the seeded demo creator through the site's <code>/v1</code> proxy; its response is in <code>.verify-logs/06-api.log</code>. <em>Demo account not found</em> means the database is missing its migrations or seed data — rebuild it and re-run. Anything else: the API's own log says why.</p>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Rebuild the database</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Rebuild the database</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>docker compose -f docker-compose.workshop.yml exec claude-container start-app.sh --reset-db</pre>
   </div>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Then re-run the check</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Then re-run the check</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>./verify-setup.sh</pre>
   </div>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>The API's own log</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>The API's own log</span><span class="cb-shells"><span data-only="windows-linux"><span class="shellbadge">Git Bash</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>docker compose -f docker-compose.workshop.yml exec claude-container sh -c 'tail -n 50 /workspace/logs/server.log'</pre>
   </div>
       </div>
@@ -1119,7 +1128,7 @@ powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
       <div class="fx-body">
         <p>Check 5 deliberately claims <strong>the port the workshop itself runs on</strong>, not a spare one, so a pass means the day will work rather than merely that some port was free. 5173 is Vite's default, so the usual culprit is another project of yours already running. Otherwise move the workshop to another port, and it is picked up by the check <em>and</em> the stack.</p>
   <div class="copyblock in-host">
-    <div class="cb-head"><span>Move the workshop to another port, once</span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
+    <div class="cb-head"><span>Move the workshop to another port, once</span><span class="cb-shells"><span data-only="windows-windows"><span class="shellbadge ps">PowerShell</span></span></span><span class="loc host" tabindex="0">host terminal<span class="tip" role="tooltip">Window 1. A terminal on your own machine, in your <code>workshop-example</code> folder — <em>not</em> inside the container. Only <code>docker</code> and <code>./checkpoint.sh</code> run here.</span></span><button type="button">Copy</button></div>
     <pre>$env:WORKSHOP_PORT=5174
 powershell -ExecutionPolicy Bypass -File windows\verify.ps1</pre>
   </div>

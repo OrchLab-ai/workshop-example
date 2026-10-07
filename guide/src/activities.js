@@ -161,7 +161,9 @@ const CREDENTIALS = {
         // terminal. Inlined rather than winOnly(), which is declared further down
         // and so does not exist yet when this object is built.
         ' <span class="rednote" data-only="windows-linux windows-windows"><strong>On Windows, run this one in PowerShell or CMD, not Git Bash</strong> — its sign-in screen does not work properly in Git Bash. Everything after setup stays in Git Bash.</span>',
-      command: { label: "On your own machine", code: "claude setup-token", where: "host" },
+      // shell: which Windows shell badge the block carries, where it is not the
+      // pathway's own (Git Bash on Linux containers, PowerShell on Windows containers).
+      command: { label: "On your own machine", code: "claude setup-token", where: "host", shell: "pscmd" },
       after:
         "The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> and leave <code>ANTHROPIC_API_KEY</code> commented out.",
     },
@@ -296,7 +298,7 @@ const TROUBLESHOOTING = [
       "<em>for the check</em> — there is a Windows-container version that tests the same toolchain: Docker, Claude and a browser. " +
       "<strong>You will need to switch to Linux containers for the workshop itself</strong>, once the check passes.",
     commands: [
-      { label: "Run this instead", code: "powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
+      { label: "Run this instead", code: "powershell -ExecutionPolicy Bypass -File windows\\verify.ps1", shell: "powershell" },
     ],
   },
   {
@@ -363,7 +365,7 @@ const TROUBLESHOOTING = [
       "It needs an administrator once, and then a <strong>new login session</strong>: group rights are " +
       "granted at logon, so nothing changes until you sign out and back in.",
     commands: [
-      { label: "In an ELEVATED PowerShell, then sign out of Windows and back in", code: "Add-LocalGroupMember -Group docker-users -Member <your-username>" },
+      { label: "In an ELEVATED PowerShell, then sign out of Windows and back in", code: "Add-LocalGroupMember -Group docker-users -Member <your-username>", shell: "powershell" },
       // Shown only to somebody who has not picked a pathway, which is where a Linux
       // host lands: the picker offers macOS and Windows, and Linux is neither.
       { label: "On a Linux host instead — then log out and back in", code: "sudo usermod -aG docker $USER", only: [] },

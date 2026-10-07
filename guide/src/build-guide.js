@@ -565,6 +565,15 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .rednote strong { color: var(--danger); }
 .rednote[hidden] { display: none; }
 
+/* PowerShell's badge: the guide's blue, so it never reads as the amber Git Bash one. */
+.shellbadge.ps { background: var(--blue); color: var(--bg); }
+/* In a copy block's header, the shell badges take the auto margin that pushes the
+   window badge right, and the window badge sits beside them. */
+.cb-head .cb-shells { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
+.cb-head .cb-shells .shellbadge { margin: 0; font-size: 10.5px; padding: 3px 8px; }
+.cb-head .cb-shells + .loc { margin-left: 6px; }
+.cb-head .cb-shells + button { margin-left: 10px; }
+
 .mode-pick {
   border: 2px solid var(--danger); border-radius: 8px;
   padding: 14px 16px 6px; margin: 16px 0 12px;
@@ -1067,10 +1076,13 @@ const badge = (where, extra = "") => {
   return `<span class="loc ${loc.cls}${extra ? ` ${extra}` : ""}" tabindex="0">${loc.text}<span class="tip" role="tooltip">${loc.tip}${cmd}</span></span>`;
 };
 
-function copyBlock(label, body, isPrompt, where) {
+// `shells`: optional per-pathway shell badges from shellBadges(), shown beside the
+// window badge. Only the setup page passes them - it is the one page where the same
+// step runs in a different shell depending on the pathway.
+function copyBlock(label, body, isPrompt, where, shells = "") {
   const loc = where ? LOCATIONS[where] : null;
   return `  <div class="copyblock${isPrompt ? " is-prompt" : ""}${loc ? ` in-${loc.cls}` : ""}">
-    <div class="cb-head"><span>${esc(label)}</span>${loc ? badge(where) : ""}<button type="button">Copy</button></div>
+    <div class="cb-head"><span>${esc(label)}</span>${shells}${loc ? badge(where) : ""}<button type="button">Copy</button></div>
     <pre>${esc(body)}</pre>
   </div>`;
 }
@@ -1181,6 +1193,29 @@ const siteHeader = (backLabel, L) =>
 
 const pathwayFor = id => PLATFORMS.find(p => p.id === id);
 
+// WHICH WINDOWS SHELL a setup command runs in, as a badge on the block itself.
+// Setup is the one place a Windows attendee switches shells: the Linux-containers
+// pathway is Git Bash throughout, the Windows-containers pathway's check is
+// PowerShell, and claude setup-token is PowerShell or CMD on either. Each badge is
+// gated to the pathway it is true for, so macOS readers see none and a picked
+// pathway sees only its own. `pathways` is where the block is shown (null = all);
+// `shell` overrides the pathway default on both Windows pathways.
+const SHELL_BADGE = {
+  gitbash: '<span class="shellbadge">Git Bash</span>',
+  powershell: '<span class="shellbadge ps">PowerShell</span>',
+  pscmd: '<span class="shellbadge ps">PowerShell / CMD</span>',
+};
+const shellBadges = (pathways, shell) => {
+  const on = pathways || PLATFORMS.map(p => p.id);
+  const pick = { "windows-linux": shell || "gitbash", "windows-windows": shell || "powershell" };
+  const groups = {};
+  for (const id of on) if (pick[id]) (groups[pick[id]] = groups[pick[id]] || []).push(id);
+  const html = Object.entries(groups)
+    .map(([k, ids]) => `<span data-only="${ids.join(" ")}">${SHELL_BADGE[k]}</span>`)
+    .join("");
+  return html ? `<span class="cb-shells">${html}</span>` : "";
+};
+
 // shellCallout — "run these HERE, from THIS folder". Takes a pathway (which knows
 // its own shell) or any object with the same two fields, so the platform panels and
 // the activity pages cannot disagree about the answer.
@@ -1213,8 +1248,12 @@ const shellName = (day = false) =>
 
 // Git Bash gets the badge; the other shells stay bold text. It is the one name a
 // Windows attendee must not substitute, so it is the one that has to stand out.
+// PowerShell gets the blue badge the setup commands carry, so the "Where" line and
+// the blocks under it name the shell the same way.
 const shellLabel = name =>
-  name === "Git Bash" ? GIT_BASH : `<strong>${esc(name)}</strong>`;
+  name === "Git Bash" ? GIT_BASH
+  : name === "PowerShell" ? SHELL_BADGE.powershell
+  : `<strong>${esc(name)}</strong>`;
 
 // The credential, as two sections of which at most one is open.
 //
@@ -1232,7 +1271,7 @@ ${CREDENTIALS.options
     </summary>
     <div class="cred-body">
       <p>${o.body}</p>
-${o.command ? copyBlock(o.command.label, o.command.code, false, o.command.where) : ""}
+${o.command ? copyBlock(o.command.label, o.command.code, false, o.command.where, shellBadges(null, o.command.shell)) : ""}
       <p>${o.after}</p>
     </div>
   </details>`
@@ -1275,7 +1314,7 @@ ${SWITCH_TO_LINUX.details.map(d => `        <div class="bigred-detail"><b>${esc(
 const runTheCheck = () =>
   PLATFORMS.map(
     p => `    <div class="pathway" data-pathway="${p.id}">
-${p.checkCommands.map(c => copyBlock(c.label, c.code, false, "host")).join("\n")}${
+${p.checkCommands.map(c => copyBlock(c.label, c.code, false, "host", shellBadges([p.id], c.shell))).join("\n")}${
   p.afterCheck ? `\n${switchToLinux()}` : ""
 }
     </div>`
@@ -1354,7 +1393,7 @@ function platformPicker() {
     <strong>either</strong> Linux containers <strong>or</strong> Windows containers —
     one daemon, one mode, never both — and the workshop uses a different check for
     each. Don't guess. Run this and read the one word it prints:</p>
-${copyBlock("Tells you which mode Docker is in", DETECT_COMMAND)}
+${copyBlock("Tells you which mode Docker is in", DETECT_COMMAND, false, undefined, shellBadges(["windows-linux", "windows-windows"]))}
     <div class="mode-pick">
       <p class="mode-pick-prompt">Now pick the button that matches what it printed — <code>linux</code> or <code>windows</code>. The rest of setup stays hidden until you do.</p>
       <div class="picker">
@@ -1374,7 +1413,7 @@ function platformPanels() {
       <h3>${esc(p.label)}${p.os === "windows" ? " &middot; Windows" : ""}</h3>
       <p class="confirm">${p.confirm}</p>
 ${shellCallout(p)}
-${p.commands.map(c => copyBlock(c.label, c.code, false)).join("\n")}
+${p.commands.map(c => copyBlock(c.label, c.code, false, undefined, shellBadges([p.id], c.shell))).join("\n")}
 ${(p.notes || []).map(n => `      <div class="note">${n}</div>`).join("\n")}
     </div>`;
 
@@ -1397,15 +1436,16 @@ function troubleshooting() {
   // A command that differs only by shell is wrapped rather than passed through
   // copyBlock, so copyBlock keeps one job and the markup it emits stays identical
   // everywhere it is used.
-  const command = c =>
-    c.only
-      ? `  <div${gate(c.only)}>\n${copyBlock(c.label, c.code, false, "host")}\n  </div>`
-      : copyBlock(c.label, c.code, false, "host");
+  // Shell badges follow the narrowest gate: the command's own, else its entry's.
+  const command = (c, t) => {
+    const block = copyBlock(c.label, c.code, false, "host", shellBadges(c.only || t.only || null, c.shell));
+    return c.only ? `  <div${gate(c.only)}>\n${block}\n  </div>` : block;
+  };
 
   const entry = t => `    <details class="fix"${gate(t.only)}>
       <summary><span class="fx-check">${esc(t.check)}</span>${esc(t.symptom)}</summary>
       <div class="fx-body">
-        <p>${t.fix}</p>${(t.commands || []).map(c => `\n${command(c)}`).join("")}
+        <p>${t.fix}</p>${(t.commands || []).map(c => `\n${command(c, t)}`).join("")}
       </div>
     </details>`;
 

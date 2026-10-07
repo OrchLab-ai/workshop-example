@@ -517,6 +517,15 @@ ol.helpsteps li { margin: 0 0 12px; font-size: 15.5px; }
 .rednote strong { color: var(--danger); }
 .rednote[hidden] { display: none; }
 
+/* PowerShell's badge: the guide's blue, so it never reads as the amber Git Bash one. */
+.shellbadge.ps { background: var(--blue); color: var(--bg); }
+/* In a copy block's header, the shell badges take the auto margin that pushes the
+   window badge right, and the window badge sits beside them. */
+.cb-head .cb-shells { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
+.cb-head .cb-shells .shellbadge { margin: 0; font-size: 10.5px; padding: 3px 8px; }
+.cb-head .cb-shells + .loc { margin-left: 6px; }
+.cb-head .cb-shells + button { margin-left: 10px; }
+
 .mode-pick {
   border: 2px solid var(--danger); border-radius: 8px;
   padding: 14px 16px 6px; margin: 16px 0 12px;
