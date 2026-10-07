@@ -85,7 +85,14 @@ say() {
 # ------------------------------------------------------------------- machinery
 
 mkdir -p "$LOG_DIR" screenshots
+# Every log is from THIS run. Without this, a run that stops at check 3 leaves checks
+# 4-9's logs from an older run in place, looking current - and they are the ones
+# somebody reads when asking for help.
+rm -f "$LOG_DIR"/*.log "$LOG_DIR"/*.out "$LOG_DIR"/*.err 2>/dev/null
 : > "$REPORT"
+# timeline.log is per RUN, like the report: a fresh file with one line saying when.
+printf '%s  ==== verify-setup.sh started
+' "$(date '+%Y-%m-%d %H:%M:%S %z')" > "$LOG_DIR/timeline.log"
 
 IDX=0
 FAILED=0
@@ -122,6 +129,7 @@ fi
 start_check() {
   IDX=$((IDX + 1))
   local label="$1"
+  timeline "CHECK $IDX  $label"
   local padded="$label "
   while [ ${#padded} -lt 42 ]; do padded="${padded}."; done
   CURRENT_LABEL="$label"
@@ -140,10 +148,12 @@ start_check() {
 }
 
 pass_check() {
+  timeline "PASS   ${1:-}"
   say "${CURRENT_LINE}${GREEN}PASS${RESET}   ${DIM}${1:-}${RESET}"
 }
 
 fail_check() {
+  timeline "FAIL   $1"
   say "${CURRENT_LINE}${RED}FAIL${RESET}"
   FAILED=1
   FAIL_LABEL="$CURRENT_LABEL"
@@ -195,7 +205,8 @@ term_cols() {
 # of BuildKit's plain-progress log.
 progress_note() {
   local log="$1" sizes line
-  [ -s "$log" ] || { printf 'starting'; return; }
+  # Line 1 is run_logged's timestamp header; nothing after it means nothing yet.
+  [ -n "$(sed -n '2p' "$log" 2>/dev/null)" ] || { printf 'starting'; return; }
   # git clone, not docker. Check 1 clones the app repo through this same helper,
   # and git's own progress line is the only thing on screen that moves during a
   # slow clone. Read before the BuildKit patterns because it is unambiguous.
@@ -292,17 +303,38 @@ progress_clear() {
 # run_logged <log> <command...> - run a command silently, logging it, and keep the
 # current check line updated while it runs. Returns the command's own exit status,
 # so the callers' if/elif logic reads exactly as it did before.
+# TIMESTAMPS. Every log starts with one header line - when, and which command - and
+# timeline.log gets a start line and an end line (exit code, seconds) per command, so
+# "it failed at about three minutes" can be matched to the step that failed. A
+# header, not a stamp on every line: the checks parse these logs (progress patterns
+# anchored at line start, the version on the LAST line of 07-claude.log), and a
+# prefix would break all of that. Format portable to BSD date on macOS.
+log_stamp() { date '+%Y-%m-%d %H:%M:%S %z'; }
+timeline() { printf '%s  %s\n' "$(log_stamp)" "$*" >> "$LOG_DIR/timeline.log"; }
+
 run_logged() {
+  local log="$1"; shift
+  local t0 rc
+  t0=$(date +%s)
+  printf '# %s  %s\n' "$(log_stamp)" "$*" > "$log"
+  timeline "start  $(basename "$log")  $*"
+  run_logged_inner "$log" "$@"
+  rc=$?
+  timeline "end    $(basename "$log")  exit $rc after $(( $(date +%s) - t0 ))s"
+  return $rc
+}
+
+run_logged_inner() {
   local log="$1"; shift
   # stdin comes from /dev/null in both branches. `docker compose run` will read the
   # terminal if it can, and a BACKGROUND job that reads the terminal is stopped by
   # SIGTTIN - which looks exactly like the hang this function exists to prevent.
+  # >> not >: run_logged has already written the log's header line.
   if [ "$PROGRESS" -eq 0 ]; then
-    "$@" >"$log" 2>&1 </dev/null
+    "$@" >>"$log" 2>&1 </dev/null
     return $?
   fi
-  : > "$log"
-  "$@" >"$log" 2>&1 </dev/null &
+  "$@" >>"$log" 2>&1 </dev/null &
   local pid=$! start base rc note
   start=$(date +%s)
   # Time the CHECK, not this command. A check that runs several commands in sequence
@@ -946,6 +978,7 @@ while [ "$IDX" -lt "$TOTAL" ]; do
     8) start_check "Playwright screenshot captured" ;;
     9) start_check "Agent sees the same app you do" ;;
   esac
+  timeline "NOT REACHED"
   say "${CURRENT_LINE}${DIM}----${RESET}   ${DIM}not reached${RESET}"
 done
 

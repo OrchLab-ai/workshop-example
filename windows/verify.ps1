@@ -111,13 +111,16 @@ function Write-CheckStart([string]$Label) {
     $script:CurrentLabel = $Label
     $script:CurrentLine  = "   [$($script:Idx)/$Total]  $padded  "
     $script:CurrentPrefix = "   [$($script:Idx)/$Total]  $Label ... "
+    Add-Timeline "CHECK $($script:Idx)  $Label"
 }
 
 function Write-CheckPass([string]$Detail = '') {
+    Add-Timeline "PASS   $Detail"
     Say "$($script:CurrentLine)${GREEN}PASS${RESET}   ${DIM}${Detail}${RESET}"
 }
 
 function Write-CheckFail([string]$Cause, [string]$Fix) {
+    Add-Timeline "FAIL   $Cause"
     Say "$($script:CurrentLine)${RED}FAIL${RESET}"
     $script:Failed    = $true
     $script:FailLabel = $script:CurrentLabel
@@ -215,8 +218,38 @@ function Format-NativeArgs([string[]]$Arguments) {
 # `timeout` uses, so the Linux script and this one read the same.
 $TimedOutExitCode = 124
 
+# TIMESTAMPS - the twin of the same block in verify-setup.sh. Every log starts with
+# one header line (when, and which command), and timeline.log gets a start and an end
+# line (exit code, seconds) per command, so "it failed at about three minutes" can be
+# matched to the step that failed. A header rather than a stamp on every line: check
+# 4 reads the CLI version out of its log, and the progress notes read the raw output.
+function Get-LogStamp { Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz' }
+function Add-Timeline([string]$Text) {
+    try {
+        Add-Content -LiteralPath (Join-Path $LogDir 'timeline.log') -Value ("{0}  {1}" -f (Get-LogStamp), $Text) -Encoding UTF8
+    } catch {}
+}
+
 function Invoke-Logged([string]$LogName, [string[]]$Arguments, [string]$Exe = 'docker',
                        [int]$TimeoutSec = 0, [string]$KillContainer = '') {
+    $log = Join-Path $LogDir $LogName
+    $stamp = Get-LogStamp
+    $cmd = "$Exe " + (Format-NativeArgs $Arguments)
+    Add-Timeline "start  $LogName  $cmd"
+    $t0 = Get-Date
+    $rc = Invoke-LoggedInner $LogName $Arguments $Exe $TimeoutSec $KillContainer
+    Add-Timeline ("end    {0}  exit {1} after {2}s" -f $LogName, $rc, [int]((Get-Date) - $t0).TotalSeconds)
+    # Prepended once the command has finished, because both ways of running it write
+    # the log in one go at the end (Out-File, or the merge of the two stream files).
+    try {
+        $body = if (Test-Path -LiteralPath $log) { [System.IO.File]::ReadAllText($log) } else { '' }
+        [System.IO.File]::WriteAllText($log, "# $stamp  $cmd`r`n$body", (New-Object System.Text.UTF8Encoding $true))
+    } catch {}
+    return $rc
+}
+
+function Invoke-LoggedInner([string]$LogName, [string[]]$Arguments, [string]$Exe = 'docker',
+                            [int]$TimeoutSec = 0, [string]$KillContainer = '') {
     $log = Join-Path $LogDir $LogName
     # A timeout needs a process handle to kill, which only the Start-Process path
     # has - so a timed call takes that path even when progress output is off.
@@ -361,6 +394,12 @@ function Get-DockerGroupStatus([string]$GroupName = 'docker-users') {
 }
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
+# Every log is from THIS run - see the same step in verify-setup.sh. A run that stops
+# at check 3 otherwise leaves an older run's logs for checks 4-7 looking current.
+Get-ChildItem -LiteralPath $LogDir -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Extension -in '.log', '.out', '.err' } |
+    Remove-Item -Force -ErrorAction SilentlyContinue
+Set-Content -LiteralPath (Join-Path $LogDir 'timeline.log') -Value ("{0}  ==== verify.ps1 started" -f (Get-LogStamp)) -Encoding UTF8
 # The screenshots folder must exist BEFORE compose runs: Windows Docker refuses to
 # start a container on a missing bind source, where the Linux daemon silently
 # creates it. This one line is the difference between a pass and an opaque
@@ -937,6 +976,7 @@ $remaining = @{ 2 = 'Docker daemon reachable'; 3 = 'Workshop image builds'; 4 = 
                 7 = 'Git Bash available' }
 while ($script:Idx -lt $Total) {
     Write-CheckStart $remaining[$script:Idx + 1]
+    Add-Timeline 'NOT REACHED'
     Say "$($script:CurrentLine)${DIM}----${RESET}   ${DIM}not reached${RESET}"
 }
 

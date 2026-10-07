@@ -22,6 +22,13 @@ services:
       interval: 2s
       timeout: 5s
       retries: 15
+      # A cold first start - Docker Desktop's VM just booted, Postgres initialising
+      # its data directory - can outlast 15 retries, and claude-container waits on
+      # `service_healthy`, so `compose up` then aborted with "dependency failed to
+      # start ... is unhealthy" while the database finished starting moments later.
+      # Failures inside start_period do not count; a pass still counts at once, so a
+      # fast machine is not slowed down.
+      start_period: 180s
     # No published port, deliberately. Nothing on the host needs to reach Postgres
     # directly, and publishing 5432 collides with any database an attendee already
     # runs — which turns a working setup into a failed one for no gain.

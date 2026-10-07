@@ -136,7 +136,25 @@ if [ "$APP_BRANCH" = "main" ] && git -C app rev-parse -q --verify refs/tags/cp-0
 fi
 
 printf '\n%sStarting the workshop stack%s\n\n' "$BOLD" "$RESET"
-compose up -d || exit 1
+# Retried, but only for one failure: a dependency that was not healthy YET. A slow
+# first start (cold Docker VM, Postgres initialising) made `compose up` give up with
+# "dependency failed to start: container ...-db-1 is unhealthy" while the database
+# came up moments later - and the attendee saw a failed check for a stack that was
+# fine. `up -d` is idempotent, so a retry just starts what is not running. Any other
+# failure (a taken port, say) is reported at once, unchanged, for check 5 to read.
+UP_OUT=$(mktemp 2>/dev/null || echo "/tmp/workshop-up.$$")
+UP_TRY=1
+until compose up -d 2>&1 | tee "$UP_OUT"; do
+  if [ "$UP_TRY" -ge 3 ] || ! grep -qiE 'dependency failed|is unhealthy' "$UP_OUT"; then
+    rm -f "$UP_OUT"
+    exit 1
+  fi
+  printf '\n%sA dependency was not healthy yet - usually a slow first start. Retrying (%s of 3)...%s\n\n' \
+    "$DIM" "$(( UP_TRY + 1 ))" "$RESET"
+  UP_TRY=$(( UP_TRY + 1 ))
+  sleep 10
+done
+rm -f "$UP_OUT"
 
 printf '\n%sThe container is up. The app inside it is not, yet.%s\n' "$BOLD" "$RESET"
 printf '%sFirst run installs the app'"'"'s dependencies — several minutes, once.%s\n\n' "$DIM" "$RESET"
