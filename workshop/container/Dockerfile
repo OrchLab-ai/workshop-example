@@ -48,6 +48,14 @@ RUN mkdir -p /home/agent/.claude \
 WORKDIR /workspace
 RUN chown agent:agent /workspace
 
+# Trust the bind-mounted app repo. On Windows (Docker Desktop's WSL 2 file sharing)
+# every file under ./app appears owned by root, not by agent, and git then refuses
+# to touch it: "fatal: detected dubious ownership in repository at
+# '/workspace/repo'". That broke git, ci-check and Claude's commits in the container
+# for every Windows attendee while macOS - whose file sharing presents files as the
+# container user's - never saw it. System-level, so it holds for any user here.
+RUN git config --system --add safe.directory /workspace/repo
+
 USER agent
 
 # Install Chromium using the MCP server's bundled Playwright, not the system one.

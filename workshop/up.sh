@@ -24,6 +24,16 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.." || exit 1
 
+# Git Bash rewrites any argument that looks like a POSIX path into a Windows path
+# before docker.exe sees it - right for host paths, fatal for CONTAINER paths:
+# `test -f /usr/local/bin/app-views.mjs` reached the container as
+# C:/Program Files/Git/usr/local/bin/app-views.mjs, and the view check reported the
+# checker "not mounted" in a container created a minute earlier. Every host path in
+# this script is relative, so nothing here needs the conversion. Same guard as
+# verify-setup.sh; meaningless on macOS and Linux.
+export MSYS_NO_PATHCONV=1
+export MSYS2_ARG_CONV_EXCL='*'
+
 COMPOSE_FILE="docker-compose.workshop.yml"
 PORT="${WORKSHOP_PORT:-5173}"
 SERVICE="claude-container"
@@ -43,8 +53,108 @@ compose() { docker compose -f "$COMPOSE_FILE" "$@"; }
 
 hhmmss() { printf '%dm%02ds' "$(( $1 / 60 ))" "$(( $1 % 60 ))"; }
 
+# Docker in Windows-container mode cannot run this stack - every image is Linux - and
+# compose says so only as "no matching manifest for windows(...)/amd64", which reads
+# like a broken image. Seen on the Windows-containers pathway, whose environment check
+# passes in that mode and so never prompted the switch. Checked before `up`, and
+# only when the answer is definite: an empty OSType (daemon not running) falls
+# through to compose, whose own error for that case is already clear.
+#
+# Interactive runs are offered the switch itself, through Docker Desktop's own CLI -
+# never without a yes, because it stops any Windows container that is running.
+# Non-interactive runs (verify-setup.sh's check 5, anything piped) only explain.
+# Same facts as SWITCH_TO_LINUX in guide/src/activities.js; keep the two in step.
+DOCKER_OS=$(docker info --format '{{.OSType}}' 2>/dev/null || true)
+if [ "$DOCKER_OS" = "windows" ]; then
+  printf '\n%sDocker is in Windows-container mode. The workshop needs Linux containers.%s\n\n' "$RED$BOLD" "$RESET"
+  printf 'Every workshop image is a Linux image, and Docker Desktop runs one mode at a time.\n\n'
+  printf '%sWhat switching does%s  Docker Desktop has two separate engines, Windows and Linux.\n' "$BOLD" "$RESET"
+  printf '  Switching stops one and starts the other. Nothing is converted or removed.\n'
+  printf '%sWhy it is safe%s  Your Windows images, containers and volumes are kept - hidden\n' "$BOLD" "$RESET"
+  printf '  while you are in Linux mode, not deleted. Only RUNNING Windows containers stop.\n'
+  printf '%sSwitching back%s  Right-click the whale -> Switch to Windows containers... and\n' "$BOLD" "$RESET"
+  printf '  everything is listed again as you left it.\n\n'
+
+  DOCKER_CLI="${ProgramFiles:-C:/Program Files}/Docker/Docker/DockerCli.exe"
+  if [ -t 0 ] && [ -t 1 ] && [ -x "$DOCKER_CLI" ]; then
+    printf '%sSwitch Docker to Linux containers now? [y/N] %s' "$BOLD" "$RESET"
+    read -r ANSWER || ANSWER=""
+    case "$ANSWER" in
+      [yY]|[yY][eE][sS])
+        printf '\nSwitching - Docker restarts, which can take a minute (longer the first time).\n'
+        "$DOCKER_CLI" -SwitchLinuxEngine >/dev/null 2>&1
+        SWITCH_START=$(date +%s)
+        while :; do
+          DOCKER_OS=$(docker info --format '{{.OSType}}' 2>/dev/null || true)
+          [ "$DOCKER_OS" = "linux" ] && break
+          if [ $(( $(date +%s) - SWITCH_START )) -ge 300 ]; then
+            printf '\n%sDocker has not come back in Linux mode after 5 minutes.%s\n' "$RED$BOLD" "$RESET"
+            printf 'Check the Docker Desktop window - the first switch may be asking to install\n'
+            printf 'WSL 2. Once  docker info --format '"'"'{{.OSType}}'"'"'  prints linux, run this again.\n'
+            exit 1
+          fi
+          sleep 3
+        done
+        printf '%s%s  Docker is in Linux-container mode.%s\n' "$GREEN" "$BOLD" "$RESET"
+        ;;
+      *)
+        printf '\nNot switched. When you are ready:\n'
+        ;;
+    esac
+  fi
+
+  if [ "$DOCKER_OS" != "linux" ]; then
+    printf '  Right-click the Docker whale in the system tray -> %sSwitch to Linux containers...%s\n' "$BOLD" "$RESET"
+    printf '  wait for Docker to restart, then run  %s./workshop/up.sh%s  again.\n\n' "$BOLD" "$RESET"
+    printf '%sCheck with  docker info --format '"'"'{{.OSType}}'"'"'  - it should print linux.%s\n' "$DIM" "$RESET"
+    exit 1
+  fi
+fi
+
+# STILL ON main? A setup that skipped the "land on cp-01" step - windows\verify.ps1
+# did, until it was fixed - leaves app/ on main's tip, which carries every published
+# rung: the morning's first activity is then already done. Attendees otherwise always
+# work on a work/cp-* branch made by checkpoint.sh, so main means "never placed", not
+# "placed and progressed". Never moved silently - up.sh is run again whenever the
+# stack is restarted, and a reset then would throw away the day - only offered, and only on main. The move
+# goes through checkpoint.sh, which parks any uncommitted work to wip/ first.
+APP_BRANCH=$(git -C app branch --show-current 2>/dev/null || true)
+if [ "$APP_BRANCH" = "main" ] && git -C app rev-parse -q --verify refs/tags/cp-01 >/dev/null 2>&1; then
+  printf '\n%sThe app is on main, not on a checkpoint.%s main has every published\n' "$RED$BOLD" "$RESET"
+  printf 'checkpoint already applied, so the first activity would start finished.\n'
+  printf 'The workshop starts at cp-01. Any uncommitted work is parked to a wip/ branch first.\n\n'
+  if [ -t 0 ] && [ -t 1 ]; then
+    printf '%sMove the app to cp-01 now? [Y/n] %s' "$BOLD" "$RESET"
+    read -r ANSWER || ANSWER=""
+    case "$ANSWER" in
+      [nN]|[nN][oO]) printf '\nLeft on main. To move it later:  %s./checkpoint.sh 1%s\n' "$BOLD" "$RESET" ;;
+      *) ./checkpoint.sh 1 || exit 1 ;;
+    esac
+  else
+    printf 'To move it:  %s./checkpoint.sh 1%s\n' "$BOLD" "$RESET"
+  fi
+fi
+
 printf '\n%sStarting the workshop stack%s\n\n' "$BOLD" "$RESET"
-compose up -d || exit 1
+# Retried, but only for one failure: a dependency that was not healthy YET. A slow
+# first start (cold Docker VM, Postgres initialising) made `compose up` give up with
+# "dependency failed to start: container ...-db-1 is unhealthy" while the database
+# came up moments later - and the attendee saw a failed check for a stack that was
+# fine. `up -d` is idempotent, so a retry just starts what is not running. Any other
+# failure (a taken port, say) is reported at once, unchanged, for check 5 to read.
+UP_OUT=$(mktemp 2>/dev/null || echo "/tmp/workshop-up.$$")
+UP_TRY=1
+until compose up -d 2>&1 | tee "$UP_OUT"; do
+  if [ "$UP_TRY" -ge 3 ] || ! grep -qiE 'dependency failed|is unhealthy' "$UP_OUT"; then
+    rm -f "$UP_OUT"
+    exit 1
+  fi
+  printf '\n%sA dependency was not healthy yet - usually a slow first start. Retrying (%s of 3)...%s\n\n' \
+    "$DIM" "$(( UP_TRY + 1 ))" "$RESET"
+  UP_TRY=$(( UP_TRY + 1 ))
+  sleep 10
+done
+rm -f "$UP_OUT"
 
 printf '\n%sThe container is up. The app inside it is not, yet.%s\n' "$BOLD" "$RESET"
 printf '%sFirst run installs the app'"'"'s dependencies — several minutes, once.%s\n\n' "$DIM" "$RESET"
@@ -56,10 +166,52 @@ LAST_BEAT=0
 while :; do
   ELAPSED=$(( $(date +%s) - START ))
 
-  if curl -fsS -o /dev/null "http://localhost:${PORT}/" 2>/dev/null; then
+  # --max-time: without it one probe could wait FOREVER. Seen on Windows: the site was
+  # up inside the container within a second, but a connection made through Docker
+  # Desktop's port forwarding before the app listened was accepted and never answered.
+  # The loop never came round again, so neither the 30s heartbeat nor the timeout below
+  # ever fired, and up.sh sat on "Site on :5173" indefinitely.
+  #
+  # The result is KEPT, not just tested, so the heartbeat below can say what the probe
+  # got - an HTTP code, or curl's own error. A wait that only says "still working"
+  # cannot be told apart from a probe failing the same way every two seconds.
+  SITE_URL="http://localhost:${PORT}/"
+  # The page is discarded by THIS shell (>/dev/null), never handed to curl as a path:
+  # under the Git Bash path guard above, `-o /dev/null` reached the native curl.exe
+  # literally, as the path C:/dev/null. Where C:/dev happened to exist curl quietly
+  # wrote a file there; everywhere else it failed with exit 23 after an HTTP 200, and the
+  # site never counted as up. %{stderr} sends the code to the captured stream.
+  SITE_ERR=$(curl -fsS --max-time 5 -w '%{stderr}%{http_code}' "$SITE_URL" 2>&1 >/dev/null)
+  SITE_RC=$?
+  if [ "$SITE_RC" -eq 0 ]; then
     printf '\n%s%s  READY  %s  the site is answering on http://localhost:%s%s\n' \
       "$GREEN" "$BOLD" "$RESET" "$PORT" ""
-    printf '   Took %s. Leave the stack running — you only do this once a day.\n' "$(hhmmss "$ELAPSED")"
+    printf '   Took %s. Leave the stack running — you only do this once, at the start of the workshop.\n' "$(hhmmss "$ELAPSED")"
+
+    # THE SITE IS NOT THE APP. Vite serves the page while the API behind it is dead,
+    # and every /v1 call then comes back a bare 500 - so the loop above said READY
+    # over an API that was crash-looping on a missing package, and the first sign was
+    # an attendee clicking around the app. check-api.sh asks the API itself, through
+    # the same proxy the browser uses, and names the cause when it cannot answer.
+    #
+    # A 401 (exit 2) only warns: the API is up and querying its database, and the demo
+    # account is gone - which can be an attendee's own work by mid-afternoon, and is
+    # no reason to hold the stack back.
+    if [ -z "${WORKSHOP_SKIP_API_CHECK:-}" ] && [ -x ./workshop/check-api.sh ]; then
+      API_OUT=$(./workshop/check-api.sh)
+      case $? in
+        0) printf '   %sAPI answering, database reachable.%s\n' "$DIM" "$RESET" ;;
+        2) printf '   %sAPI answering, but the demo account was not found.%s\n' "$DIM" "$RESET"
+           printf '%s\n' "$API_OUT" | sed -n 's/^FIX   /   /p; s/^        /       /p' ;;
+        *)
+          printf '\n%s%s  NOT READY  %s  the site is up, but the API behind it is not.\n\n' \
+            "$RED" "$BOLD" "$RESET"
+          printf '%s\n' "$API_OUT" | sed 's/^/   /'
+          printf '\n   To carry on regardless:  WORKSHOP_SKIP_API_CHECK=1 ./workshop/up.sh\n\n'
+          exit 1
+          ;;
+      esac
+    fi
 
     # READY ABOVE IS ONE VANTAGE, AND IT IS NOT THE AGENT'S.
     #
@@ -108,6 +260,12 @@ while :; do
     # A heartbeat, so a long install never looks like a hang. Installing the
     # dependencies is one phase and takes the bulk of the wait.
     printf '   %sstill working — %s%s\n' "$DIM" "$(hhmmss "$ELAPSED")" "$RESET"
+    # Once the site phase has started, also say what the last probe got - the one
+    # line that explains a wait the container's own log says should be over.
+    case "$LAST_PHASE" in
+      Site*) printf '   %s  last check of %s: curl exit %s, %s%s\n' "$DIM" "$SITE_URL" "$SITE_RC" \
+               "$(printf '%s' "$SITE_ERR" | tr -d '\015' | tr '\n' ' ' | cut -c1-120)" "$RESET" ;;
+    esac
     LAST_BEAT=$ELAPSED
   fi
 

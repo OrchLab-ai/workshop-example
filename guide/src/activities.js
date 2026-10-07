@@ -46,6 +46,55 @@ const DETECT_COMMAND = "docker info --format '{{.OSType}}'";
 const DOCKER_USERS_NOTE =
   'If Docker says <strong>access is denied</strong>, or the check reports you are not in <code>docker-users</code>: an administrator needs to run <code>Add-LocalGroupMember -Group docker-users -Member &lt;your-username&gt;</code> once — and then you must <strong>sign out of Windows and back in</strong>. Group rights are granted at logon, so nothing changes until a new session. Restarting Docker Desktop will not help.';
 
+// The Git Bash badge (.shellbadge, styled in build-guide.js). Prose fields here are
+// trusted markup, so this drops straight into a sentence.
+const GIT_BASH = '<span class="shellbadge">Git Bash</span>';
+
+// THE STEP THE WINDOWS-CONTAINERS PATHWAY MISSED. Its environment check passes in
+// Windows-container mode, and the guide used to say "you do not have to switch
+// modes" - true of the check, false of the workshop, whose every image is Linux. An
+// attendee followed it to the letter and ./workshop/up.sh failed with "no matching
+// manifest for windows(...)/amd64". Rendered big and red in two places: right after
+// that pathway's check, so it is done the night before, and at the top of Start
+// your day, for anyone who skipped past it. One copy, so the two cannot disagree.
+const SWITCH_TO_LINUX = {
+  title: "Now switch Docker to Linux containers",
+  body:
+    "The environment check runs in Windows-container mode. <strong>The workshop does not</strong> — it needs <strong>Linux containers</strong>, because every workshop image is Linux, " +
+    "and the workshop stack will not start — Docker reports <code>no matching manifest for windows</code> — until you switch. Do it before anything else.",
+  steps: [
+    "Right-click the Docker whale in the system tray and choose <strong>Switch to Linux containers…</strong>",
+    "Wait for Docker to restart, then check: <code>docker info --format '{{.OSType}}'</code> must print <code>linux</code>.",
+  ],
+  // What it does, that it is safe, and the way back - each its own short paragraph,
+  // because "will this break my other Docker work?" is the question that stops people
+  // clicking, and the answer has to be on the box, not in a chat with a facilitator.
+  details: [
+    {
+      h: "What switching actually does",
+      text:
+        "Docker Desktop on Windows has <strong>two separate engines</strong> — one for Windows containers, one for Linux containers — " +
+        "and only one is active at a time. Switching stops the Windows engine and starts the Linux one (it runs inside WSL 2 or a small Hyper-V VM). " +
+        "Your <code>docker</code> commands then talk to the Linux engine. Nothing is converted, copied or removed.",
+    },
+    {
+      h: "Why it is safe",
+      text:
+        "Each engine keeps its own images, containers and volumes on disk. While you are in Linux mode your Windows images, containers and volumes " +
+        "are <strong>hidden, not deleted</strong> — <code>docker ps -a</code> and <code>docker images</code> just stop listing them. " +
+        "The one thing that happens: any Windows container that is <em>running</em> when you switch is stopped, so stop anything you care about first. " +
+        "The first switch can take a minute, and may ask you to install WSL 2 if it is not already there.",
+    },
+    {
+      h: "Switching back after the workshop",
+      text:
+        "Same menu: right-click the whale and choose <strong>Switch to Windows containers…</strong> Everything you had is listed again exactly as you left it. " +
+        "Containers that were stopped by the switch do not restart on their own — start them again as you normally would. " +
+        "You can switch back and forth as often as you like.",
+    },
+  ],
+};
+
 // Where to run things, and what the token step actually involves. Both questions
 // come up on every pathway, so the text lives here once rather than three times.
 const CWD_CLONE =
@@ -106,10 +155,22 @@ const CREDENTIALS = {
       summary: "I have a Claude subscription",
       hint: "Most people. Pro, Max or Team.",
       body:
-        "Run this on <strong>your own machine</strong>, never inside the container. It needs Claude Code installed locally — <code>npm install -g @anthropic-ai/claude-code</code> — and it opens a browser for you to sign in. It then prints a long-lived token.",
-      command: { label: "On your own machine", code: "claude setup-token", where: "host" },
+        "Run this on <strong>your own machine</strong>, never inside the container. It needs Claude Code installed locally — <code>npm install -g @anthropic-ai/claude-code</code> — and it opens a browser for you to sign in. It then prints a long-lived token." +
+        // Windows only, and the one exception to "everything is Git Bash": the
+        // sign-in screen setup-token draws does not work properly in Git Bash's
+        // terminal. Inlined rather than winOnly(), which is declared further down
+        // and so does not exist yet when this object is built.
+        ' <span class="rednote" data-only="windows-linux windows-windows"><strong>On Windows, run this one in PowerShell or CMD, not Git Bash</strong> — its sign-in screen does not work properly in Git Bash. Everything after setup stays in Git Bash.</span>',
+      // shell: which Windows shell badge the block carries, where it is not the
+      // pathway's own (Git Bash on Linux containers, PowerShell on Windows containers).
+      command: { label: "On your own machine", code: "claude setup-token", where: "host", shell: "pscmd" },
+      // The paste step is where this goes wrong, so it is rendered as its own
+      // highlighted step (pasteTitle + after + env), not a closing sentence. `env` is
+      // what the two credential lines of .env look like when it is done.
+      pasteTitle: "Then paste the token into .env",
       after:
-        "The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> and leave <code>ANTHROPIC_API_KEY</code> commented out.",
+        "The value it prints starts <code>sk-ant-oat01-</code>. Paste it into <code>.env</code> right after <code>CLAUDE_CODE_OAUTH_TOKEN=</code> — no spaces, no quotes — and leave <code>ANTHROPIC_API_KEY</code> commented out.",
+      env: "CLAUDE_CODE_OAUTH_TOKEN=sk-ant-oat01-…your token…\n# ANTHROPIC_API_KEY=",
     },
     {
       id: "apikey",
@@ -117,8 +178,10 @@ const CREDENTIALS = {
       hint: "From console.anthropic.com. Billed per token.",
       body:
         'Create one at <a href="https://console.anthropic.com">console.anthropic.com</a> if you do not have it yet. There is nothing to install and nothing to run.',
+      pasteTitle: "Then paste the key into .env",
       after:
-        "The key starts <code>sk-ant-api03-</code>. Uncomment <code>ANTHROPIC_API_KEY</code> in <code>.env</code>, paste it there, and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> empty.",
+        "The key starts <code>sk-ant-api03-</code>. Uncomment <code>ANTHROPIC_API_KEY</code> in <code>.env</code> (delete the <code>#</code>), paste the key right after the <code>=</code> — no spaces, no quotes — and leave <code>CLAUDE_CODE_OAUTH_TOKEN</code> empty.",
+      env: "CLAUDE_CODE_OAUTH_TOKEN=\nANTHROPIC_API_KEY=sk-ant-api03-…your key…",
     },
   ],
   // Shown under both, because it is the thing neither section can tell you on its
@@ -173,8 +236,15 @@ const PLATFORMS = [
     label: "Windows containers",
     detectValue: "windows",
     confirm:
-      "Less common, and usually deliberate — .NET Framework work needs it. You do <strong>not</strong> have to switch modes: there is a Windows-container check that proves the same six things.",
+      "Less common, and usually deliberate — .NET Framework work needs it. There is a Windows-container version of the environment check, so you can run it without switching modes — <strong>but the workshop itself needs Linux containers</strong>, and you will switch once the check passes. Switching is safe and reversible.",
+    afterCheck: true,
     shell: "PowerShell",
+    // PowerShell is for the CHECK only (windows\verify.ps1). Everything on the day
+    // is a bash script - ./workshop/up.sh, ./checkpoint.sh - and this pathway also
+    // switches Docker to Linux containers before the first activity. So the three
+    // windows on the start-your-day page are Git Bash here too. Rendered as PowerShell
+    // they told an attendee to run ./workshop/up.sh in a shell that cannot run it.
+    dayShell: "Git Bash",
     cwd: CWD_CLONE,
     commands: [
       { label: "Clone and enter the repo", code: `git clone ${REPO_URL}.git\ncd workshop-example` },
@@ -231,10 +301,11 @@ const TROUBLESHOOTING = [
     symptom: "Docker is in Windows-container mode — run windows\\verify.ps1 instead",
     fix:
       "Not a failure, and nothing is broken. Every image <code>./verify-setup.sh</code> uses is a " +
-      "Linux image, and one Docker daemon serves one mode. You do <strong>not</strong> need to " +
-      "switch modes — there is a Windows-container check that tests the same toolchain: Docker, Claude and a browser.",
+      "Linux image, and one Docker daemon serves one mode. You do not need to switch modes " +
+      "<em>for the check</em> — there is a Windows-container version that tests the same toolchain: Docker, Claude and a browser. " +
+      "<strong>You will need to switch to Linux containers for the workshop itself</strong>, once the check passes.",
     commands: [
-      { label: "Run this instead", code: "powershell -ExecutionPolicy Bypass -File windows\\verify.ps1" },
+      { label: "Run this instead", code: "powershell -ExecutionPolicy Bypass -File windows\\verify.ps1", shell: "powershell" },
     ],
   },
   {
@@ -245,7 +316,7 @@ const TROUBLESHOOTING = [
       "Docker and Claude Code. Install it from <a href=\"https://git-scm.com/downloads\">git-scm.com/downloads</a>, " +
       "then re-run the check. " +
       gitBashOnly(
-        "Installing Git for Windows is also what gives you <strong>Git Bash</strong>, which is the " +
+        `Installing Git for Windows is also what gives you ${GIT_BASH}, which is the ` +
           "shell the whole setup expects."
       ),
   },
@@ -301,7 +372,7 @@ const TROUBLESHOOTING = [
       "It needs an administrator once, and then a <strong>new login session</strong>: group rights are " +
       "granted at logon, so nothing changes until you sign out and back in.",
     commands: [
-      { label: "In an ELEVATED PowerShell, then sign out of Windows and back in", code: "Add-LocalGroupMember -Group docker-users -Member <your-username>" },
+      { label: "In an ELEVATED PowerShell, then sign out of Windows and back in", code: "Add-LocalGroupMember -Group docker-users -Member <your-username>", shell: "powershell" },
       // Shown only to somebody who has not picked a pathway, which is where a Linux
       // host lands: the picker offers macOS and Windows, and Linux is neither.
       { label: "On a Linux host instead — then log out and back in", code: "sudo usermod -aG docker $USER", only: [] },
@@ -407,7 +478,34 @@ const TROUBLESHOOTING = [
     commands: [
       { label: "Rebuild the database", code: "docker compose -f docker-compose.workshop.yml exec claude-container start-app.sh --reset-db" },
       { label: "Then re-run the check", code: "./verify-setup.sh" },
-      { label: "The API's own log", code: "docker compose -f docker-compose.workshop.yml exec claude-container tail -n 50 /workspace/logs/server.log" },
+      { label: "The API's own log", code: "docker compose -f docker-compose.workshop.yml exec claude-container sh -c 'tail -n 50 /workspace/logs/server.log'" },
+    ],
+  },
+  {
+    check: "Check 6",
+    only: ["macos", "windows-linux"],
+    symptom: "the API cannot start: package '…' is not installed",
+    fix:
+      "The site loads but the API behind it cannot start, so every page that loads data shows a " +
+      "<strong>500</strong>. The app's dependencies are incomplete — usually an install that was " +
+      "interrupted. Restarting the app checks them against the lockfile and installs whatever is " +
+      "missing; then re-run the check.",
+    commands: [
+      { label: "Reinstall what is missing and restart the app", code: "docker compose -f docker-compose.workshop.yml exec claude-container start-app.sh --restart" },
+      { label: "Then re-run the check", code: "./verify-setup.sh" },
+    ],
+  },
+  {
+    check: "Check 7",
+    only: ["macos", "windows-linux"],
+    symptom: "Claude Code could not be updated to the latest version",
+    fix:
+      "The check updates Claude Code inside the workshop container before it tests it, so everyone " +
+      "starts on the same current release. It could not reach the npm registry — almost always the " +
+      "network, a VPN or a proxy. Check your connection and re-run. If a release is known to be bad, " +
+      "you can hold a version instead by naming it in <code>.env</code>.",
+    commands: [
+      { label: "Only if told to hold a version", code: "echo WORKSHOP_CLAUDE_VERSION=2.0.14 >> .env\n./verify-setup.sh" },
     ],
   },
   {
@@ -499,6 +597,18 @@ const TROUBLESHOOTING = [
       "where checks 1–5 passed it is usually transient — the site had not finished starting. If it " +
       "fails twice with the same error, that is the point to ask rather than keep re-running.",
   },
+  // Windows-container check only - verify-setup.sh is already running in Git Bash
+  // on Windows, so it has nothing to look for.
+  {
+    check: "Check 7",
+    only: ["windows-windows"],
+    symptom: "Git Bash not found - the workshop commands are bash scripts",
+    fix:
+      `Every command after setup — <code>./checkpoint.sh</code> and the script that starts the stack — is a bash script, and ` +
+      `PowerShell and CMD cannot run it. ${GIT_BASH} comes with Git for Windows: install it from ` +
+      '<a href="https://git-scm.com/download/win">git-scm.com/download/win</a> (the defaults are fine) and re-run the check. ' +
+      "It deliberately ignores WSL's <code>bash</code>, which would run the scripts in a different Linux with a different Docker.",
+  },
 ];
 
 // When to stop debugging and ask. Deliberately specific about WHEN, because the
@@ -549,7 +659,7 @@ const FIRST_RUN_NOTE =
 //
 // It also used to be spliced into every activity's commands, on the reasoning that
 // people arrive at the guide mid-morning having closed their terminal. That reasoning
-// was wrong twice over: it is done once a day, by a room that has just been walked
+// was wrong twice over: it is done once, at the start of the workshop, by a room that has just been walked
 // through it on the slides, and repeated above ten activities the block was longer
 // than the activity underneath it. Every page links here from its header.
 //
@@ -567,7 +677,7 @@ const TERMINALS = {
         "A {shell} window in your <code>workshop-example</code> folder — the only one of the three that is <em>not</em> inside the container. Only a few commands run here: <code>git pull</code> for this folder, <code>docker</code> and <code>./checkpoint.sh</code>. Nothing you type here touches the app.",
       commands: [
         {
-          // FIRST, every morning: fixes to the workshop itself (the guide, checkpoint.sh,
+          // FIRST, at the start of the workshop: fixes to the workshop itself (the guide, checkpoint.sh,
           // the scripts that start the container) land on main right up to the day, and
           // most people set up days before. Pulling BEFORE up.sh matters: a change to the
           // compose file only reaches a container when `up -d` recreates it, and up.sh
@@ -638,6 +748,19 @@ const TERMINALS = {
       ],
     },
   ],
+  // Both Windows pathways, ABOVE the three windows rather than after them: by the
+  // time a note at the bottom is read, ./workshop/up.sh has already failed in
+  // PowerShell. `bash ./workshop/up.sh` from PowerShell was considered instead and
+  // rejected - on a machine with WSL, `bash` there is WSL's bash, which runs the
+  // script in a different Linux with a different Docker context.
+  windowsShell: {
+    only: ["windows-linux", "windows-windows"],
+    body:
+      `<strong>On Windows, all three windows are</strong> ${GIT_BASH}. ` +
+      '<span class="not">Not PowerShell, and not CMD</span> — every <code>./something.sh</code> command in this guide is a bash script and will not run there. ' +
+      `${GIT_BASH} came with Git for Windows. Open it from the Start menu and <code>cd</code> into your <code>workshop-example</code> folder, or right-click the folder in Explorer and choose <strong>Open Git Bash here</strong>. ` +
+      "Two exceptions, both during setup: <code>claude setup-token</code> runs in <strong>PowerShell or CMD</strong>, because its sign-in screen does not work properly in Git Bash, and the Windows-containers environment check, <code>windows\\verify.ps1</code>, runs in PowerShell.",
+  },
   // Not a terminal, so it is not a fourth numbered window - but it is the thing that
   // tells you the three above worked.
   after: {
@@ -657,10 +780,10 @@ const TERMINALS = {
   // Windows-container mode runs the environment CHECK, not the workshop. Everything
   // the day itself uses is a Linux image, and one Docker daemon cannot serve both
   // modes at once.
+  // Gates the big red SWITCH_TO_LINUX box at the top of the three windows. Its text
+  // lives in SWITCH_TO_LINUX, shared with the setup page, so the two cannot drift.
   note: {
     only: ["windows-windows"],
-    body:
-      "<strong>You are in Windows-container mode.</strong> That is fine for the environment check — there is a Windows-container version of it — but the workshop stack itself is Linux images, and Docker Desktop cannot run both modes at once. Switch Docker Desktop to <strong>Linux containers</strong> before the first activity, and use Git Bash for the commands above. Ask us on the day if you are unsure; do not spend the morning on it.",
   },
 };
 
@@ -1305,4 +1428,4 @@ You are a senior full-stack engineer working in this codebase.
   },
 ];
 
-module.exports = { activities, LINKS, REPO_URL, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER, CATCH_UP };
+module.exports = { activities, GIT_BASH, SWITCH_TO_LINUX, LINKS, REPO_URL, PLATFORMS, DETECT_COMMAND, CREDENTIALS, SETUP_STATES, TROUBLESHOOTING, HELP, FIRST_RUN_NOTE, TERMINALS, RECOVER, CATCH_UP };

@@ -85,7 +85,14 @@ say() {
 # ------------------------------------------------------------------- machinery
 
 mkdir -p "$LOG_DIR" screenshots
+# Every log is from THIS run. Without this, a run that stops at check 3 leaves checks
+# 4-9's logs from an older run in place, looking current - and they are the ones
+# somebody reads when asking for help.
+rm -f "$LOG_DIR"/*.log "$LOG_DIR"/*.out "$LOG_DIR"/*.err 2>/dev/null
 : > "$REPORT"
+# timeline.log is per RUN, like the report: a fresh file with one line saying when.
+printf '%s  ==== verify-setup.sh started
+' "$(date '+%Y-%m-%d %H:%M:%S %z')" > "$LOG_DIR/timeline.log"
 
 IDX=0
 FAILED=0
@@ -105,6 +112,10 @@ FAIL_FIX=""
 # the night before are the images `up -d` wants in the morning, and the container the
 # checks ask questions of is the one attendees will exec into.
 workshop_compose() { docker compose -f "$WORKSHOP_COMPOSE_FILE" "$@"; }
+# Exported because run_logged runs its commands in a fresh bash (see no_tty), which
+# would otherwise know neither the function nor the file it names.
+export WORKSHOP_COMPOSE_FILE
+export -f workshop_compose
 
 # IS THE WORKSHOP STACK ALREADY UP?
 #
@@ -122,6 +133,7 @@ fi
 start_check() {
   IDX=$((IDX + 1))
   local label="$1"
+  timeline "CHECK $IDX  $label"
   local padded="$label "
   while [ ${#padded} -lt 42 ]; do padded="${padded}."; done
   CURRENT_LABEL="$label"
@@ -140,10 +152,12 @@ start_check() {
 }
 
 pass_check() {
+  timeline "PASS   ${1:-}"
   say "${CURRENT_LINE}${GREEN}PASS${RESET}   ${DIM}${1:-}${RESET}"
 }
 
 fail_check() {
+  timeline "FAIL   $1"
   say "${CURRENT_LINE}${RED}FAIL${RESET}"
   FAILED=1
   FAIL_LABEL="$CURRENT_LABEL"
@@ -195,7 +209,8 @@ term_cols() {
 # of BuildKit's plain-progress log.
 progress_note() {
   local log="$1" sizes line
-  [ -s "$log" ] || { printf 'starting'; return; }
+  # Line 1 is run_logged's timestamp header; nothing after it means nothing yet.
+  [ -n "$(sed -n '2p' "$log" 2>/dev/null)" ] || { printf 'starting'; return; }
   # git clone, not docker. Check 1 clones the app repo through this same helper,
   # and git's own progress line is the only thing on screen that moves during a
   # slow clone. Read before the BuildKit patterns because it is unambiguous.
@@ -289,20 +304,62 @@ progress_clear() {
   printf '\r%*s\r' "$(term_cols)" ''
 }
 
+# no_tty <command...> - run a command with NO CONTROLLING TERMINAL.
+#
+# Reported as a stray "^[" under check 5's row. Something the step runs - the Docker
+# CLI is the likely one - asks the terminal a question through /dev/tty, the way a
+# program asks for the background colour. Nothing reads the answer, so the terminal
+# echoes it onto the screen, where it lands on top of the progress line. Redirecting
+# stdin, stdout and stderr cannot stop it: /dev/tty is opened by name.
+#
+# A new session has no controlling terminal, so opening /dev/tty fails and the
+# question is never asked. perl rather than setsid(1): setsid is not on macOS, and
+# perl is on macOS, Linux and Git Bash alike. Through bash -c so that shell functions
+# (workshop_compose) still resolve. Without perl it runs the command as before.
+no_tty() {
+  if command -v perl >/dev/null 2>&1; then
+    perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV or die "exec: $!\n"' \
+      bash -c '"$@"' no_tty "$@"
+  else
+    "$@"
+  fi
+}
+
 # run_logged <log> <command...> - run a command silently, logging it, and keep the
 # current check line updated while it runs. Returns the command's own exit status,
 # so the callers' if/elif logic reads exactly as it did before.
+# TIMESTAMPS. Every log starts with one header line - when, and which command - and
+# timeline.log gets a start line and an end line (exit code, seconds) per command, so
+# "it failed at about three minutes" can be matched to the step that failed. A
+# header, not a stamp on every line: the checks parse these logs (progress patterns
+# anchored at line start, the version on the LAST line of 07-claude.log), and a
+# prefix would break all of that. Format portable to BSD date on macOS.
+log_stamp() { date '+%Y-%m-%d %H:%M:%S %z'; }
+timeline() { printf '%s  %s\n' "$(log_stamp)" "$*" >> "$LOG_DIR/timeline.log"; }
+
 run_logged() {
+  local log="$1"; shift
+  local t0 rc
+  t0=$(date +%s)
+  printf '# %s  %s\n' "$(log_stamp)" "$*" > "$log"
+  timeline "start  $(basename "$log")  $*"
+  run_logged_inner "$log" "$@"
+  rc=$?
+  timeline "end    $(basename "$log")  exit $rc after $(( $(date +%s) - t0 ))s"
+  return $rc
+}
+
+run_logged_inner() {
   local log="$1"; shift
   # stdin comes from /dev/null in both branches. `docker compose run` will read the
   # terminal if it can, and a BACKGROUND job that reads the terminal is stopped by
   # SIGTTIN - which looks exactly like the hang this function exists to prevent.
+  # >> not >: run_logged has already written the log's header line.
   if [ "$PROGRESS" -eq 0 ]; then
-    "$@" >"$log" 2>&1 </dev/null
+    no_tty "$@" >>"$log" 2>&1 </dev/null
     return $?
   fi
-  : > "$log"
-  "$@" >"$log" 2>&1 </dev/null &
+  no_tty "$@" >>"$log" 2>&1 </dev/null &
   local pid=$! start base rc note
   start=$(date +%s)
   # Time the CHECK, not this command. A check that runs several commands in sequence
@@ -474,7 +531,7 @@ else
     CLONE_START=$(date +%s)
     # --progress, not --quiet: run_logged reads this log to keep the checklist
     # line moving, and without it a slow clone looks exactly like a hang.
-    if run_logged "$LOG_DIR/01-clone.log" git clone --progress "$APP_REPO" "$APP_DIR"; then
+    if run_logged "$LOG_DIR/01-clone.log" git clone -c core.autocrlf=false --progress "$APP_REPO" "$APP_DIR"; then
       APP_ACTION="cloned in $(( $(date +%s) - CLONE_START ))s"
 
       # LAND ON cp-01, NOT ON main.
@@ -518,6 +575,49 @@ else
     # it remove one that was deleted, so a retired rung would read as published
     # forever. See checkpoint.sh.
     run_logged "$LOG_DIR/01-clone.log" git -C "$APP_DIR" fetch --tags --force --prune --prune-tags --quiet || true
+
+    # LINE ENDINGS. The app repo has no .gitattributes, and Git for Windows defaults
+    # to core.autocrlf=true - so a Windows clone has CRLF in every text file. The
+    # container's Linux git compares those with the LF in the index and reports the
+    # whole app (240 files) as modified, and the first commit made in there rewrites
+    # them all. New clones are made with autocrlf=false (above); this repairs one made
+    # before that, WITHOUT touching real work: every file git stores as LF but has
+    # checked out as CRLF gets its carriage returns stripped IN PLACE. A file that
+    # differed only by line endings is then clean again; a file with real edits -
+    # the package-lock.json the container's npm install rewrites, which npm keeps
+    # CRLF - keeps every edit, now with LF. Nothing is checked out, so nothing can be
+    # lost. Keyed on the files themselves, not on the config, so a clone already set
+    # to autocrlf=false with CRLF left behind is still repaired. A no-op on macOS and
+    # Linux, where nothing is checked out as CRLF.
+    if [ "$FAILED" -eq 0 ] &&
+       git -C "$APP_DIR" ls-files --eol 2>/dev/null | grep -qE '^i/lf +w/(crlf|mixed)'; then
+      EOL_OK=1
+      git -C "$APP_DIR" config core.autocrlf false || EOL_OK=0
+      # -z: one NUL-terminated record per file, "i/lf w/crlf attr/<TAB>path".
+      # w/mixed too: a CRLF file somebody has since appended LF lines to.
+      while IFS= read -r -d '' rec; do
+        case "$rec" in
+          # perl, not sed -i: BSD sed on macOS reads -i's argument as a backup
+          # suffix. perl -pi is the same on macOS, Linux and Git for Windows.
+          i/lf*w/crlf*|i/lf*w/mixed*)
+            perl -pi -e 's/\r\n/\n/' "$APP_DIR/${rec#*$'\t'}" || EOL_OK=0 ;;
+        esac
+      done < <(git -C "$APP_DIR" ls-files --eol -z 2>/dev/null)
+      # The index still records each file's old, CRLF SIZE, and git treats a size
+      # change as "modified" without looking at the content - so every rewritten file
+      # would stay listed even where it now matches exactly, and update-index
+      # --refresh does not clear it. Rebuilding the index from HEAD does. Files on
+      # disk are not touched; anything staged is merely unstaged.
+      { git -C "$APP_DIR" rm --cached -r -q . &&
+        git -C "$APP_DIR" reset -q; } >/dev/null 2>&1 || EOL_OK=0
+      if [ "$EOL_OK" -eq 1 ]; then
+        APP_ACTION="$APP_ACTION, line endings fixed"
+      else
+        fail_check "could not convert $APP_DIR/ to LF line endings" \
+"run  git -C $APP_DIR ls-files --eol | grep w/crlf  to see which files,
+                        then tell a facilitator"
+      fi
+    fi
   fi
 
   if [ "$FAILED" -eq 0 ]; then
@@ -718,14 +818,16 @@ fi
 # attendee's own browser has. So a pass here is also the port check: nothing else on
 # this machine is holding WORKSHOP_PORT, because the workshop itself is serving on it.
 #
-# The two-vantage view check up.sh would run next is skipped here and run as check 9,
-# so that it gets a row of its own rather than failing under this one's label.
+# The API check and the two-vantage view check up.sh would run next are skipped here
+# and run as checks 6 and 9, so each gets a row of its own rather than failing under
+# this one's label.
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop app up and serving"
   PORT="${WORKSHOP_PORT:-5173}"
   UP_START=$(date +%s)
-  if WORKSHOP_SKIP_VIEW_CHECK=1 run_logged "$LOG_DIR/05-up.log" ./workshop/up.sh; then
+  if WORKSHOP_SKIP_API_CHECK=1 WORKSHOP_SKIP_VIEW_CHECK=1 \
+       run_logged "$LOG_DIR/05-up.log" ./workshop/up.sh; then
     if [ "$WORKSHOP_RUNNING" -eq 1 ]; then
       pass_check "http://localhost:${PORT} - your stack, already running"
     else
@@ -761,34 +863,23 @@ fi
 # page in the app takes - so a pass means the proxy, the API, the database, the
 # migrations and the seed data all work. A site that loads while every request it makes
 # fails is the fault this catches: it looks fine until the first page that needs data.
+# The probe and its diagnosis live in workshop/check-api.sh, which up.sh runs too.
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Workshop API answers"
-  PORT="${WORKSHOP_PORT:-5173}"
-  API_URL="http://localhost:${PORT}/v1/auth/login"
-  API_STATUS=000
-  # The API can come up a few seconds after the site, so allow it half a minute.
-  for _ in $(seq 1 15); do
-    API_STATUS=$(curl -sS -o "$LOG_DIR/06-api.log" -w '%{http_code}' --max-time 10 \
-      -X POST -H 'Content-Type: application/json' \
-      -d '{"email":"creator@example.com","password":"creator-demo-pass"}' \
-      "$API_URL" 2>>"$LOG_DIR/06-api-curl.log") || API_STATUS=000
-    case "$API_STATUS" in 000|502|503|504) sleep 2 ;; *) break ;; esac
-  done
-  if [ "$API_STATUS" = 200 ] && grep -q '"token"' "$LOG_DIR/06-api.log"; then
+  if run_logged "$LOG_DIR/06-api.log" ./workshop/check-api.sh; then
     pass_check "logged in as the demo creator via /v1"
-  elif [ "$API_STATUS" = 401 ]; then
-    fail_check "the API answers, but the demo account was not found" \
-"the database is up but is missing its migrations or seed data
-                        rebuild it from scratch, then re-run  ./verify-setup.sh :
-                          docker compose -f $WORKSHOP_COMPOSE_FILE exec claude-container \\
-                            start-app.sh --reset-db"
   else
-    fail_check "the site is up, but its API did not answer (HTTP $API_STATUS)" \
-"the response is in $LOG_DIR/06-api.log
-                        the API's own log is in the container:
-                          docker compose -f $WORKSHOP_COMPOSE_FILE exec claude-container \\
-                            tail -n 50 /workspace/logs/server.log"
+    # check-api.sh has already worked out WHY, from the API's own log. Say its words
+    # rather than a generic "see the log" - the cause line is the whole diagnosis.
+    API_CAUSE=$(sed -n 's/^CAUSE //p' "$LOG_DIR/06-api.log" | tail -1)
+    API_FIX=$(sed -n 's/^FIX   //p; s/^        //p' "$LOG_DIR/06-api.log" | head -3 |
+      sed '2,$s/^/                          /')
+    fail_check "${API_CAUSE:-the workshop API did not answer}" \
+"${API_FIX:-see $LOG_DIR/06-api.log}
+                        then re-run  ./verify-setup.sh
+                        the full diagnosis, with the API's own log, is in
+                        $LOG_DIR/06-api.log"
   fi
 fi
 
@@ -800,7 +891,19 @@ fi
 
 if [ "$FAILED" -eq 0 ]; then
   start_check "Claude Code CLI + auth"
-  if ! run_logged "$LOG_DIR/07-claude.log" \
+  # UPDATE FIRST, so the version checked and reported is the one the day will run.
+  # start-app.sh already did this when check 5 started the container; running it again
+  # here costs one registry lookup and makes the answer part of this row. See
+  # update_claude in workshop/container/start-app.sh for why it lives there.
+  if ! STEP_NOTE_PREFIX="updating " run_logged "$LOG_DIR/07-update.log" \
+        workshop_compose exec -T claude-container start-app.sh --update-claude; then
+    fail_check "Claude Code could not be updated to the latest version" \
+"$(tr -d '\r' < "$LOG_DIR/07-update.log" | tail -1)
+                        this is almost always the network - check your connection,
+                        then re-run  ./verify-setup.sh
+                        to hold a known version instead, set it in .env:
+                          WORKSHOP_CLAUDE_VERSION=<version>"
+  elif ! run_logged "$LOG_DIR/07-claude.log" \
         workshop_compose exec -T claude-container claude --version; then
     fail_check "the Claude Code CLI did not start inside the workshop container" \
 "check $LOG_DIR/07-claude.log for the error
@@ -903,6 +1006,7 @@ while [ "$IDX" -lt "$TOTAL" ]; do
     8) start_check "Playwright screenshot captured" ;;
     9) start_check "Agent sees the same app you do" ;;
   esac
+  timeline "NOT REACHED"
   say "${CURRENT_LINE}${DIM}----${RESET}   ${DIM}not reached${RESET}"
 done
 

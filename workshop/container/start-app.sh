@@ -40,6 +40,52 @@ if [ -e "$SELF" ] && [ "$(readlink "$LINK" 2>/dev/null)" != "$SELF" ]; then
     echo "could not link $LINK - run it as $SELF instead" >&2
 fi
 
+# ------------------------------------------------- Claude Code, kept current
+#
+# The image installs whatever Claude Code was current when it was BUILT, and an
+# attendee who ran the environment check a week early keeps that image. A room then
+# runs a spread of versions, and the screen at the front does not match the screen in
+# front of you.
+#
+# Updated HERE, on every container start, because nothing done inside the container
+# survives it: ./verify-setup.sh stops the stack when it finishes, and the morning's
+# ./workshop/up.sh starts a fresh container from the image. Updating once at check
+# time would be undone before anybody used it.
+#
+# Not `claude update`: the image installs the CLI globally as root, and this runs as
+# `agent`, so the updater's own npm install fails with EACCES. npm through sudo is the
+# same update with the permission it needs (`agent` has passwordless sudo).
+#
+# WORKSHOP_CLAUDE_VERSION pins it - set it in .env if a release lands on the morning
+# of a workshop and you would rather not find out live. Never fatal: offline, it keeps
+# the version it has and says so.
+CLAUDE_PKG="@anthropic-ai/claude-code"
+update_claude() {
+  local want have
+  have=$(claude --version 2>/dev/null | awk '{print $1}')
+  want=$(npm view "${CLAUDE_PKG}@${WORKSHOP_CLAUDE_VERSION:-latest}" version 2>/dev/null | tail -1)
+  if [ -z "$want" ]; then
+    echo "claude ${have:-?} - could not reach the npm registry to check for a newer one"
+    return 1
+  fi
+  if [ "$have" = "$want" ]; then
+    echo "claude ${have} - up to date"
+    return 0
+  fi
+  if sudo npm install -g --no-fund --no-audit "${CLAUDE_PKG}@${want}" >"$LOGS/claude-update.log" 2>&1; then
+    echo "claude updated ${have:-?} -> $(claude --version 2>/dev/null | awk '{print $1}')"
+    return 0
+  fi
+  echo "claude ${have:-?} - update to ${want} FAILED, see $LOGS/claude-update.log"
+  return 1
+}
+
+# Just the update, for the environment check's Claude row and for doing it by hand.
+if [ "${1:-}" = "--update-claude" ]; then
+  update_claude
+  exit $?
+fi
+
 # ------------------------------------------------- Claude's first-run onboarding
 #
 # WHY THIS IS HERE AND NOT AN ENVIRONMENT VARIABLE
@@ -76,6 +122,7 @@ fi
 # Only ever written when absent. Claude keeps real state in this file (history,
 # per-project settings), and clobbering it on every restart would throw that away.
 step "Claude Code"
+update_claude || true
 CLAUDE_CONFIG="${HOME:-/home/agent}/.claude.json"
 if [ -f "$CLAUDE_CONFIG" ]; then
   echo "already onboarded"
@@ -176,18 +223,42 @@ echo "writable"
 # host is usually Windows, and win32 binaries (esbuild, lightningcss) cannot run in a
 # Linux container.
 #
-# Keyed on the client's binary rather than on node_modules existing at all: an
-# interrupted install leaves the directory there but unusable.
+# KEYED ON THE LOCKFILE, not on any one package being present. This used to check for
+# vite's binary, and that is exactly the wrong question: an interrupted install, or an
+# install made from an older lockfile, leaves vite there and something else missing.
+# The script then said "already installed", and the API died on every start with
+#
+#   ERR_MODULE_NOT_FOUND: Cannot find package 'pino-http'
+#
+# which Vite turns into a bare 500 on every /v1 call. ./checkpoint.sh makes the same
+# thing routine: any rung that adds a dependency changes the lockfile under a volume
+# installed for the old one.
+#
+# So a stamp of the lockfile's hash is written into the volume AFTER a successful
+# install, and anything else - no stamp, a different hash - installs again. On an
+# existing tree npm install only fetches the difference, so a re-run costs seconds.
+# `start-app.sh --restart` re-runs this step, which makes it the repair too.
 step "Dependencies"
 APP_OK=1
-if [ -x "node_modules/.bin/vite" ] || [ -x "packages/client/node_modules/.bin/vite" ]; then
+DEPS_STAMP="node_modules/.workshop-lock-hash"
+LOCK_HASH=$(sha256sum package-lock.json 2>/dev/null | cut -d' ' -f1)
+if [ -n "$LOCK_HASH" ] && [ "$(cat "$DEPS_STAMP" 2>/dev/null)" = "$LOCK_HASH" ]; then
   echo "already installed"
 else
-  echo "first run — installing (this takes a few minutes, once)"
+  if [ -x "node_modules/.bin/vite" ]; then
+    echo "dependencies out of date — updating"
+  else
+    echo "first run — installing (this takes a few minutes, once)"
+  fi
   # NOT `npm install | tail`: a pipe reports the exit status of tail, so a failed
   # install looked exactly like a successful one and the script sailed on to start
   # servers that had nothing to run.
   if npm install >"$LOGS/install.log" 2>&1; then
+    # Only now. A stamp written before or regardless of the install would mark a
+    # half-finished tree as complete - the failure this whole block exists to stop.
+    # Hashed again rather than reusing LOCK_HASH: npm may rewrite the lockfile as it
+    # installs, and a stamp of the old one would reinstall on every start.
+    sha256sum package-lock.json | cut -d' ' -f1 > "$DEPS_STAMP"
     echo "installed"
   else
     APP_OK=0
@@ -312,9 +383,36 @@ step "Site on :${PORT}"
 ) >"$LOGS/vite.log" 2>&1 &
 echo $! > "$LOGS/vite.pid"
 
+# WAIT AS LONG AS VITE IS ALIVE, NOT A FIXED 30 SECONDS. Vite's first start scans and
+# pre-bundles the app's dependencies, and on Windows every one of those file reads
+# crosses Docker Desktop's file sharing - far slower than on macOS. The old 30-try
+# loop gave up while Vite was still booting, printed WORKSHOP APP DID NOT START
+# (whose first line of advice is "did the dependencies install?"), up.sh failed check
+# 5 on that banner - and Vite came up a minute later, in a log nobody was reading.
+#
+# So: the site is up when it answers; it has FAILED only when Vite has exited. Until
+# then keep waiting, up to WORKSHOP_SITE_WAIT seconds (default 600, the same budget
+# as up.sh), with a line every 30s so the wait is visibly alive. --max-time stops a
+# half-booted Vite that accepts the connection from stalling a single probe for
+# minutes, which is what stretched the old "30 seconds" far past 30.
 SITE_UP=0
-for _ in $(seq 1 30); do
-  if curl -sf "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then SITE_UP=1; break; fi
+VITE_PID=$(cat "$LOGS/vite.pid" 2>/dev/null || true)
+SITE_WAIT="${WORKSHOP_SITE_WAIT:-600}"
+SITE_START=$(date +%s)
+SITE_BEAT=0
+while :; do
+  if curl -sf --max-time 5 "http://127.0.0.1:${PORT}/" >/dev/null 2>&1; then SITE_UP=1; break; fi
+  # Vite gone means it failed to boot - say so now rather than waiting out the budget.
+  if [ -n "$VITE_PID" ] && ! kill -0 "$VITE_PID" 2>/dev/null; then
+    echo "Vite exited before serving - see ${LOGS}/vite.log" >&2
+    break
+  fi
+  SITE_ELAPSED=$(( $(date +%s) - SITE_START ))
+  [ "$SITE_ELAPSED" -ge "$SITE_WAIT" ] && break
+  if [ $(( SITE_ELAPSED - SITE_BEAT )) -ge 30 ]; then
+    echo "still starting the site - ${SITE_ELAPSED}s (the first start is the slow one)"
+    SITE_BEAT=$SITE_ELAPSED
+  fi
   sleep 1
 done
 fi   # APP_OK
