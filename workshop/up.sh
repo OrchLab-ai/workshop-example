@@ -176,7 +176,12 @@ while :; do
   # got - an HTTP code, or curl's own error. A wait that only says "still working"
   # cannot be told apart from a probe failing the same way every two seconds.
   SITE_URL="http://localhost:${PORT}/"
-  SITE_ERR=$(curl -fsS --max-time 5 -o /dev/null -w '%{http_code}' "$SITE_URL" 2>&1)
+  # The page is discarded by THIS shell (>/dev/null), never handed to curl as a path:
+  # under the Git Bash path guard above, `-o /dev/null` reached the native curl.exe
+  # literally, as the path C:/dev/null. Where C:/dev happened to exist curl quietly
+  # wrote a file there; everywhere else it failed with exit 23 after an HTTP 200, and the
+  # site never counted as up. %{stderr} sends the code to the captured stream.
+  SITE_ERR=$(curl -fsS --max-time 5 -w '%{stderr}%{http_code}' "$SITE_URL" 2>&1 >/dev/null)
   SITE_RC=$?
   if [ "$SITE_RC" -eq 0 ]; then
     printf '\n%s%s  READY  %s  the site is answering on http://localhost:%s%s\n' \
