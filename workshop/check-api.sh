@@ -32,26 +32,37 @@ export MSYS2_ARG_CONV_EXCL='*'
 COMPOSE_FILE="docker-compose.workshop.yml"
 PORT="${WORKSHOP_PORT:-5173}"
 URL="http://localhost:${PORT}/v1/auth/login"
-BODY="$(mktemp 2>/dev/null || echo "/tmp/workshop-api.$$")"
-trap 'rm -f "$BODY"' EXIT
 
 # The API can come up a few seconds after the site, so allow it half a minute.
+#
+# The response is read from curl's STDOUT, never written to a temp file. With the
+# path guard above, Git Bash no longer rewrites "/tmp/tmp.XXXX" for the native
+# curl.exe it ships, so `curl -o "$(mktemp)"` failed every time with error 23 -
+# "client returned ERROR on write" - and a healthy API was reported as "nothing
+# answered on :5173". stdout needs no path at all, on any platform.
 CODE=000
+BODY=""
 for _ in $(seq 1 15); do
-  CODE=$(curl -sS -o "$BODY" -w '%{http_code}' --max-time 10 \
-    -X POST -H 'Content-Type: application/json' \
-    -d '{"email":"creator@example.com","password":"creator-demo-pass"}' \
-    "$URL" 2>/dev/null) || CODE=000
+  if RESP=$(curl -sS -w '\n%{http_code}' --max-time 10 \
+      -X POST -H 'Content-Type: application/json' \
+      -d '{"email":"creator@example.com","password":"creator-demo-pass"}' \
+      "$URL" 2>/dev/null); then
+    CODE=${RESP##*$'\n'}
+    BODY=${RESP%$'\n'*}
+  else
+    CODE=000
+    BODY=""
+  fi
   case "$CODE" in 000|500|502|503|504) sleep 2 ;; *) break ;; esac
 done
 
-if [ "$CODE" = 200 ] && grep -q '"token"' "$BODY"; then
+if [ "$CODE" = 200 ] && grep -q '"token"' <<<"$BODY"; then
   echo "API_OK logged in as the demo creator via /v1"
   exit 0
 fi
 
 echo "API_FAIL http ${CODE} from ${URL}"
-[ -s "$BODY" ] && { printf 'response: '; head -c 300 "$BODY"; echo; }
+[ -n "$BODY" ] && { printf 'response: %s\n' "$(printf '%s' "$BODY" | head -c 300)"; }
 
 if [ "$CODE" = 401 ]; then
   echo "CAUSE the API answers, but the demo account was not found"
